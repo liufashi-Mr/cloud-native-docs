@@ -1,0 +1,120 @@
+.k8s-appearance {
+  position: relative;
+}
+
+.k8s-appearance__trigger {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+}
+
+.k8s-appearance__popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(290px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  background: var(--vp-c-bg-elv);
+  box-shadow: var(--vp-shadow-3);
+}
+
+.k8s-appearance__label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.k8s-appearance__swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 32px);
+  gap: 8px;
+}
+
+.k8s-appearance__swatch {
+  width: 32px;
+  height: 28px;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: var(--swatch-color);
+  background-clip: content-box;
+  cursor: pointer;
+}
+
+.k8s-appearance__swatch[aria-pressed='true'] {
+  border-color: var(--k8s-accent);
+}
+
+.k8s-appearance__custom {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.k8s-appearance__custom input {
+  width: 36px;
+  height: 30px;
+  padding: 2px;
+}
+
+.k8s-appearance__custom code {
+  color: var(--vp-c-text-2);
+  font-size: 11px;
+}
+
+.k8s-appearance__modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.k8s-appearance__modes button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--vp-c-divider);
+  background: transparent;
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.k8s-appearance__modes button[aria-pressed='true'] {
+  border-color: var(--k8s-accent);
+  color: var(--vp-c-text-1);
+}
+
+.k8s-appearance-slot--mobile {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .k8s-appearance-slot--desktop {
+    display: none;
+  }
+
+  .k8s-appearance-slot--mobile {
+    display: block;
+    padding: 12px 0;
+  }
+
+  .k8s-appearance-slot--mobile .k8s-appearance__popover {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+  }
+}
