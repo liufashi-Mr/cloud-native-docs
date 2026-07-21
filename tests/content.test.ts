@@ -24,6 +24,24 @@ describe('content contract', () => {
     expect(existsSync(resolve(root, file))).toBe(true)
   })
 
+  it('defines the fluid responsive theme contracts', () => {
+    const styles = readFileSync(
+      resolve(root, 'docs/.vitepress/theme/styles.css'),
+      'utf8',
+    )
+
+    for (const contract of [
+      '--k8s-accent',
+      'clamp(',
+      '@media (max-width: 1099px)',
+      '@media (max-width: 767px)',
+      'prefers-reduced-motion',
+      'overflow-x: auto',
+    ]) {
+      expect(styles, `styles.css is missing ${contract}`).toContain(contract)
+    }
+  })
+
   it('introduces the core workload relationships on the home page', () => {
     const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
 
