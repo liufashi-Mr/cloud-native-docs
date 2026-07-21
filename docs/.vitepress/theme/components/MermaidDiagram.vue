@@ -3,7 +3,8 @@ let diagramSequence = 0
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useData } from 'vitepress'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps<{
   encodedSource: string
@@ -12,7 +13,10 @@ const props = defineProps<{
 const container = ref<HTMLElement>()
 const svg = ref('')
 const errorMessage = ref('')
-let active = true
+const { isDark } = useData()
+let active = false
+let renderGeneration = 0
+let stopWatching: (() => void) | undefined
 
 const source = computed(() => {
   try {
@@ -22,32 +26,49 @@ const source = computed(() => {
   }
 })
 
-onMounted(async () => {
+async function renderDiagram(): Promise<void> {
+  const generation = ++renderGeneration
+  const theme = isDark.value ? 'dark' : 'default'
+
   try {
     const { default: mermaid } = await import('mermaid')
+    if (!active || generation !== renderGeneration) return
+
     mermaid.initialize({
       securityLevel: 'strict',
       startOnLoad: false,
+      theme,
     })
 
     const result = await mermaid.render(
       `mermaid-diagram-${++diagramSequence}`,
       source.value,
     )
-    if (!active) return
+    if (!active || generation !== renderGeneration) return
 
     svg.value = result.svg
+    errorMessage.value = ''
     await nextTick()
-    if (active && container.value) result.bindFunctions?.(container.value)
+    if (active && generation === renderGeneration && container.value) {
+      result.bindFunctions?.(container.value)
+    }
   } catch (error) {
-    if (!active) return
+    if (!active || generation !== renderGeneration) return
+    svg.value = ''
     errorMessage.value =
       error instanceof Error ? error.message : '无法渲染此图表。'
   }
+}
+
+onMounted(() => {
+  active = true
+  stopWatching = watch(isDark, () => void renderDiagram(), { immediate: true })
 })
 
 onUnmounted(() => {
   active = false
+  renderGeneration += 1
+  stopWatching?.()
 })
 </script>
 
