@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -24,5 +24,14 @@ describe('production build', () => {
     const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
 
     expect(home).not.toMatch(/(?:href|src)="[^"]*mermaid[^"]*"/i)
+  })
+
+  it('includes Mermaid as a lazy build asset', () => {
+    const assets = readdirSync(resolve(dist, 'assets'), {
+      encoding: 'utf8',
+      recursive: true,
+    })
+
+    expect(assets.some((asset) => /mermaid/i.test(asset))).toBe(true)
   })
 })

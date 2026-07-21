@@ -10,7 +10,9 @@
     "skipLibCheck": true
   },
   "include": [
+    "docs/.vitepress/**/*.ts",
     "docs/.vitepress/**/*.mts",
+    "docs/.vitepress/**/*.vue",
     "tests/**/*.ts",
     "vitest.config.ts"
   ]
