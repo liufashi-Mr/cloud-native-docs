@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_COLOR,
@@ -21,14 +21,31 @@ type ApplyAppearanceReturnsVoid = Assert<
   IsExactlyVoid<ReturnType<typeof applyAppearance>>
 >
 
+const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+
+function restoreMatchMedia(): void {
+  if (originalMatchMedia) {
+    Object.defineProperty(window, 'matchMedia', originalMatchMedia)
+  } else {
+    Reflect.deleteProperty(window, 'matchMedia')
+  }
+}
+
 describe('appearance utilities', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    restoreMatchMedia()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('--k8s-accent')
     document.documentElement.style.removeProperty('--k8s-accent-dark')
-    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    restoreMatchMedia()
   })
 
   it('normalizes six-digit hex colors', () => {
@@ -88,7 +105,21 @@ describe('appearance utilities', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
-  it('falls back safely when system preference detection fails', () => {
+  it('falls back safely when the matchMedia getter throws in auto mode', () => {
+    const getter = vi.fn(() => {
+      throw new Error('media query denied')
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      get: getter,
+    })
+
+    expect(() => applyAppearance('#28755D', 'auto')).not.toThrow()
+    expect(getter).toHaveBeenCalledOnce()
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
+
+  it('falls back safely when the matchMedia function throws in auto mode', () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => {
@@ -98,6 +129,30 @@ describe('appearance utilities', () => {
 
     expect(() => applyAppearance('#28755D', 'auto')).not.toThrow()
     expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
+
+  it('does not read matchMedia for explicit light and dark modes', () => {
+    const getter = vi.fn(() => {
+      throw new Error('media query denied')
+    })
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      get: getter,
+    })
+
+    expect(() => applyAppearance('#28755D', 'light')).not.toThrow()
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(() => applyAppearance('#28755D', 'dark')).not.toThrow()
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  it('is safe when the document has no root element', () => {
+    vi.spyOn(document, 'documentElement', 'get').mockReturnValue(
+      null as unknown as HTMLElement,
+    )
+
+    expect(() => applyAppearance('#28755D', 'light')).not.toThrow()
   })
 
   it('round trips saved appearance preferences', () => {

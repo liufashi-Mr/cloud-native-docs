@@ -78,14 +78,17 @@ export function applyAppearance(
   color: string,
   mode: AppearanceMode,
 ): void {
-  const dark = resolveDarkMode(mode, getSystemDark())
+  const systemDark = mode === 'auto' ? getSystemDark() : false
+  const dark = resolveDarkMode(mode, systemDark)
 
   if (typeof document === 'undefined') return
+  const root = document.documentElement
+  if (!root) return
 
   const accent = deriveAccent(color)
-  document.documentElement.style.setProperty('--k8s-accent', accent.light)
-  document.documentElement.style.setProperty('--k8s-accent-dark', accent.dark)
-  document.documentElement.classList.toggle('dark', dark)
+  root.style.setProperty('--k8s-accent', accent.light)
+  root.style.setProperty('--k8s-accent-dark', accent.dark)
+  root.classList.toggle('dark', dark)
 }
 
 export function loadAppearance(): AppearanceState {
@@ -137,12 +140,13 @@ function isAppearanceMode(value: unknown): value is AppearanceMode {
 }
 
 function getSystemDark(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false
-  }
+  if (typeof window === 'undefined') return false
 
   try {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+    const matchMedia = window.matchMedia
+    return typeof matchMedia === 'function'
+      ? matchMedia.call(window, '(prefers-color-scheme: dark)').matches
+      : false
   } catch {
     return false
   }
