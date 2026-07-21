@@ -3,15 +3,26 @@
 }
 
 .k8s-appearance__trigger {
-  display: inline-grid;
-  width: 32px;
+  display: inline-flex;
+  width: 44px;
   height: 32px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--vp-c-text-2);
   cursor: pointer;
+}
+
+.k8s-appearance__current-color {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 50%;
+  background: var(--current-color);
 }
 
 .k8s-appearance__popover {

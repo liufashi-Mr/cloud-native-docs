@@ -104,6 +104,26 @@ describe('AppearanceControl', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
+  it('shows the current color on the trigger and updates it for every color choice', async () => {
+    installMatchMedia()
+    const wrapper = mountControl()
+    const trigger = wrapper.get('button[aria-label="外观设置"]')
+    const currentColor = trigger.get('.k8s-appearance__current-color')
+
+    expect(currentColor.attributes('style')).toContain(
+      `--current-color: ${PRESET_COLORS[0]}`,
+    )
+
+    await trigger.trigger('click')
+    await wrapper.get(`button[data-color="${PRESET_COLORS[3]}"]`).trigger('click')
+    expect(currentColor.attributes('style')).toContain(
+      `--current-color: ${PRESET_COLORS[3]}`,
+    )
+
+    await wrapper.get('input[type="color"]').setValue('#8fd8bc')
+    expect(currentColor.attributes('style')).toContain('--current-color: #8FD8BC')
+  })
+
   it('renders every preset and persists the selected color', async () => {
     installMatchMedia()
     const wrapper = mountControl()
