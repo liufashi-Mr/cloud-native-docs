@@ -77,16 +77,15 @@ export function resolveDarkMode(
 export function applyAppearance(
   color: string,
   mode: AppearanceMode,
-): boolean {
+): void {
   const dark = resolveDarkMode(mode, getSystemDark())
 
-  if (typeof document === 'undefined') return dark
+  if (typeof document === 'undefined') return
 
   const accent = deriveAccent(color)
   document.documentElement.style.setProperty('--k8s-accent', accent.light)
   document.documentElement.style.setProperty('--k8s-accent-dark', accent.dark)
   document.documentElement.classList.toggle('dark', dark)
-  return dark
 }
 
 export function loadAppearance(): AppearanceState {

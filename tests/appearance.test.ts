@@ -11,6 +11,16 @@ import {
   saveAppearance,
 } from '../docs/.vitepress/theme/appearance'
 
+type Assert<T extends true> = T
+type IsExactlyVoid<T> = [T] extends [void]
+  ? [void] extends [T]
+    ? true
+    : false
+  : false
+type ApplyAppearanceReturnsVoid = Assert<
+  IsExactlyVoid<ReturnType<typeof applyAppearance>>
+>
+
 describe('appearance utilities', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -67,7 +77,7 @@ describe('appearance utilities', () => {
   it('applies accent variables and the resolved dark class', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
 
-    expect(applyAppearance('#8FD8BC', 'auto')).toBe(true)
+    applyAppearance('#8FD8BC', 'auto')
 
     expect(
       document.documentElement.style.getPropertyValue('--k8s-accent'),
