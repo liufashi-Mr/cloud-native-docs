@@ -8,6 +8,7 @@ import {
   PRESET_COLORS,
   deriveAccent,
 } from '../docs/.vitepress/theme/appearance'
+import { resetAppearanceStateForTests } from '../docs/.vitepress/theme/appearance-state'
 
 const vitepressData = vi.hoisted(
   (): { isDark: Ref<boolean> | null } => ({ isDark: null }),
@@ -73,6 +74,7 @@ function mountControl() {
 describe('AppearanceControl', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
+    resetAppearanceStateForTests()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('--k8s-accent')
@@ -102,6 +104,18 @@ describe('AppearanceControl', () => {
 
     await trigger.trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('focuses the selected color when the popover opens', async () => {
+    installMatchMedia()
+    const wrapper = mountControl()
+
+    await wrapper.get('button[aria-label="外观设置"]').trigger('click')
+    await nextTick()
+
+    expect(document.activeElement).toBe(
+      wrapper.get(`button[data-color="${PRESET_COLORS[0]}"]`).element,
+    )
   })
 
   it('shows the current color on the trigger and updates it for every color choice', async () => {
@@ -197,9 +211,11 @@ describe('AppearanceControl', () => {
   })
 
   it('keeps desktop and mobile control state synchronized', async () => {
-    installMatchMedia()
+    const media = installMatchMedia()
     const desktop = mountControl()
     const mobile = mountControl()
+
+    expect(media.addEventListener).toHaveBeenCalledOnce()
 
     await desktop.get('button[aria-label="外观设置"]').trigger('click')
     await desktop.get(`button[data-color="${PRESET_COLORS[4]}"]`).trigger('click')
@@ -215,6 +231,42 @@ describe('AppearanceControl', () => {
     expect(mobile.get('button[data-mode="dark"]').attributes('aria-pressed')).toBe(
       'true',
     )
+
+    desktop.unmount()
+    expect(media.removeEventListener).not.toHaveBeenCalled()
+    mobile.unmount()
+    expect(media.removeEventListener).toHaveBeenCalledOnce()
+  })
+
+  it('preserves in-memory choices across remounts when storage writes fail', async () => {
+    installMatchMedia(false)
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(() => {
+        throw new Error('storage denied')
+      }),
+    })
+
+    const first = mountControl()
+    await first.get('button[aria-label="外观设置"]').trigger('click')
+    await first.get(`button[data-color="${PRESET_COLORS[6]}"]`).trigger('click')
+    await first.get('button[data-mode="dark"]').trigger('click')
+    expect(vitepressData.isDark!.value).toBe(true)
+    first.unmount()
+
+    vitepressData.isDark!.value = false
+    const remounted = mountControl()
+    await remounted.get('button[aria-label="外观设置"]').trigger('click')
+
+    expect(
+      remounted
+        .get(`button[data-color="${PRESET_COLORS[6]}"]`)
+        .attributes('aria-pressed'),
+    ).toBe('true')
+    expect(
+      remounted.get('button[data-mode="dark"]').attributes('aria-pressed'),
+    ).toBe('true')
+    expect(vitepressData.isDark!.value).toBe(true)
   })
 
   it('tracks system changes only in auto mode and removes the listener', async () => {

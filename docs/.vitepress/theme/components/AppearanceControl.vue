@@ -14,36 +14,39 @@ import {
 import {
   DEFAULT_COLOR,
   PRESET_COLORS,
-  applyAppearance,
-  loadAppearance,
   normalizeHex,
-  resolveDarkMode,
-  saveAppearance,
   type AppearanceMode,
 } from '../appearance'
-import { appearanceColor as color, appearanceMode as mode } from '../appearance-state'
+import {
+  appearanceColor as color,
+  appearanceMode as mode,
+  mountAppearance,
+  selectAppearanceColor,
+  selectAppearanceMode,
+} from '../appearance-state'
 
 const { isDark } = useData()
 const control = useTemplateRef<HTMLElement>('control')
+const popover = useTemplateRef<HTMLElement>('popover')
 const trigger = useTemplateRef<HTMLButtonElement>('trigger')
 const popoverId = useId()
 const open = ref(false)
 const displayColor = computed(() => normalizeHex(color.value) ?? DEFAULT_COLOR)
 
-let mediaQuery: MediaQueryList | null = null
-
-function getSystemDark(): boolean {
-  return mode.value === 'auto' ? (mediaQuery?.matches ?? false) : false
-}
-
-function applyCurrent(persist: boolean, systemDark = getSystemDark()): void {
-  applyAppearance(color.value, mode.value)
-  isDark.value = resolveDarkMode(mode.value, systemDark)
-  if (persist) saveAppearance(color.value, mode.value)
-}
+let unmountAppearance: (() => void) | null = null
 
 function togglePopover(): void {
   open.value = !open.value
+  if (open.value) {
+    void nextTick(() => {
+      const selected = popover.value?.querySelector<HTMLButtonElement>(
+        'button[data-color][aria-pressed="true"]',
+      )
+      const firstControl = popover.value?.querySelector<HTMLElement>('button, input')
+      const focusTarget = selected ?? firstControl
+      focusTarget?.focus()
+    })
+  }
 }
 
 function closePopover(restoreFocus = false): void {
@@ -53,13 +56,11 @@ function closePopover(restoreFocus = false): void {
 }
 
 function selectColor(nextColor: string): void {
-  color.value = normalizeHex(nextColor) ?? DEFAULT_COLOR
-  applyCurrent(true)
+  selectAppearanceColor(nextColor)
 }
 
 function selectMode(nextMode: AppearanceMode): void {
-  mode.value = nextMode
-  applyCurrent(true)
+  selectAppearanceMode(nextMode)
 }
 
 function handleCustomColor(event: Event): void {
@@ -76,35 +77,14 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') closePopover(true)
 }
 
-function handleSystemModeChange(event: MediaQueryListEvent): void {
-  if (mode.value === 'auto') applyCurrent(false, event.matches)
-}
-
-function createMediaQuery(): MediaQueryList | null {
-  if (typeof window === 'undefined') return null
-
-  try {
-    return typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-color-scheme: dark)')
-      : null
-  } catch {
-    return null
-  }
-}
-
 onMounted(() => {
-  const saved = loadAppearance()
-  color.value = saved.color
-  mode.value = saved.mode
-  mediaQuery = createMediaQuery()
-  mediaQuery?.addEventListener('change', handleSystemModeChange)
+  unmountAppearance = mountAppearance(isDark)
   document.addEventListener('click', handleDocumentClick)
   document.addEventListener('keydown', handleDocumentKeydown)
-  applyCurrent(false)
 })
 
 onBeforeUnmount(() => {
-  mediaQuery?.removeEventListener('change', handleSystemModeChange)
+  unmountAppearance?.()
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleDocumentKeydown)
 })
@@ -133,6 +113,7 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
+      ref="popover"
       :id="popoverId"
       class="k8s-appearance__popover"
       role="dialog"
