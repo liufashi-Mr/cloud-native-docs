@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { generate, parse as parseCss, walk } from 'css-tree'
+import { compileStyle, parse as parseSfc } from '@vue/compiler-sfc'
 import { nextTick } from 'vue'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import {
@@ -26,6 +28,46 @@ let animationFrameCallbacks = new Map<number, FrameRequestCallback>()
 
 const TOOLBAR_BORDER_BOX_WIDTH = 138
 const TOOLBAR_BORDER_BOX_HEIGHT = 38
+const VIEWER_COMPONENT_PATH = resolve(
+  process.cwd(),
+  'docs/.vitepress/theme/components/MermaidFullscreenViewer.vue',
+)
+
+function viewerComponentSource(): string {
+  return readFileSync(VIEWER_COMPONENT_PATH, 'utf8')
+}
+
+function compiledViewerStyles(): string {
+  const { descriptor, errors } = parseSfc(viewerComponentSource(), {
+    filename: VIEWER_COMPONENT_PATH,
+  })
+  if (errors.length > 0) throw errors[0]
+
+  const style = descriptor.styles.find((block) => block.scoped)
+  if (!style) throw new Error('scoped component styles not found')
+
+  const result = compileStyle({
+    filename: VIEWER_COMPONENT_PATH,
+    id: 'data-v-mermaid-fullscreen-viewer-test',
+    source: style.content,
+    scoped: true,
+  })
+  if (result.errors.length > 0) throw result.errors[0]
+  return result.code
+}
+
+function cssSelectors(source: string): string[] {
+  const selectors: string[] = []
+  walk(parseCss(source), {
+    visit: 'Rule',
+    enter(node) {
+      if (node.prelude.type === 'SelectorList') {
+        selectors.push(generate(node.prelude))
+      }
+    },
+  })
+  return selectors
+}
 
 function rect(left: number, top: number, width: number, height: number): DOMRect {
   return {
@@ -929,14 +971,67 @@ describe('MermaidFullscreenViewer', () => {
     expect(TOOLBAR_BORDER_BOX_HEIGHT).toBe(30 + 2 * 3 + 2 * 1)
   })
 
-  it('keeps interaction and compact segmented toolbar styles explicit', () => {
-    const componentSource = readFileSync(
-      resolve(
-        process.cwd(),
-        'docs/.vitepress/theme/components/MermaidFullscreenViewer.vue',
-      ),
-      'utf8',
+  it('compiles dark viewer styles as complete global descendant selectors', () => {
+    const styles = compiledViewerStyles()
+    const selectors = cssSelectors(styles)
+    const darkViewerSelector = '.dark .mermaid-fullscreen-viewer'
+    const darkToolbarSelector =
+      '.dark .mermaid-fullscreen-viewer__toolbar'
+    const darkHoverSelector =
+      '.dark .mermaid-fullscreen-viewer__toolbar button:hover'
+    const darkFocusSelector =
+      '.dark .mermaid-fullscreen-viewer__toolbar button:focus-visible'
+    const darkDividerSelector =
+      '.dark .mermaid-fullscreen-viewer__toolbar button:last-child::before'
+
+    expect(selectors).toEqual(
+      expect.arrayContaining([
+        darkViewerSelector,
+        darkToolbarSelector,
+        darkHoverSelector,
+        darkFocusSelector,
+        darkDividerSelector,
+      ]),
     )
+    expect(selectors).not.toContain('.dark')
+    expect(styles).not.toMatch(/(?:^|})\s*\.dark\s*\{/)
+
+    const darkViewerRule = cssDeclarations(styles, darkViewerSelector)
+    const darkToolbarRule = cssDeclarations(styles, darkToolbarSelector)
+    const darkHoverRule = cssDeclarations(styles, darkHoverSelector)
+    const darkFocusRule = cssDeclarations(styles, darkFocusSelector)
+    const darkDividerRule = cssDeclarations(styles, darkDividerSelector)
+
+    expect(darkViewerRule).toMatch(/\bcolor:\s*#f5f7fa\s*;/)
+    expect(darkViewerRule).toMatch(
+      /\bbackground:\s*rgba\(14, 17, 21, 0\.98\)\s*;/,
+    )
+    expect(darkViewerRule).toMatch(/\bcolor-scheme:\s*dark\s*;/)
+    expect(darkToolbarRule).toMatch(/\bbackground:\s*#252b32\s*;/)
+    expect(darkToolbarRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
+    expect(darkToolbarRule).toMatch(
+      /\bbox-shadow:\s*0 2px 8px rgba\(0, 0, 0, 0\.32\)\s*;/,
+    )
+    expect(darkHoverRule).toMatch(/\bbackground:\s*#343b43\s*;/)
+    expect(darkHoverRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
+    expect(darkFocusRule).toMatch(/\boutline-color:\s*#80c7ff\s*;/)
+    expect(darkDividerRule).toMatch(/\bbackground:\s*#98a2b3\s*;/)
+
+    const toolbarBackground = cssHexColor(darkToolbarRule, 'background')
+    const hoverBackground = cssHexColor(darkHoverRule, 'background')
+    for (const [boundary, surface] of [
+      [cssHexColor(darkToolbarRule, 'border-color'), toolbarBackground],
+      [cssHexColor(darkHoverRule, 'border-color'), hoverBackground],
+      [cssHexColor(darkDividerRule, 'background'), toolbarBackground],
+      [cssHexColor(darkFocusRule, 'outline-color'), toolbarBackground],
+      [cssHexColor(darkFocusRule, 'outline-color'), hoverBackground],
+    ]) {
+      expect(contrastRatio(boundary, surface)).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('keeps interaction and compact segmented toolbar styles explicit', () => {
+    const componentSource = viewerComponentSource()
     const styles = componentSource.match(
       /<style scoped>([\s\S]*?)<\/style>/,
     )?.[1]
@@ -954,16 +1049,9 @@ describe('MermaidFullscreenViewer', () => {
     expect(viewportRule).toMatch(/\btouch-action:\s*none\s*;/)
 
     const lightRule = cssDeclarations(styles, '.mermaid-fullscreen-viewer')
-    const darkRule = cssDeclarations(
-      styles,
-      ':global(.dark) .mermaid-fullscreen-viewer',
-    )
-    for (const rule of [lightRule, darkRule]) {
-      expect(rule).toMatch(/\bcolor:\s*#[\da-f]{6}\s*;/i)
-      expect(rule).toMatch(/\bbackground:\s*rgba\([^;]+\)\s*;/)
-    }
+    expect(lightRule).toMatch(/\bcolor:\s*#[\da-f]{6}\s*;/i)
+    expect(lightRule).toMatch(/\bbackground:\s*rgba\([^;]+\)\s*;/)
     expect(lightRule).toMatch(/\bcolor-scheme:\s*light\s*;/)
-    expect(darkRule).toMatch(/\bcolor-scheme:\s*dark\s*;/)
 
     const toolbarRule = cssDeclarations(
       styles,
@@ -978,69 +1066,23 @@ describe('MermaidFullscreenViewer', () => {
       /\bbox-shadow:\s*0 2px 8px rgba\(15, 23, 42, 0\.12\)\s*;/,
     )
 
-    const darkToolbarRule = cssDeclarations(
-      styles,
-      ':global(.dark) .mermaid-fullscreen-viewer__toolbar',
-    )
-    expect(darkToolbarRule).toMatch(/\bbackground:\s*#252b32\s*;/)
-    expect(darkToolbarRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
-    expect(darkToolbarRule).toMatch(
-      /\bbox-shadow:\s*0 2px 8px rgba\(0, 0, 0, 0\.32\)\s*;/,
-    )
-
     const toolbarHoverRule = cssDeclarations(
       styles,
       '.mermaid-fullscreen-viewer__toolbar button:hover',
     )
     expect(toolbarHoverRule).toMatch(/\bbackground:\s*#f1f4f7\s*;/)
     expect(toolbarHoverRule).toMatch(/\bborder-color:\s*#667085\s*;/)
-    const darkToolbarHoverRule = cssDeclarations(
-      styles,
-      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover',
-    )
-    expect(darkToolbarHoverRule).toMatch(/\bbackground:\s*#343b43\s*;/)
-    expect(darkToolbarHoverRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
-    const darkFocusRule = cssDeclarations(
-      styles,
-      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:focus-visible',
-    )
-    const darkFocusColor = cssHexColor(darkFocusRule, 'outline-color')
-    expect(darkFocusColor).toBe('#80c7ff')
-    expect(
-      contrastRatio(
-        darkFocusColor,
-        cssHexColor(darkToolbarRule, 'background'),
-      ),
-    ).toBeGreaterThanOrEqual(3)
 
     const lightToolbarBorder = cssHexColor(toolbarRule, 'border')
     const lightToolbarBackground = cssHexColor(toolbarRule, 'background')
-    const darkToolbarBorder = cssHexColor(darkToolbarRule, 'border-color')
-    const darkToolbarBackground = cssHexColor(darkToolbarRule, 'background')
     const lightHoverBorder = cssHexColor(toolbarHoverRule, 'border-color')
     const lightHoverBackground = cssHexColor(toolbarHoverRule, 'background')
-    const darkHoverBorder = cssHexColor(
-      darkToolbarHoverRule,
-      'border-color',
-    )
-    const darkHoverBackground = cssHexColor(
-      darkToolbarHoverRule,
-      'background',
-    )
     for (const [boundary, surface] of [
       [lightToolbarBorder, lightToolbarBackground],
-      [darkToolbarBorder, darkToolbarBackground],
       [lightHoverBorder, lightHoverBackground],
-      [darkHoverBorder, darkHoverBackground],
     ]) {
       expect(contrastRatio(boundary, surface)).toBeGreaterThanOrEqual(3)
     }
-    expect(
-      contrastRatio(
-        darkFocusColor,
-        cssHexColor(darkToolbarHoverRule, 'background'),
-      ),
-    ).toBeGreaterThanOrEqual(3)
 
     const toolbarButtonRule = cssDeclarations(
       styles,
@@ -1080,17 +1122,12 @@ describe('MermaidFullscreenViewer', () => {
     expect(separatorRule).toMatch(/\bwidth:\s*1px\s*;/)
     expect(separatorRule).toMatch(/\bbackground:\s*#667085\s*;/)
 
-    const darkSeparatorRule = cssDeclarations(
-      styles,
-      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:last-child::before',
-    )
-    expect(darkSeparatorRule).toMatch(/\bbackground:\s*#98a2b3\s*;/)
-    for (const [divider, surface] of [
-      [cssHexColor(separatorRule, 'background'), lightToolbarBackground],
-      [cssHexColor(darkSeparatorRule, 'background'), darkToolbarBackground],
-    ]) {
-      expect(contrastRatio(divider, surface)).toBeGreaterThanOrEqual(3)
-    }
+    expect(
+      contrastRatio(
+        cssHexColor(separatorRule, 'background'),
+        lightToolbarBackground,
+      ),
+    ).toBeGreaterThanOrEqual(3)
 
     const mobileStart = styles.indexOf('@media (max-width: 480px)')
     const reducedMotionStart = styles.indexOf(
