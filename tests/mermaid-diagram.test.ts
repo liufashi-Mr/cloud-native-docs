@@ -6,6 +6,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import MermaidDiagram from '../docs/.vitepress/theme/components/MermaidDiagram.vue'
+import MermaidFullscreenViewer from '../docs/.vitepress/theme/components/MermaidFullscreenViewer.vue'
 
 const vitepressData = vi.hoisted(
   (): { isDark: Ref<boolean> | null } => ({ isDark: null }),
@@ -144,5 +145,196 @@ describe('MermaidDiagram', () => {
     const canvas = wrapper.find('.mermaid-diagram__canvas')
     expect(canvas.classes()).not.toContain('mermaid-diagram__canvas--wide')
     expect(canvas.attributes('style')).toBeUndefined()
+  })
+
+  it('opens the already-rendered SVG without rerendering Mermaid', async () => {
+    const renderedSvg =
+      '<svg viewBox="0 0 1200 600"><text>diagram</text></svg>'
+    mermaid.render.mockResolvedValue({ svg: renderedSvg })
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+
+    const trigger = wrapper.get('button[aria-label="全屏查看图表"]')
+    expect(trigger.attributes('title')).toBe('全屏查看图表')
+    await trigger.trigger('click')
+    await nextTick()
+
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog?.querySelector('.mermaid-fullscreen-viewer__surface')?.innerHTML).toBe(
+      renderedSvg,
+    )
+    expect(mermaid.render).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores focus after closing and supports repeated open and close', async () => {
+    mermaid.render.mockResolvedValue({
+      svg: '<svg viewBox="0 0 1200 600"><text>diagram</text></svg>',
+    })
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+
+    const trigger = wrapper.get<HTMLButtonElement>(
+      'button[aria-label="全屏查看图表"]',
+    )
+    trigger.element.focus()
+    await trigger.trigger('click')
+    await nextTick()
+    await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
+    await nextTick()
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('only shows the full-screen trigger after a successful SVG render', async () => {
+    const pendingRender = deferred<{ svg: string }>()
+    mermaid.render.mockReturnValue(pendingRender.promise)
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await nextTick()
+    expect(wrapper.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(wrapper.find('.mermaid-diagram__source').exists()).toBe(true)
+
+    pendingRender.resolve({ svg: '<svg><text>diagram</text></svg>' })
+    await flushPromises()
+    expect(wrapper.find('button[aria-label="全屏查看图表"]').exists()).toBe(true)
+
+    wrapper.unmount()
+    mermaid.render.mockRejectedValueOnce(new Error('bad diagram'))
+    const errored = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+    expect(errored.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(errored.find('.mermaid-diagram__error').text()).toContain('bad diagram')
+  })
+
+  it('keeps the full-screen action outside the horizontally scrolling canvas', async () => {
+    mermaid.render.mockResolvedValue({
+      svg: '<svg viewBox="0 0 2371 1868"><text>wide diagram</text></svg>',
+    })
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+
+    const triggerSelector = 'button[aria-label="全屏查看图表"]'
+    expect(wrapper.get('.mermaid-diagram__actions').find(triggerSelector).exists()).toBe(
+      true,
+    )
+    expect(wrapper.get('.mermaid-diagram__viewport').find(triggerSelector).exists()).toBe(
+      false,
+    )
+
+    const componentSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'docs/.vitepress/theme/components/MermaidDiagram.vue',
+      ),
+      'utf8',
+    )
+    expect(
+      componentSource.match(/\.mermaid-diagram\s*\{([^}]*)\}/)?.[1],
+    ).toMatch(/\boverflow-x:\s*auto\s*;/)
+    expect(
+      componentSource.match(/\.mermaid-diagram__viewport\s*\{([^}]*)\}/)?.[1],
+    ).toMatch(/\boverflow-x:\s*auto\s*;/)
+  })
+
+  it('updates an open viewer with the latest theme SVG without an extra render', async () => {
+    const lightSvg = '<svg data-theme="light"><text>light</text></svg>'
+    const darkSvg = '<svg data-theme="dark"><text>dark</text></svg>'
+    mermaid.render
+      .mockResolvedValueOnce({ svg: lightSvg })
+      .mockResolvedValueOnce({ svg: darkSvg })
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
+    await nextTick()
+
+    expect(
+      document.body.querySelector('.mermaid-fullscreen-viewer__surface')?.innerHTML,
+    ).toBe(lightSvg)
+
+    vitepressData.isDark!.value = true
+    await nextTick()
+    await flushPromises()
+
+    expect(wrapper.find('svg[data-theme="dark"]').exists()).toBe(true)
+    expect(
+      document.body.querySelector('.mermaid-fullscreen-viewer__surface')?.innerHTML,
+    ).toBe(darkSvg)
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes an open viewer when the latest theme render fails', async () => {
+    mermaid.render
+      .mockResolvedValueOnce({ svg: '<svg data-theme="light"></svg>' })
+      .mockRejectedValueOnce(new Error('dark render failed'))
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+
+    vitepressData.isDark!.value = true
+    await nextTick()
+    await flushPromises()
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(wrapper.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(wrapper.get('.mermaid-diagram__error').text()).toContain(
+      'dark render failed',
+    )
+  })
+
+  it('closes the viewer and restores body scrolling when unmounted', async () => {
+    document.body.style.overflow = 'scroll'
+    mermaid.render.mockResolvedValue({
+      svg: '<svg viewBox="0 0 1200 600"><text>diagram</text></svg>',
+    })
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
+    await nextTick()
+    expect(document.body.style.overflow).toBe('hidden')
+
+    wrapper.unmount()
+    await nextTick()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.body.style.overflow).toBe('scroll')
   })
 })

@@ -3,17 +3,22 @@ let diagramSequence = 0
 </script>
 
 <script setup lang="ts">
+import { Maximize2 } from '@lucide/vue'
 import { useData } from 'vitepress'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+import MermaidFullscreenViewer from './MermaidFullscreenViewer.vue'
 
 const props = defineProps<{
   encodedSource: string
 }>()
 
 const container = ref<HTMLElement>()
+const fullscreenTrigger = ref<HTMLButtonElement>()
 const svg = ref('')
 const errorMessage = ref('')
 const renderedViewBoxWidth = ref(0)
+const viewerOpen = ref(false)
 const { isDark } = useData()
 let active = false
 let renderGeneration = 0
@@ -53,6 +58,17 @@ function renderedSvgViewBoxWidth(): number {
     : 0
 }
 
+function openViewer(): void {
+  if (svg.value) viewerOpen.value = true
+}
+
+function closeViewer(): void {
+  if (!viewerOpen.value) return
+
+  viewerOpen.value = false
+  void nextTick(() => fullscreenTrigger.value?.focus())
+}
+
 async function renderDiagram(): Promise<void> {
   const generation = ++renderGeneration
   const theme = isDark.value ? 'dark' : 'default'
@@ -82,6 +98,7 @@ async function renderDiagram(): Promise<void> {
     }
   } catch (error) {
     if (!active || generation !== renderGeneration) return
+    viewerOpen.value = false
     svg.value = ''
     renderedViewBoxWidth.value = 0
     errorMessage.value =
@@ -103,24 +120,84 @@ onUnmounted(() => {
 
 <template>
   <figure class="mermaid-diagram">
-    <div
-      v-if="svg"
-      ref="container"
-      class="mermaid-diagram__canvas"
-      :class="{ 'mermaid-diagram__canvas--wide': wideCanvasStyle }"
-      :style="wideCanvasStyle"
-      v-html="svg"
-    />
+    <template v-if="svg">
+      <div class="mermaid-diagram__viewport">
+        <div
+          ref="container"
+          class="mermaid-diagram__canvas"
+          :class="{ 'mermaid-diagram__canvas--wide': wideCanvasStyle }"
+          :style="wideCanvasStyle"
+          v-html="svg"
+        />
+      </div>
+      <div class="mermaid-diagram__actions">
+        <button
+          ref="fullscreenTrigger"
+          class="mermaid-diagram__fullscreen"
+          type="button"
+          aria-label="全屏查看图表"
+          title="全屏查看图表"
+          @click="openViewer"
+        >
+          <Maximize2 :size="20" aria-hidden="true" />
+        </button>
+      </div>
+    </template>
     <pre v-else class="mermaid-diagram__source"><code>{{ source }}</code></pre>
     <figcaption v-if="errorMessage" class="mermaid-diagram__error" role="alert">
       图表渲染失败：{{ errorMessage }}
     </figcaption>
   </figure>
+  <MermaidFullscreenViewer
+    v-if="viewerOpen && svg"
+    :svg="svg"
+    @close="closeViewer"
+  />
 </template>
 
 <style scoped>
 .mermaid-diagram {
   margin: 24px 0;
+  overflow-x: auto;
+}
+
+.mermaid-diagram__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.mermaid-diagram__fullscreen {
+  display: inline-grid;
+  flex: 0 0 40px;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.mermaid-diagram__fullscreen:hover {
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-default-soft);
+  border-color: var(--vp-c-text-3);
+}
+
+.mermaid-diagram__fullscreen:focus-visible {
+  outline: 3px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+}
+
+.mermaid-diagram__viewport {
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -148,5 +225,11 @@ onUnmounted(() => {
   margin-top: 8px;
   color: var(--vp-c-danger-1);
   font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mermaid-diagram__fullscreen {
+    transition: none;
+  }
 }
 </style>
