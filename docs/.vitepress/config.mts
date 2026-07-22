@@ -2,7 +2,10 @@ import { defineConfig } from 'vitepress'
 
 import { mermaidFencePlugin } from './markdown/mermaid-fence'
 
+const siteBase = process.env.BASE_PATH || '/'
+
 export default defineConfig({
+  base: siteBase,
   lang: 'zh-CN',
   title: 'Kubernetes',
   description: '用关系与场景串联 Kubernetes 核心概念。',
@@ -128,7 +131,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/kubernetes-logo.svg',
-    logoLink: '/',
+    logoLink: siteBase,
     siteTitle: 'Kubernetes',
     nav: [
       { text: '概念', link: '/concepts/resource-model' },

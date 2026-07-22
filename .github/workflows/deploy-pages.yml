@@ -29,7 +29,7 @@ jobs:
       - run: npm run typecheck
       - uses: actions/configure-pages@v5
       - run: |
-          BASE_PATH="/${GITHUB_REPOSITORY#*/}/"
+          export BASE_PATH="/${GITHUB_REPOSITORY#*/}/"
           npm run build -- --base="$BASE_PATH"
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -74,7 +74,7 @@ describe('GitHub Pages deployment', () => {
       { run: 'npm run typecheck' },
       { uses: 'actions/configure-pages@v5' },
       {
-        run: 'BASE_PATH="/${GITHUB_REPOSITORY#*/}/"\nnpm run build -- --base="$BASE_PATH"\n',
+        run: 'export BASE_PATH="/${GITHUB_REPOSITORY#*/}/"\nnpm run build -- --base="$BASE_PATH"\n',
       },
       {
         uses: 'actions/upload-pages-artifact@v3',
@@ -99,6 +99,9 @@ describe('GitHub Pages deployment', () => {
       'utf8',
     )
 
+    expect(config).toContain("const siteBase = process.env.BASE_PATH || '/'")
+    expect(config).toContain('base: siteBase')
+    expect(config).toContain('logoLink: siteBase')
     expect(config).toContain('transformHead({ siteData })')
     expect(config).toContain('`${siteData.base}kubernetes-logo.svg`')
     expect(config).not.toContain("href: '/kubernetes-logo.svg'")
