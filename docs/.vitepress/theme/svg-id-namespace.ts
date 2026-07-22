@@ -1,4 +1,4 @@
-import { generate, parse, walk } from 'css-tree'
+import { generate, ident, parse, walk } from 'css-tree'
 
 const URL_REFERENCE_PATTERN = /url\(\s*(["']?)\s*#([^)"']+?)\s*\1\s*\)/gi
 const ARIA_REFERENCE_ATTRIBUTES = new Set([
@@ -43,24 +43,26 @@ function rewriteFragmentReference(
   return namespacedId ? `${match[1]}#${namespacedId}${match[3]}` : value
 }
 
-function rewriteStyle(
-  style: string,
+function rewriteCss(
+  css: string,
   idMap: ReadonlyMap<string, string>,
+  context: 'declarationList' | undefined,
 ): string {
   try {
     let parseFailed = false
-    const ast = parse(style, {
+    const ast = parse(css, {
+      context,
       parseCustomProperty: true,
       onParseError: () => {
         parseFailed = true
       },
     })
-    if (parseFailed) return style
+    if (parseFailed) return css
 
     walk(ast, (node) => {
-      if (node.type === 'IdSelector') {
-        const namespacedId = idMap.get(node.name)
-        if (namespacedId) node.name = namespacedId
+      if (context === undefined && node.type === 'IdSelector') {
+        const namespacedId = idMap.get(ident.decode(node.name))
+        if (namespacedId) node.name = ident.encode(namespacedId)
         return
       }
       if (node.type !== 'Url' || !node.value.startsWith('#')) return
@@ -70,8 +72,22 @@ function rewriteStyle(
     })
     return generate(ast)
   } catch {
-    return style
+    return css
   }
+}
+
+function rewriteStyle(
+  style: string,
+  idMap: ReadonlyMap<string, string>,
+): string {
+  return rewriteCss(style, idMap, undefined)
+}
+
+function rewriteInlineStyle(
+  style: string,
+  idMap: ReadonlyMap<string, string>,
+): string {
+  return rewriteCss(style, idMap, 'declarationList')
 }
 
 function allocateElementIds(
@@ -145,7 +161,9 @@ export function namespaceSvgIds(svg: string, namespace: string): string {
           .join(' ')
       }
 
-      value = rewriteUrlReferences(value, idMap)
+      value = attribute.localName.toLowerCase() === 'style'
+        ? rewriteInlineStyle(value, idMap)
+        : rewriteUrlReferences(value, idMap)
       if (value === attribute.value) continue
       if (attribute.namespaceURI) {
         element.setAttributeNS(attribute.namespaceURI, attribute.name, value)

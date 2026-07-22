@@ -131,6 +131,64 @@ describe('namespaceSvgIds', () => {
     expect(style).toContain('stroke:#node')
   })
 
+  it('decodes escaped CSS selectors and encodes namespaced ids', () => {
+    const source = String.raw`
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>
+          #foo\:bar,#\31 23,#测试 {
+            clip-path: url(#foo\:bar);
+            marker-end: url(#\31 23);
+          }
+        </style>
+        <g id="foo:bar" /><g id="123" /><g id="测试" />
+      </svg>
+    `
+
+    const root = parseSvg(namespaceSvgIds(source, 'viewer'))
+    const style = root.querySelector('style')?.textContent ?? ''
+    expect(style).toContain(
+      String.raw`#viewer-foo\:bar,#viewer-123,#viewer-测试`,
+    )
+    expect(style).toContain('clip-path:url(#viewer-foo:bar)')
+    expect(style).toContain('marker-end:url(#viewer-123)')
+    expect(root.querySelector(String.raw`#viewer-foo\:bar`)?.id).toBe(
+      'viewer-foo:bar',
+    )
+    expect(root.querySelector('#viewer-123')?.id).toBe('viewer-123')
+    expect(root.querySelector('#viewer-测试')?.id).toBe('viewer-测试')
+  })
+
+  it('rewrites only real URL tokens in inline style attributes', () => {
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="arrow" /></defs>
+        <g id="node"
+          style="--label:'url(#arrow)';marker-end:url(#arrow);--marker:url(#arrow);clip-path:url(#missing)" />
+      </svg>
+    `
+
+    const style = parseSvg(namespaceSvgIds(source, 'viewer'))
+      .querySelector('g')?.getAttribute('style')
+    expect(style).toBe(
+      '--label:"url(#arrow)";marker-end:url(#viewer-arrow);' +
+        '--marker:url(#viewer-arrow);clip-path:url(#missing)',
+    )
+  })
+
+  it('keeps malformed inline style attributes unchanged', () => {
+    const invalidStyle = 'marker-end:url(#arrow); }'
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <marker id="arrow" /><g id="node" style="${invalidStyle}" />
+      </svg>
+    `
+
+    expect(
+      parseSvg(namespaceSvgIds(source, 'viewer'))
+        .querySelector('g')?.getAttribute('style'),
+    ).toBe(invalidStyle)
+  })
+
   it('gives duplicate source ids unique targets while references keep the first target', () => {
     const source = `
       <svg xmlns="http://www.w3.org/2000/svg">
