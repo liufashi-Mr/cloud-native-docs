@@ -126,16 +126,17 @@ describe('GitHub Pages deployment', () => {
     expect(await readFile(nodeVersionPath, 'utf8')).toBe('24\n')
   })
 
-  it('enables GitHub Pages before deployment', async () => {
+  it('uses the manually preconfigured GitHub Pages site', async () => {
     const workflow = await readWorkflow()
     const configurePages = workflow.jobs.deploy.steps.find(
       ({ uses }) => uses === 'actions/configure-pages@v6',
     )
+    const source = await readFile(workflowPath, 'utf8')
 
-    expect(configurePages?.with).toEqual({
-      enablement: true,
-      token: '${{ secrets.PAGES_ENABLEMENT_TOKEN }}',
-    })
+    expect(configurePages).toBeDefined()
+    expect(configurePages?.with).toBeUndefined()
+    expect(source).not.toContain('PAGES_ENABLEMENT_TOKEN')
+    expect(source).not.toContain('secrets.')
   })
 
   it.each([
