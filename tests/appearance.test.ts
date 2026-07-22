@@ -5,6 +5,7 @@ import {
   PRESET_COLORS,
   applyAppearance,
   deriveAccent,
+  deriveTextAccent,
   loadAppearance,
   normalizeHex,
   resolveDarkMode,
@@ -22,6 +23,63 @@ type ApplyAppearanceReturnsVoid = Assert<
 >
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+const DARK_SURFACE = '#1A2224'
+const CONTRAST_COLORS = [
+  ...PRESET_COLORS,
+  '#FFD400',
+  '#00FFFF',
+  '#0066FF',
+  '#FFFFFF',
+  '#000000',
+] as const
+
+function hslToRgb(value: string): [number, number, number] {
+  const match = /^hsl\((\d+) (\d+)% (\d+)%\)$/.exec(value)
+  if (!match) throw new Error(`Expected an HSL color, received ${value}`)
+
+  const hue = Number(match[1])
+  const saturation = Number(match[2]) / 100
+  const lightness = Number(match[3]) / 100
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+  const intermediate = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const offset = lightness - chroma / 2
+  let red = 0
+  let green = 0
+  let blue = 0
+
+  if (hue < 60) [red, green] = [chroma, intermediate]
+  else if (hue < 120) [red, green] = [intermediate, chroma]
+  else if (hue < 180) [green, blue] = [chroma, intermediate]
+  else if (hue < 240) [green, blue] = [intermediate, chroma]
+  else if (hue < 300) [red, blue] = [intermediate, chroma]
+  else [red, blue] = [chroma, intermediate]
+
+  return [red + offset, green + offset, blue + offset]
+}
+
+function hexToRgb(value: string): [number, number, number] {
+  return [1, 3, 5].map(
+    (offset) => Number.parseInt(value.slice(offset, offset + 2), 16) / 255,
+  ) as [number, number, number]
+}
+
+function relativeLuminance([red, green, blue]: [number, number, number]): number {
+  const linear = [red, green, blue].map((channel) =>
+    channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4,
+  )
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const foregroundLuminance = relativeLuminance(hslToRgb(foreground))
+  const backgroundLuminance = relativeLuminance(hexToRgb(background))
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  )
+}
 
 function restoreMatchMedia(): void {
   if (originalMatchMedia) {
@@ -40,6 +98,8 @@ describe('appearance utilities', () => {
     document.documentElement.classList.remove('dark')
     document.documentElement.style.removeProperty('--k8s-accent')
     document.documentElement.style.removeProperty('--k8s-accent-dark')
+    document.documentElement.style.removeProperty('--k8s-accent-text')
+    document.documentElement.style.removeProperty('--k8s-accent-text-dark')
   })
 
   afterEach(() => {
@@ -84,6 +144,25 @@ describe('appearance utilities', () => {
     expect(deriveAccent('#xyzxyz')).toEqual(deriveAccent(DEFAULT_COLOR))
   })
 
+  it.each(CONTRAST_COLORS)(
+    'derives foreground-safe text accents for %s',
+    (color) => {
+      const textAccent = deriveTextAccent(color)
+      const decorativeAccent = deriveAccent(color)
+
+      expect(contrastRatio(textAccent.light, '#FFFFFF')).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(textAccent.dark, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5)
+      expect(textAccent.light.split(' ').slice(0, 2)).toEqual(
+        decorativeAccent.light.split(' ').slice(0, 2),
+      )
+      expect(textAccent.dark.split(' ').slice(0, 2)).toEqual(
+        decorativeAccent.dark.split(' ').slice(0, 2),
+      )
+      expect(contrastRatio(decorativeAccent.light, '#FFFFFF')).toBeGreaterThanOrEqual(3)
+      expect(contrastRatio(decorativeAccent.dark, DARK_SURFACE)).toBeGreaterThanOrEqual(3)
+    },
+  )
+
   it('resolves explicit and automatic color modes', () => {
     expect(resolveDarkMode('auto', true)).toBe(true)
     expect(resolveDarkMode('auto', false)).toBe(false)
@@ -102,6 +181,25 @@ describe('appearance utilities', () => {
     expect(
       document.documentElement.style.getPropertyValue('--k8s-accent-dark'),
     ).toBe('hsl(156 48% 68%)')
+    const textAccent = deriveTextAccent('#8FD8BC')
+    expect(
+      document.documentElement.style.getPropertyValue('--k8s-accent-text'),
+    ).toBe(textAccent.light)
+    expect(
+      document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
+    ).toBe(textAccent.dark)
+    expect(
+      contrastRatio(
+        document.documentElement.style.getPropertyValue('--k8s-accent-text'),
+        '#FFFFFF',
+      ),
+    ).toBeGreaterThanOrEqual(4.5)
+    expect(
+      contrastRatio(
+        document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
+        DARK_SURFACE,
+      ),
+    ).toBeGreaterThanOrEqual(4.5)
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 

@@ -8,6 +8,9 @@
   --k8s-code: #f3f5f7;
   --k8s-accent: #28755d;
   --k8s-accent-dark: #69bea0;
+  --k8s-accent-text: hsl(161 49% 34%);
+  --k8s-accent-text-dark: hsl(161 49% 68%);
+  --k8s-accent-active: var(--k8s-accent);
   --k8s-accent-soft: color-mix(in srgb, var(--k8s-accent) 12%, transparent);
   --k8s-sidebar-width: clamp(232px, 19vw, 296px);
   --k8s-outline-width: clamp(176px, 16vw, 240px);
@@ -22,14 +25,15 @@
   --vp-c-border: #bdc5ce;
   --vp-c-divider: var(--k8s-line);
   --vp-c-gutter: var(--k8s-line);
-  --vp-c-brand-1: var(--k8s-accent);
-  --vp-c-brand-2: color-mix(in srgb, var(--k8s-accent) 84%, black);
+  --vp-c-brand-1: var(--k8s-accent-text);
+  --vp-c-brand-2: color-mix(in srgb, var(--k8s-accent-text) 84%, black);
   --vp-c-brand-3: color-mix(in srgb, var(--k8s-accent) 74%, black);
   --vp-c-brand-soft: var(--k8s-accent-soft);
-  --vp-c-tip-1: var(--k8s-accent);
-  --vp-c-tip-2: var(--k8s-accent);
+  --vp-c-tip-1: var(--k8s-accent-text);
+  --vp-c-tip-2: color-mix(in srgb, var(--k8s-accent-text) 84%, black);
   --vp-c-tip-3: var(--k8s-accent);
   --vp-c-tip-soft: var(--k8s-accent-soft);
+  --vp-code-tab-active-bar-color: var(--k8s-accent-active);
   --vp-code-bg: var(--k8s-code);
   --vp-sidebar-bg-color: var(--k8s-surface);
   --vp-nav-bg-color: color-mix(in srgb, var(--k8s-page) 94%, transparent);
@@ -45,14 +49,15 @@
   --k8s-muted: #abb5be;
   --k8s-line: #343c44;
   --k8s-code: #1d2328;
+  --k8s-accent-active: var(--k8s-accent-dark);
   --k8s-accent-soft: color-mix(in srgb, var(--k8s-accent-dark) 15%, transparent);
   --vp-c-text-3: #89949e;
   --vp-c-border: #4c5660;
-  --vp-c-brand-1: var(--k8s-accent-dark);
-  --vp-c-brand-2: color-mix(in srgb, var(--k8s-accent-dark) 86%, white);
+  --vp-c-brand-1: var(--k8s-accent-text-dark);
+  --vp-c-brand-2: color-mix(in srgb, var(--k8s-accent-text-dark) 86%, white);
   --vp-c-brand-3: color-mix(in srgb, var(--k8s-accent-dark) 74%, white);
-  --vp-c-tip-1: var(--k8s-accent-dark);
-  --vp-c-tip-2: var(--k8s-accent-dark);
+  --vp-c-tip-1: var(--k8s-accent-text-dark);
+  --vp-c-tip-2: color-mix(in srgb, var(--k8s-accent-text-dark) 86%, white);
   --vp-c-tip-3: var(--k8s-accent-dark);
 }
 
@@ -186,7 +191,7 @@ body {
 }
 
 .vp-doc .custom-block.tip {
-  border-left-color: var(--vp-c-brand-1);
+  border-left-color: var(--k8s-accent-active);
 }
 
 .vp-doc .mermaid-diagram {
@@ -267,7 +272,7 @@ body {
 }
 
 .k8s-appearance__swatch[aria-pressed='true'] {
-  border-color: var(--vp-c-brand-1);
+  border-color: var(--k8s-accent-active);
 }
 
 .k8s-appearance__custom {
@@ -317,7 +322,7 @@ body {
 .k8s-appearance__modes button:hover,
 .k8s-appearance__modes button:focus-visible,
 .k8s-appearance__modes button[aria-pressed='true'] {
-  border-color: var(--vp-c-brand-1);
+  border-color: var(--k8s-accent-active);
   color: var(--vp-c-text-1);
 }
 

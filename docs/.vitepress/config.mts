@@ -40,8 +40,54 @@ export default defineConfig({
         var rawSaturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1))
         var saturation = Math.min(72, Math.max(34, Math.round(rawSaturation * 100)))
         var hueDegrees = Math.floor(hue * 60)
+
+        function hslToRgb(hueValue, saturationPercent, lightnessPercent) {
+          var saturationValue = saturationPercent / 100
+          var lightnessValue = lightnessPercent / 100
+          var chroma = (1 - Math.abs(2 * lightnessValue - 1)) * saturationValue
+          var intermediate = chroma * (1 - Math.abs(((hueValue / 60) % 2) - 1))
+          var offset = lightnessValue - chroma / 2
+          var redValue = 0
+          var greenValue = 0
+          var blueValue = 0
+          if (hueValue < 60) { redValue = chroma; greenValue = intermediate }
+          else if (hueValue < 120) { redValue = intermediate; greenValue = chroma }
+          else if (hueValue < 180) { greenValue = chroma; blueValue = intermediate }
+          else if (hueValue < 240) { greenValue = intermediate; blueValue = chroma }
+          else if (hueValue < 300) { redValue = intermediate; blueValue = chroma }
+          else { redValue = chroma; blueValue = intermediate }
+          return [redValue + offset, greenValue + offset, blueValue + offset]
+        }
+
+        function relativeLuminance(rgb) {
+          function linearize(channel) {
+            return channel <= 0.04045
+              ? channel / 12.92
+              : Math.pow((channel + 0.055) / 1.055, 2.4)
+          }
+          return 0.2126 * linearize(rgb[0]) + 0.7152 * linearize(rgb[1]) + 0.0722 * linearize(rgb[2])
+        }
+
+        function contrastRatio(first, second) {
+          var firstLuminance = relativeLuminance(first)
+          var secondLuminance = relativeLuminance(second)
+          return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05)
+        }
+
+        function findTextLightness(initialLightness, direction, background) {
+          var textLightness = initialLightness
+          while (contrastRatio(hslToRgb(hueDegrees, saturation, textLightness), background) < 4.5 && textLightness > 0 && textLightness < 100) {
+            textLightness += direction
+          }
+          return textLightness
+        }
+
+        var lightTextLightness = findTextLightness(36, -1, [1, 1, 1])
+        var darkTextLightness = findTextLightness(68, 1, [26 / 255, 34 / 255, 36 / 255])
         root.style.setProperty('--k8s-accent', 'hsl(' + hueDegrees + ' ' + saturation + '% 36%)')
         root.style.setProperty('--k8s-accent-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% 68%)')
+        root.style.setProperty('--k8s-accent-text', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + lightTextLightness + '%)')
+        root.style.setProperty('--k8s-accent-text-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + darkTextLightness + '%)')
 
         var systemDark = false
         if (mode === 'auto') {

@@ -8,6 +8,21 @@ const styles = readFileSync(
 )
 
 describe('responsive theme styles', () => {
+  it('maps brand text to foreground-safe accent tokens', () => {
+    expect(styles).toMatch(
+      /:root\s*{[^}]*--vp-c-brand-1:\s*var\(--k8s-accent-text\)/,
+    )
+    expect(styles).toMatch(
+      /\.dark\s*{[^}]*--vp-c-brand-1:\s*var\(--k8s-accent-text-dark\)/,
+    )
+    expect(styles).toMatch(
+      /:root\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--k8s-accent-text\)/,
+    )
+    expect(styles).toMatch(
+      /\.dark\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--k8s-accent-text-dark\)/,
+    )
+  })
+
   it('contains mobile code overflow inside the document gutter', () => {
     const mobileStyles = styles.slice(
       styles.indexOf('@media (max-width: 767px)'),

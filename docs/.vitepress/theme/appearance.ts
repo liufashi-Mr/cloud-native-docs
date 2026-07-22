@@ -28,12 +28,55 @@ export interface AccentColors {
   dark: string
 }
 
+interface AccentChannels {
+  hue: number
+  saturation: number
+}
+
+type RgbColor = readonly [number, number, number]
+
+const LIGHT_TEXT_BACKGROUND: RgbColor = [1, 1, 1]
+const DARK_TEXT_BACKGROUND: RgbColor = [26 / 255, 34 / 255, 36 / 255]
+const MINIMUM_TEXT_CONTRAST = 4.5
+
 export function normalizeHex(value: string): string | null {
   const match = /^#?([0-9a-f]{6})$/i.exec(value)
   return match ? `#${match[1].toUpperCase()}` : null
 }
 
 export function deriveAccent(value: string): AccentColors {
+  const { hue, saturation } = deriveAccentChannels(value)
+
+  return {
+    light: formatHsl(hue, saturation, 36),
+    dark: formatHsl(hue, saturation, 68),
+  }
+}
+
+export function deriveTextAccent(value: string): AccentColors {
+  const { hue, saturation } = deriveAccentChannels(value)
+  const light = findContrastLightness(
+    hue,
+    saturation,
+    36,
+    -1,
+    LIGHT_TEXT_BACKGROUND,
+  )
+  const dark = findContrastLightness(
+    hue,
+    saturation,
+    68,
+    1,
+    DARK_TEXT_BACKGROUND,
+  )
+
+  return {
+    light: formatHsl(hue, saturation, light),
+    dark: formatHsl(hue, saturation, dark),
+  }
+}
+
+function deriveAccentChannels(value: string): AccentChannels {
   const normalized = normalizeHex(value) ?? DEFAULT_COLOR
   const red = Number.parseInt(normalized.slice(1, 3), 16) / 255
   const green = Number.parseInt(normalized.slice(3, 5), 16) / 255
@@ -59,10 +102,78 @@ export function deriveAccent(value: string): AccentColors {
   const saturation = Math.min(72, Math.max(34, Math.round(rawSaturation * 100)))
   const hueDegrees = Math.floor(hue * 60)
 
-  return {
-    light: `hsl(${hueDegrees} ${saturation}% 36%)`,
-    dark: `hsl(${hueDegrees} ${saturation}% 68%)`,
+  return { hue: hueDegrees, saturation }
+}
+
+function formatHsl(hue: number, saturation: number, lightness: number): string {
+  return `hsl(${hue} ${saturation}% ${lightness}%)`
+}
+
+function findContrastLightness(
+  hue: number,
+  saturation: number,
+  initialLightness: number,
+  direction: -1 | 1,
+  background: RgbColor,
+): number {
+  let lightness = initialLightness
+
+  while (
+    contrastRatio(hslToRgb(hue, saturation, lightness), background) <
+      MINIMUM_TEXT_CONTRAST &&
+    lightness > 0 &&
+    lightness < 100
+  ) {
+    lightness += direction
   }
+
+  return lightness
+}
+
+function hslToRgb(
+  hue: number,
+  saturationPercent: number,
+  lightnessPercent: number,
+): RgbColor {
+  const saturation = saturationPercent / 100
+  const lightness = lightnessPercent / 100
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+  const intermediate = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const offset = lightness - chroma / 2
+  let red = 0
+  let green = 0
+  let blue = 0
+
+  if (hue < 60) [red, green] = [chroma, intermediate]
+  else if (hue < 120) [red, green] = [intermediate, chroma]
+  else if (hue < 180) [green, blue] = [chroma, intermediate]
+  else if (hue < 240) [green, blue] = [intermediate, chroma]
+  else if (hue < 300) [red, blue] = [intermediate, chroma]
+  else [red, blue] = [chroma, intermediate]
+
+  return [red + offset, green + offset, blue + offset]
+}
+
+function relativeLuminance([red, green, blue]: RgbColor): number {
+  const linearize = (channel: number): number =>
+    channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4
+
+  return (
+    0.2126 * linearize(red) +
+    0.7152 * linearize(green) +
+    0.0722 * linearize(blue)
+  )
+}
+
+function contrastRatio(first: RgbColor, second: RgbColor): number {
+  const firstLuminance = relativeLuminance(first)
+  const secondLuminance = relativeLuminance(second)
+  return (
+    (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05)
+  )
 }
 
 export function resolveDarkMode(
@@ -86,8 +197,11 @@ export function applyAppearance(
   if (!root) return
 
   const accent = deriveAccent(color)
+  const textAccent = deriveTextAccent(color)
   root.style.setProperty('--k8s-accent', accent.light)
   root.style.setProperty('--k8s-accent-dark', accent.dark)
+  root.style.setProperty('--k8s-accent-text', textAccent.light)
+  root.style.setProperty('--k8s-accent-text-dark', textAccent.dark)
   root.classList.toggle('dark', dark)
 }
 
