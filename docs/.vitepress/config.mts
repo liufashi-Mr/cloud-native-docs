@@ -3,13 +3,6 @@ import { defineConfig } from 'vitepress'
 import { mermaidFencePlugin } from './markdown/mermaid-fence'
 
 const plannedFutureRoutes = [
-  '/concepts/resource-model',
-  '/concepts/cluster-nodes',
-  '/concepts/workloads',
-  '/concepts/networking',
-  '/concepts/config-storage',
-  '/concepts/security',
-  '/concepts/scheduling-resources',
   '/operations/health-lifecycle',
   '/operations/release-scaling',
   '/operations/troubleshooting',
@@ -138,6 +131,18 @@ export default defineConfig({
         items: [
           { text: '概念总览', link: '/' },
           { text: '发布与调谐之旅', link: '/guide/deployment-flow' },
+        ],
+      },
+      {
+        text: '核心概念',
+        items: [
+          { text: '资源对象与元数据', link: '/concepts/resource-model' },
+          { text: '集群与节点', link: '/concepts/cluster-nodes' },
+          { text: '工作负载', link: '/concepts/workloads' },
+          { text: '网络与流量', link: '/concepts/networking' },
+          { text: '配置与存储', link: '/concepts/config-storage' },
+          { text: '身份与安全', link: '/concepts/security' },
+          { text: '调度与资源', link: '/concepts/scheduling-resources' },
         ],
       },
     ],

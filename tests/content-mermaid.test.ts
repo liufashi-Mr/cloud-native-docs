@@ -1,15 +1,21 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import mermaid from 'mermaid'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const diagramFiles = [
-  'docs/index.md',
-  'docs/guide/deployment-flow.md',
-]
+const docsRoot = resolve(root, 'docs')
+
+function publicMarkdownFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name.startsWith('.') || entry.name === 'superpowers') return []
+    const absolutePath = resolve(directory, entry.name)
+    if (entry.isDirectory()) return publicMarkdownFiles(absolutePath)
+    return entry.name.endsWith('.md') ? [absolutePath] : []
+  })
+}
 
 function mermaidFences(markdown: string): string[] {
   return Array.from(
@@ -26,19 +32,23 @@ describe('documentation Mermaid diagrams', () => {
     })
   })
 
-  it.each(diagramFiles)('%s contains only parseable Mermaid fences', async (file) => {
-    const markdown = readFileSync(resolve(root, file), 'utf8')
-    const diagrams = mermaidFences(markdown)
+  it('parses every Mermaid fence in public content', async () => {
+    const markdownFiles = publicMarkdownFiles(docsRoot)
+    let parsedDiagrams = 0
 
-    expect(diagrams.length, `${file} has no Mermaid fences`).toBeGreaterThan(0)
-
-    for (const [index, diagram] of diagrams.entries()) {
-      try {
-        await mermaid.parse(diagram)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        throw new Error(`${file} Mermaid fence ${index + 1}: ${message}`)
+    for (const file of markdownFiles) {
+      const markdown = readFileSync(file, 'utf8')
+      for (const [index, diagram] of mermaidFences(markdown).entries()) {
+        try {
+          await mermaid.parse(diagram)
+          parsedDiagrams += 1
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          throw new Error(`${file} Mermaid fence ${index + 1}: ${message}`)
+        }
       }
     }
+
+    expect(parsedDiagrams).toBeGreaterThan(0)
   })
 })

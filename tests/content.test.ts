@@ -20,6 +20,49 @@ const contentFiles = [
 ]
 
 const docsRoot = resolve(root, 'docs')
+const coreConceptFiles = [
+  'docs/concepts/resource-model.md',
+  'docs/concepts/cluster-nodes.md',
+  'docs/concepts/workloads.md',
+  'docs/concepts/networking.md',
+  'docs/concepts/config-storage.md',
+  'docs/concepts/security.md',
+  'docs/concepts/scheduling-resources.md',
+]
+
+const coreConceptContracts: Record<string, string[]> = {
+  'docs/concepts/resource-model.md': [
+    'apiVersion', 'kind', 'metadata', 'spec', 'status', 'UID', 'Namespace',
+    'labels', 'selectors', 'annotations', 'OwnerReference', 'Finalizer',
+    'deletionTimestamp', 'generation', 'observedGeneration', 'resourceVersion',
+  ],
+  'docs/concepts/cluster-nodes.md': [
+    'API Server', 'etcd', 'Controller Manager', 'Scheduler', 'Node', 'kubelet',
+    'kube-proxy', 'CRI', 'CNI', 'CSI', 'failure domain',
+  ],
+  'docs/concepts/workloads.md': [
+    'Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job',
+    'CronJob', 'kubelet', 'container runtime',
+  ],
+  'docs/concepts/networking.md': [
+    'Pod IP', 'CNI', 'Service', 'EndpointSlice', 'CoreDNS', 'Ingress',
+    'Gateway API', 'NetworkPolicy', 'selector', 'readiness',
+  ],
+  'docs/concepts/config-storage.md': [
+    'ConfigMap', 'Secret', 'base64', 'Volume', 'PV', 'PVC', 'StorageClass',
+    'access mode', 'reclaim policy', 'CSI', 'persistentVolumeClaim',
+  ],
+  'docs/concepts/security.md': [
+    'Subject', 'ServiceAccount', 'Role', 'ClusterRole', 'RoleBinding',
+    'ClusterRoleBinding', 'RBAC', 'SecurityContext', 'Pod Security Standards',
+    'NetworkPolicy',
+  ],
+  'docs/concepts/scheduling-resources.md': [
+    'requests', 'limits', 'QoS', 'filtering', 'scoring', 'nodeSelector',
+    'affinity', 'anti-affinity', 'taints', 'tolerations', 'PriorityClass',
+    'preemption', 'topology spread', 'PDB', 'voluntary',
+  ],
+}
 
 function resolveRootAbsoluteHref(href: string): {
   pathname: string
@@ -49,6 +92,38 @@ function resolveRootAbsoluteHref(href: string): {
 describe('content contract', () => {
   it.each(contentFiles)('%s exists', (file) => {
     expect(existsSync(resolve(root, file))).toBe(true)
+  })
+
+  it.each(coreConceptFiles)('%s teaches its required concepts with a usable example', (file) => {
+    const markdown = readFileSync(resolve(root, file), 'utf8')
+
+    for (const term of coreConceptContracts[file]) {
+      expect(markdown, `${file} is missing ${term}`).toContain(term)
+    }
+
+    expect(markdown).toMatch(/```(?:yaml|bash)\n[\s\S]+?```/)
+    expect(markdown).toMatch(/(?:误区|注意|不要|并不|不等于|不能)/)
+    expect(markdown).toMatch(/\[[^\]]+\]\([^)]*\)/)
+  })
+
+  it('lists the seven core concept chapters in learning order', () => {
+    const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
+    const group = config.match(/text: '核心概念',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
+
+    expect(group, 'sidebar is missing the core concept group').not.toBeNull()
+    const links = Array.from(
+      group?.[1].matchAll(/link: '([^']+)'/g) ?? [],
+      (match) => match[1],
+    )
+    expect(links).toEqual([
+      '/concepts/resource-model',
+      '/concepts/cluster-nodes',
+      '/concepts/workloads',
+      '/concepts/networking',
+      '/concepts/config-storage',
+      '/concepts/security',
+      '/concepts/scheduling-resources',
+    ])
   })
 
   it('defines the fluid responsive theme contracts', () => {
@@ -173,13 +248,6 @@ describe('content contract', () => {
   it('uses an exact allowlist for the planned future routes', () => {
     const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
     const plannedRoutes = [
-      '/concepts/resource-model',
-      '/concepts/cluster-nodes',
-      '/concepts/workloads',
-      '/concepts/networking',
-      '/concepts/config-storage',
-      '/concepts/security',
-      '/concepts/scheduling-resources',
       '/operations/health-lifecycle',
       '/operations/release-scaling',
       '/operations/troubleshooting',
@@ -289,13 +357,6 @@ describe('content contract', () => {
   it('keeps relative Markdown links valid', () => {
     const markdownLink = /\[[^\]]*\]\(([^)]+)\)/g
     const plannedFutureRoutes = new Set([
-      '/concepts/resource-model',
-      '/concepts/cluster-nodes',
-      '/concepts/workloads',
-      '/concepts/networking',
-      '/concepts/config-storage',
-      '/concepts/security',
-      '/concepts/scheduling-resources',
       '/operations/health-lifecycle',
       '/operations/release-scaling',
       '/operations/troubleshooting',
