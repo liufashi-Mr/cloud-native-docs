@@ -211,6 +211,7 @@ describe('MermaidFullscreenViewer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    document.querySelector('[data-test-inline-svg]')?.remove()
     document.body.style.overflow = ''
   })
 
@@ -238,6 +239,63 @@ describe('MermaidFullscreenViewer', () => {
     ])
     for (const control of toolbarButtons()) {
       expect(control.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+    }
+  })
+
+  it('isolates SVG ids and fragment references from the inline diagram', async () => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg"
+        xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 600">
+        <defs>
+          <marker id="arrow" />
+          <clipPath id="clip" />
+        </defs>
+        <title id="title">Title</title>
+        <desc id="description">Description</desc>
+        <g id="node" aria-labelledby="title" aria-describedby="description"
+          marker-end="url(#arrow)" clip-path="url(#clip)">
+          <a id="link" href="#node"><use id="shape" xlink:href="#node" /></a>
+        </g>
+      </svg>
+    `
+    const inline = document.createElement('div')
+    inline.dataset.testInlineSvg = ''
+    inline.innerHTML = svg
+    document.body.append(inline)
+
+    mount(MermaidFullscreenViewer, {
+      attachTo: document.body,
+      props: { svg },
+    })
+    await nextTick()
+
+    const allIds = Array.from(
+      document.querySelectorAll<HTMLElement>('[id]'),
+      (element) => element.id,
+    )
+    expect(new Set(allIds).size).toBe(allIds.length)
+
+    const viewerSvg = surface().querySelector('svg')
+    const marker = viewerSvg?.querySelector('marker')
+    const clipPath = viewerSvg?.querySelector('clipPath')
+    const node = viewerSvg?.querySelector('g')
+    const link = viewerSvg?.querySelector('a')
+    const shape = viewerSvg?.querySelector('use')
+    if (!viewerSvg || !marker || !clipPath || !node || !link || !shape) {
+      throw new Error('viewer SVG reference fixture was not rendered')
+    }
+
+    expect(node.getAttribute('marker-end')).toBe(`url(#${marker.id})`)
+    expect(node.getAttribute('clip-path')).toBe(`url(#${clipPath.id})`)
+    expect(link.getAttribute('href')).toBe(`#${node.id}`)
+    expect(shape.getAttribute('xlink:href')).toBe(`#${node.id}`)
+
+    for (const attribute of ['aria-labelledby', 'aria-describedby']) {
+      for (const reference of node.getAttribute(attribute)?.split(/\s+/) ?? []) {
+        const target = document.getElementById(reference)
+        expect(target).not.toBeNull()
+        expect(viewerSvg.contains(target)).toBe(true)
+      }
     }
   })
 
@@ -354,7 +412,7 @@ describe('MermaidFullscreenViewer', () => {
     const wrapper = await mountViewer()
     const initialTransform = transform()
 
-    expect(parseSvg).toHaveBeenCalledOnce()
+    expect(parseSvg).toHaveBeenCalledTimes(2)
 
     viewportWidth = 900
     window.dispatchEvent(new Event('resize'))
@@ -363,7 +421,7 @@ describe('MermaidFullscreenViewer', () => {
     viewportWidth = 700
     window.dispatchEvent(new Event('resize'))
 
-    expect(parseSvg).toHaveBeenCalledOnce()
+    expect(parseSvg).toHaveBeenCalledTimes(2)
     expect(requestAnimationFrame).toHaveBeenCalledOnce()
     expect(transform()).toEqual(initialTransform)
 

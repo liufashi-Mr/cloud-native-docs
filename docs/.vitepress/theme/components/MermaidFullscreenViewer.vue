@@ -42,6 +42,7 @@ import {
   zoomDiagram,
   type DiagramTransform,
 } from '../diagram-viewport'
+import { namespaceSvgIds } from '../svg-id-namespace'
 
 const props = defineProps<{
   svg: string
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 
 const modalId = ++modalSequence
 const titleId = `mermaid-fullscreen-viewer-${useId()}`
+const viewerSvgNamespace = `${titleId}-svg`
 const viewport = ref<HTMLElement>()
 const toolbar = ref<HTMLElement>()
 const closeButton = ref<HTMLButtonElement>()
@@ -74,6 +76,9 @@ const surfaceStyle = computed(() => ({
   height: `${diagramSize.value.height}px`,
   transform: `translate(${transform.value.x}px, ${transform.value.y}px) scale(${transform.value.scale})`,
 }))
+const viewerSvg = computed(() =>
+  namespaceSvgIds(props.svg, viewerSvgNamespace),
+)
 
 function positiveSvgLength(value: string | null): number | undefined {
   if (!value) return undefined
@@ -464,7 +469,7 @@ onUnmounted(() => {
         <div
           class="mermaid-fullscreen-viewer__surface"
           :style="surfaceStyle"
-          v-html="props.svg"
+          v-html="viewerSvg"
         />
       </div>
 
