@@ -134,6 +134,11 @@ onUnmounted(() => {
   min-width: var(--mermaid-intrinsic-width);
 }
 
+.mermaid-diagram :deep(.label p) {
+  margin: 0;
+  line-height: inherit;
+}
+
 .mermaid-diagram__source {
   margin: 0;
   white-space: pre-wrap;

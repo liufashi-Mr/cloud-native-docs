@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { Ref } from 'vue'
 import { nextTick } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
@@ -38,6 +40,23 @@ describe('MermaidDiagram', () => {
     if (vitepressData.isDark) vitepressData.isDark.value = false
     mermaid.initialize.mockReset()
     mermaid.render.mockReset()
+  })
+
+  it('preserves Mermaid label paragraph metrics', () => {
+    const componentSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'docs/.vitepress/theme/components/MermaidDiagram.vue',
+      ),
+      'utf8',
+    )
+    const labelParagraphRule = componentSource.match(
+      /\.mermaid-diagram\s+:deep\(\.label p\)\s*\{([^}]*)\}/,
+    )?.[1]
+
+    expect(labelParagraphRule).toBeDefined()
+    expect(labelParagraphRule).toMatch(/\bmargin:\s*0\s*;/)
+    expect(labelParagraphRule).toMatch(/\bline-height:\s*inherit\s*;/)
   })
 
   it('rerenders the SVG when VitePress changes color mode', async () => {
