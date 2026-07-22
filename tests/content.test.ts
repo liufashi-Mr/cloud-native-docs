@@ -67,6 +67,16 @@ const coreConceptContracts: Record<string, string[]> = {
   ],
 }
 
+function readRequiredContent(file: string): string | null {
+  const absoluteFile = resolve(root, file)
+  if (!existsSync(absoluteFile)) {
+    expect(existsSync(absoluteFile), `${file} must exist`).toBe(true)
+    return null
+  }
+
+  return readFileSync(absoluteFile, 'utf8')
+}
+
 function resolveRootAbsoluteHref(href: string): {
   pathname: string
   target: string
@@ -264,6 +274,184 @@ describe('content contract', () => {
     ])
   })
 
+  it('teaches probe responsibilities and lifecycle termination boundaries', () => {
+    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    if (chapter === null) return
+
+    for (const term of [
+      'startupProbe',
+      'readinessProbe',
+      'livenessProbe',
+      'postStart',
+      'preStop',
+      'SIGTERM',
+      'terminationGracePeriodSeconds',
+      'readinessGates',
+      'Pod phase',
+      'container state',
+    ]) {
+      expect(chapter, `health lifecycle chapter is missing ${term}`).toContain(term)
+    }
+
+    expect(chapter).toMatch(/\|\s*检查\s*\|[^\n]*(?:用途|职责)[^\n]*\|/)
+    expect(chapter).toContain('readinessProbe 失败不会重启 container')
+    expect(chapter).toContain('startupProbe 成功前')
+    expect(chapter).toContain('preStop 与主进程收到 TERM 信号的先后')
+    expect(chapter).toContain('postStart 与 container entrypoint 并发')
+    expect(chapter).toContain('conditions.ready=null')
+    expect(chapter).toContain('publishNotReadyAddresses')
+
+    const yaml = markdownFences(
+      chapter,
+      'docs/operations/health-lifecycle.md',
+    ).find((fence) => fence.language === 'yaml')?.content
+    expect(yaml).toContain('startupProbe:')
+    expect(yaml).toContain('readinessProbe:')
+    expect(yaml).toContain('livenessProbe:')
+    expect(yaml).toContain('lifecycle:')
+    expect(yaml).toContain('terminationGracePeriodSeconds:')
+  })
+
+  it('connects rollout and autoscaling controllers without overstating PDB', () => {
+    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    if (chapter === null) return
+
+    for (const term of [
+      'RollingUpdate',
+      'maxUnavailable',
+      'maxSurge',
+      'rollout status',
+      'rollout history',
+      'rollout undo',
+      'HorizontalPodAutoscaler',
+      'VerticalPodAutoscaler',
+      'Cluster Autoscaler',
+      'PodDisruptionBudget',
+      'scale subresource',
+    ]) {
+      expect(chapter, `release scaling chapter is missing ${term}`).toContain(term)
+    }
+
+    for (const relation of [
+      'Metrics API',
+      'HPA controller',
+      'workload replicas',
+      'workload controller',
+      'Pod API objects',
+    ]) {
+      expect(chapter, `release scaling flow is missing ${relation}`).toContain(relation)
+    }
+
+    expect(chapter).toContain('CPU 或 memory utilization')
+    expect(chapter).toContain('同一资源维度')
+    expect(chapter).toContain('PDB 不会阻止')
+    expect(chapter).toContain('PDB 不直接控制 Deployment rollout')
+  })
+
+  it('provides the ordered observable troubleshooting path and copyable commands', () => {
+    const chapter = readRequiredContent('docs/operations/troubleshooting.md')
+    if (chapter === null) return
+
+    const orderedStages = [
+      '资源被 API 接受',
+      'Pod 已创建',
+      'Pod 已调度',
+      '镜像与 container 已启动',
+      'Pod 已就绪',
+      'EndpointSlice 已填充',
+      'Service 可达',
+      '入口路由可达',
+    ]
+    let previous = -1
+    for (const stage of orderedStages) {
+      const index = chapter.indexOf(stage)
+      expect(index, `troubleshooting flow is missing ${stage}`).toBeGreaterThan(previous)
+      previous = index
+    }
+
+    for (const symptom of [
+      'Pending',
+      'ImagePullBackOff',
+      'CrashLoopBackOff',
+      'failed probe',
+      'empty endpoints',
+      'DNS',
+      'NetworkPolicy',
+    ]) {
+      expect(chapter, `troubleshooting chapter is missing ${symptom}`).toContain(symptom)
+    }
+
+    const commands = markdownFences(
+      chapter,
+      'docs/operations/troubleshooting.md',
+    ).filter((fence) => fence.language === 'bash')
+    expect(commands.length).toBeGreaterThanOrEqual(8)
+    expect(commands.map((fence) => fence.content).join('\n')).not.toMatch(/<[^\n>]+>/)
+    for (const fence of commands) {
+      const syntaxCheck = spawnSync('bash', ['-n'], {
+        input: fence.content,
+        encoding: 'utf8',
+      })
+      expect(syntaxCheck.stderr, fence.location).toBe('')
+      expect(syntaxCheck.status, fence.location).toBe(0)
+    }
+  })
+
+  it('maps object scope, ownership, references, lifetime, and primary commands', () => {
+    const chapter = readRequiredContent('docs/reference/concept-map.md')
+    if (chapter === null) return
+
+    expect(chapter).toMatch(
+      /\|\s*对象[^|]*\|\s*作用域[^|]*\|\s*谁创建或管理[^|]*\|\s*选择或引用[^|]*\|\s*生命周期[^|]*\|\s*主要命令[^|]*\|/,
+    )
+    for (const objectName of [
+      'Deployment',
+      'Service',
+      'EndpointSlice',
+      'PersistentVolumeClaim',
+      'ServiceAccount',
+      'RoleBinding',
+      'HorizontalPodAutoscaler',
+      'PodDisruptionBudget',
+    ]) {
+      expect(chapter, `concept map is missing ${objectName}`).toContain(objectName)
+    }
+
+    for (const classLabel of ['API object', 'actor', 'data plane']) {
+      expect(chapter, `concept map is missing ${classLabel}`).toContain(classLabel)
+    }
+    for (const edgeLabel of [
+      'creates or updates',
+      'selects',
+      'references',
+      'is watched by',
+      'configures',
+      'forwards',
+    ]) {
+      expect(chapter, `concept map is missing edge ${edgeLabel}`).toContain(edgeLabel)
+    }
+  })
+
+  it('lists operations and reference chapters after core concepts', () => {
+    const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
+    const sidebar = config.slice(config.indexOf('sidebar:'))
+    const operations = sidebar.match(/text: '运行实践',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
+    const reference = sidebar.match(/text: '速查',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
+
+    expect(operations, 'sidebar is missing the operations group').not.toBeNull()
+    expect(reference, 'sidebar is missing the reference group').not.toBeNull()
+    expect(Array.from(operations?.[1].matchAll(/link: '([^']+)'/g) ?? [], (match) => match[1])).toEqual([
+      '/operations/health-lifecycle',
+      '/operations/release-scaling',
+      '/operations/troubleshooting',
+    ])
+    expect(Array.from(reference?.[1].matchAll(/link: '([^']+)'/g) ?? [], (match) => match[1])).toEqual([
+      '/reference/concept-map',
+    ])
+    expect(sidebar.indexOf("text: '运行实践'")).toBeGreaterThan(sidebar.indexOf("text: '核心概念'"))
+    expect(sidebar.indexOf("text: '速查'")).toBeGreaterThan(sidebar.indexOf("text: '运行实践'"))
+  })
+
   it('defines the fluid responsive theme contracts', () => {
     const styles = readFileSync(
       resolve(root, 'docs/.vitepress/theme/styles.css'),
@@ -383,28 +571,11 @@ describe('content contract', () => {
     expect(flow).toContain('该命令会读取 Deployment 选择的所有 Pod')
   })
 
-  it('uses an exact allowlist for the planned future routes', () => {
+  it('does not retain a dead-link allowlist after the planned pages land', () => {
     const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
-    const plannedRoutes = [
-      '/operations/health-lifecycle',
-      '/operations/release-scaling',
-      '/operations/troubleshooting',
-      '/reference/concept-map',
-    ]
 
-    const allowlist = config.match(
-      /const plannedFutureRoutes = \[([\s\S]*?)\]\n/,
-    )
-    expect(allowlist, 'config is missing plannedFutureRoutes').not.toBeNull()
-
-    const configuredRoutes = Array.from(
-      allowlist?.[1].matchAll(/'([^']+)'/g) ?? [],
-      (match) => match[1],
-    )
-
-    expect(configuredRoutes).toEqual(plannedRoutes)
-    expect(config).toContain('ignoreDeadLinks: plannedFutureRoutes')
-    expect(config).not.toContain('ignoreDeadLinks: [/^\\/(?:concepts|operations|reference)\\//]')
+    expect(config).not.toContain('plannedFutureRoutes')
+    expect(config).not.toContain('ignoreDeadLinks')
   })
 
   it('distinguishes claim references from container volume mounts', () => {
@@ -494,13 +665,6 @@ describe('content contract', () => {
 
   it('keeps relative Markdown links valid', () => {
     const markdownLink = /\[[^\]]*\]\(([^)]+)\)/g
-    const plannedFutureRoutes = new Set([
-      '/operations/health-lifecycle',
-      '/operations/release-scaling',
-      '/operations/troubleshooting',
-      '/reference/concept-map',
-    ])
-
     for (const file of contentFiles) {
       const absoluteFile = resolve(root, file)
       if (!existsSync(absoluteFile)) continue
@@ -519,8 +683,7 @@ describe('content contract', () => {
             : [target, `${target}.md`, resolve(target, 'index.md')]
 
           expect(
-            candidates.some((candidate) => existsSync(candidate)) ||
-              plannedFutureRoutes.has(pathname),
+            candidates.some((candidate) => existsSync(candidate)),
             `${file} contains a broken root-absolute link: ${href}`,
           ).toBe(true)
           continue
