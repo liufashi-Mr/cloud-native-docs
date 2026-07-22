@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { nextTick } from 'vue'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import {
@@ -68,6 +70,7 @@ function dispatchPointer(
     clientX: number
     clientY: number
     pointerType?: string
+    button?: number
   },
 ): Event {
   const event = new Event(type, { bubbles: true, cancelable: true })
@@ -76,10 +79,19 @@ function dispatchPointer(
     clientX: { value: init.clientX },
     clientY: { value: init.clientY },
     pointerType: { value: init.pointerType ?? 'mouse' },
-    button: { value: 0 },
+    button: { value: init.button ?? 0 },
   })
   target.dispatchEvent(event)
   return event
+}
+
+function cssDeclarations(source: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const declarations = source.match(
+    new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 's'),
+  )?.[1]
+  if (!declarations) throw new Error(`CSS rule not found: ${selector}`)
+  return declarations
 }
 
 async function mountViewer() {
@@ -191,6 +203,46 @@ describe('MermaidFullscreenViewer', () => {
     expect(document.body.style.overflow).toBe('scroll')
   })
 
+  it('removes resize and keydown listeners without post-unmount side effects', async () => {
+    const addWindowListener = vi.spyOn(window, 'addEventListener')
+    const removeWindowListener = vi.spyOn(window, 'removeEventListener')
+    const addDocumentListener = vi.spyOn(document, 'addEventListener')
+    const removeDocumentListener = vi.spyOn(document, 'removeEventListener')
+    const wrapper = await mountViewer()
+
+    const resizeHandler = addWindowListener.mock.calls.find(
+      ([type]) => type === 'resize',
+    )?.[1]
+    const keydownHandler = addDocumentListener.mock.calls.find(
+      ([type]) => type === 'keydown',
+    )?.[1]
+    expect(resizeHandler).toBeDefined()
+    expect(keydownHandler).toBeDefined()
+
+    viewportWidth = 800
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    const renderedSurface = surface()
+    const transformBeforeUnmount = renderedSurface.style.transform
+    const closeCountBeforeUnmount = wrapper.emitted('close')?.length ?? 0
+
+    wrapper.unmount()
+
+    expect(removeWindowListener).toHaveBeenCalledWith('resize', resizeHandler)
+    expect(removeDocumentListener).toHaveBeenCalledWith(
+      'keydown',
+      keydownHandler,
+    )
+
+    viewportWidth = 600
+    window.dispatchEvent(new Event('resize'))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    expect(renderedSurface.style.transform).toBe(transformBeforeUnmount)
+    expect(wrapper.emitted('close')?.length ?? 0).toBe(closeCountBeforeUnmount)
+  })
+
   it('fits initially, resets to fit, and refits after window resize', async () => {
     await mountViewer()
 
@@ -222,14 +274,33 @@ describe('MermaidFullscreenViewer', () => {
   it('zooms with controls and keeps the wheel pointer position anchored', async () => {
     await mountViewer()
     const fitted = transform()
+    const center = { x: viewportWidth / 2, y: viewportHeight / 2 }
+    const diagramCenterBeforeZoom = {
+      x: (center.x - fitted.x) / fitted.scale,
+      y: (center.y - fitted.y) / fitted.scale,
+    }
 
     button('放大图表').click()
     await nextTick()
-    expect(transform().scale).toBeCloseTo(fitted.scale * 1.2)
+    const zoomed = transform()
+    expect(zoomed.scale).toBeCloseTo(fitted.scale * 1.2)
+    expect((center.x - zoomed.x) / zoomed.scale).toBeCloseTo(
+      diagramCenterBeforeZoom.x,
+    )
+    expect((center.y - zoomed.y) / zoomed.scale).toBeCloseTo(
+      diagramCenterBeforeZoom.y,
+    )
 
     button('缩小图表').click()
     await nextTick()
-    expect(transform().scale).toBeCloseTo(fitted.scale)
+    const restored = transform()
+    expect(restored.scale).toBeCloseTo(fitted.scale)
+    expect((center.x - restored.x) / restored.scale).toBeCloseTo(
+      diagramCenterBeforeZoom.x,
+    )
+    expect((center.y - restored.y) / restored.scale).toBeCloseTo(
+      diagramCenterBeforeZoom.y,
+    )
 
     const event = new WheelEvent('wheel', {
       bubbles: true,
@@ -348,6 +419,68 @@ describe('MermaidFullscreenViewer', () => {
     expect(transform()).toEqual(afterTouch)
   })
 
+  it('pans a left-button mouse pointer and ignores non-left buttons', async () => {
+    await mountViewer()
+    const target = viewport()
+    const setPointerCapture = vi.fn()
+    const releasePointerCapture = vi.fn()
+    target.setPointerCapture = setPointerCapture
+    target.releasePointerCapture = releasePointerCapture
+    const fitted = transform()
+
+    dispatchPointer(target, 'pointerdown', {
+      pointerId: 21,
+      clientX: 200,
+      clientY: 180,
+      pointerType: 'mouse',
+      button: 2,
+    })
+    dispatchPointer(target, 'pointermove', {
+      pointerId: 21,
+      clientX: 500,
+      clientY: 480,
+      pointerType: 'mouse',
+    })
+    dispatchPointer(target, 'pointerup', {
+      pointerId: 21,
+      clientX: 500,
+      clientY: 480,
+      pointerType: 'mouse',
+      button: 2,
+    })
+    await nextTick()
+
+    expect(transform()).toEqual(fitted)
+    expect(setPointerCapture).not.toHaveBeenCalled()
+    expect(releasePointerCapture).not.toHaveBeenCalled()
+
+    dispatchPointer(target, 'pointerdown', {
+      pointerId: 22,
+      clientX: 320,
+      clientY: 260,
+      pointerType: 'mouse',
+    })
+    dispatchPointer(target, 'pointermove', {
+      pointerId: 22,
+      clientX: 345,
+      clientY: 245,
+      pointerType: 'mouse',
+    })
+    await nextTick()
+
+    expect(transform().x).toBeCloseTo(fitted.x + 25)
+    expect(transform().y).toBeCloseTo(fitted.y - 15)
+    expect(setPointerCapture).toHaveBeenCalledWith(22)
+
+    dispatchPointer(target, 'pointerup', {
+      pointerId: 22,
+      clientX: 345,
+      clientY: 245,
+      pointerType: 'mouse',
+    })
+    expect(releasePointerCapture).toHaveBeenCalledWith(22)
+  })
+
   it('traps focus within toolbar controls and initially focuses close', async () => {
     await mountViewer()
     const controls = toolbarButtons()
@@ -392,5 +525,68 @@ describe('MermaidFullscreenViewer', () => {
     expect(Number.isFinite(transform().scale)).toBe(true)
     expect(Number.isFinite(transform().x)).toBe(true)
     expect(Number.isFinite(transform().y)).toBe(true)
+  })
+
+  it('keeps interaction and responsive style contracts explicit', () => {
+    const componentSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'docs/.vitepress/theme/components/MermaidFullscreenViewer.vue',
+      ),
+      'utf8',
+    )
+    const styles = componentSource.match(
+      /<style scoped>([\s\S]*?)<\/style>/,
+    )?.[1]
+    if (!styles) throw new Error('scoped component styles not found')
+
+    const surfaceRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__surface',
+    )
+    const viewportRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__viewport',
+    )
+    expect(surfaceRule).toMatch(/\btransform-origin:\s*0 0\s*;/)
+    expect(viewportRule).toMatch(/\btouch-action:\s*none\s*;/)
+
+    const lightRule = cssDeclarations(styles, '.mermaid-fullscreen-viewer')
+    const darkRule = cssDeclarations(
+      styles,
+      ':global(.dark) .mermaid-fullscreen-viewer',
+    )
+    for (const rule of [lightRule, darkRule]) {
+      expect(rule).toMatch(/\bcolor:\s*#[\da-f]{6}\s*;/i)
+      expect(rule).toMatch(/\bbackground:\s*rgba\([^;]+\)\s*;/)
+    }
+    expect(lightRule).toMatch(/\bcolor-scheme:\s*light\s*;/)
+    expect(darkRule).toMatch(/\bcolor-scheme:\s*dark\s*;/)
+
+    const toolbarButtonRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar button',
+    )
+    expect(toolbarButtonRule).toMatch(/\bwidth:\s*40px\s*;/)
+    expect(toolbarButtonRule).toMatch(/\bheight:\s*40px\s*;/)
+
+    const mobileStart = styles.indexOf('@media (max-width: 480px)')
+    const reducedMotionStart = styles.indexOf(
+      '@media (prefers-reduced-motion: reduce)',
+    )
+    expect(mobileStart).toBeGreaterThanOrEqual(0)
+    expect(reducedMotionStart).toBeGreaterThan(mobileStart)
+    const mobileStyles = styles.slice(mobileStart, reducedMotionStart)
+    expect(mobileStyles).toMatch(
+      /\bbottom:\s*calc\(12px \+ env\(safe-area-inset-bottom\)\)\s*;/,
+    )
+    expect(mobileStyles).toMatch(/\bmax-width:\s*calc\(100vw - 24px\)\s*;/)
+
+    const reducedMotionStyles = styles.slice(reducedMotionStart)
+    const reducedMotionSurfaceRule = cssDeclarations(
+      reducedMotionStyles,
+      '.mermaid-fullscreen-viewer__surface',
+    )
+    expect(reducedMotionSurfaceRule).toMatch(/\btransition:\s*none\s*;/)
   })
 })
