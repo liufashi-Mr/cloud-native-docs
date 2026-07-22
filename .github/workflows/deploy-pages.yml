@@ -6,41 +6,51 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
-      - uses: actions/configure-pages@v5
       - run: |
-          export BASE_PATH="/${GITHUB_REPOSITORY#*/}/"
+          repository_owner="${GITHUB_REPOSITORY%%/*}"
+          repository_name="${GITHUB_REPOSITORY#*/}"
+          repository_owner_lower="$(printf '%s' "$repository_owner" | tr '[:upper:]' '[:lower:]')"
+          repository_name_lower="$(printf '%s' "$repository_name" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$repository_name_lower" == "${repository_owner_lower}.github.io" ]]; then
+            export BASE_PATH="/"
+          else
+            export BASE_PATH="/${repository_name}/"
+          fi
           npm run build -- --base="$BASE_PATH"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/configure-pages@v6
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

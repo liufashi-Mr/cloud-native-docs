@@ -17,8 +17,7 @@ describe('appearance theme integration', () => {
     expect(config).toContain("logo: '/kubernetes-logo.svg'")
     expect(config).toContain("const siteBase = process.env.BASE_PATH || '/'")
     expect(config).toContain('base: siteBase')
-    expect(config).toContain('logoLink: siteBase')
-    expect(config).not.toContain("logoLink: '/'")
+    expect(config).not.toContain('logoLink:')
     expect(config).not.toContain("title: 'K8s 概念手册'")
   })
 

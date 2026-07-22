@@ -131,7 +131,6 @@ export default defineConfig({
   },
   themeConfig: {
     logo: '/kubernetes-logo.svg',
-    logoLink: siteBase,
     siteTitle: 'Kubernetes',
     nav: [
       { text: '概念', link: '/concepts/resource-model' },

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -18,6 +19,7 @@ interface WorkflowJob {
     url: string
   }
   needs?: string
+  permissions?: Record<string, string>
   'runs-on': string
   steps: WorkflowStep[]
 }
@@ -37,63 +39,97 @@ interface PagesWorkflow {
 }
 
 const root = process.cwd()
+const workflowPath = resolve(root, '.github/workflows/deploy-pages.yml')
+
+async function readWorkflow() {
+  return parse(await readFile(workflowPath, 'utf8')) as PagesWorkflow
+}
+
+function resolvedBase(buildScript: string, repository: string) {
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      `npm() { node -e 'process.stdout.write(process.env.BASE_PATH || "")'; }\n${buildScript}`,
+    ],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_REPOSITORY: repository },
+    },
+  )
+
+  expect(result.status).toBe(0)
+  expect(result.stderr).toBe('')
+  return result.stdout.trim()
+}
 
 describe('GitHub Pages deployment', () => {
   it('builds and deploys the documentation with the GitHub Pages actions', async () => {
-    const workflowPath = resolve(root, '.github/workflows/deploy-pages.yml')
-
     expect(existsSync(workflowPath)).toBe(true)
 
-    const source = await readFile(workflowPath, 'utf8')
-    const workflow = parse(source) as PagesWorkflow
+    const workflow = await readWorkflow()
 
     expect(workflow.name).toBe('Deploy documentation to GitHub Pages')
     expect(workflow.on).toEqual({
       push: { branches: ['main'] },
       workflow_dispatch: null,
     })
-    expect(workflow.permissions).toEqual({
-      contents: 'read',
+    expect(workflow.permissions).toEqual({})
+    expect(workflow.concurrency).toEqual({
+      group: 'pages',
+      'cancel-in-progress': false,
+    })
+
+    const build = workflow.jobs.build
+    expect(build['runs-on']).toBe('ubuntu-latest')
+    expect(build.permissions).toEqual({ contents: 'read' })
+    expect(build.steps.filter(({ uses }) => uses).map(({ uses }) => uses)).toEqual([
+      'actions/checkout@v7',
+      'actions/setup-node@v7',
+      'actions/upload-pages-artifact@v5',
+    ])
+    expect(
+      build.steps.find(({ uses }) => uses === 'actions/setup-node@v7')?.with,
+    ).toEqual({ 'node-version': '22', cache: 'npm' })
+    expect(build.steps.filter(({ run }) => run).map(({ run }) => run)).toEqual(
+      expect.arrayContaining(['npm ci', 'npm test', 'npm run typecheck']),
+    )
+    expect(
+      build.steps.find(({ uses }) => uses === 'actions/upload-pages-artifact@v5')
+        ?.with,
+    ).toEqual({ path: 'docs/.vitepress/dist' })
+
+    const deploy = workflow.jobs.deploy
+    expect(deploy.needs).toBe('build')
+    expect(deploy['runs-on']).toBe('ubuntu-latest')
+    expect(deploy.permissions).toEqual({
       pages: 'write',
       'id-token': 'write',
     })
-    expect(workflow.concurrency).toEqual({
-      group: 'pages',
-      'cancel-in-progress': true,
+    expect(deploy.environment).toEqual({
+      name: 'github-pages',
+      url: '${{ steps.deployment.outputs.page_url }}',
     })
-
-    expect(workflow.jobs.build['runs-on']).toBe('ubuntu-latest')
-    expect(workflow.jobs.build.steps).toEqual([
-      { uses: 'actions/checkout@v4' },
-      {
-        uses: 'actions/setup-node@v4',
-        with: { 'node-version': '22', cache: 'npm' },
-      },
-      { run: 'npm ci' },
-      { run: 'npm test' },
-      { run: 'npm run typecheck' },
-      { uses: 'actions/configure-pages@v5' },
-      {
-        run: 'export BASE_PATH="/${GITHUB_REPOSITORY#*/}/"\nnpm run build -- --base="$BASE_PATH"\n',
-      },
-      {
-        uses: 'actions/upload-pages-artifact@v3',
-        with: { path: 'docs/.vitepress/dist' },
-      },
+    expect(deploy.steps).toEqual([
+      { uses: 'actions/configure-pages@v6' },
+      { id: 'deployment', uses: 'actions/deploy-pages@v5' },
     ])
-
-    expect(workflow.jobs.deploy).toEqual({
-      needs: 'build',
-      'runs-on': 'ubuntu-latest',
-      environment: {
-        name: 'github-pages',
-        url: '${{ steps.deployment.outputs.page_url }}',
-      },
-      steps: [{ id: 'deployment', uses: 'actions/deploy-pages@v4' }],
-    })
   })
 
-  it('derives project-page assets from the CLI-provided site base', async () => {
+  it.each([
+    ['project Pages', 'liufashi-Mr/k8s-doc', '/k8s-doc/'],
+    ['user or organization Pages', 'ExampleOrg/EXAMPLEORG.GITHUB.IO', '/'],
+  ])('resolves the %s base from the repository name', async (_, repository, expected) => {
+    const workflow = await readWorkflow()
+    const buildScript = workflow.jobs.build.steps.find(({ run }) =>
+      run?.includes('npm run build'),
+    )?.run
+
+    expect(buildScript).toBeDefined()
+    expect(resolvedBase(buildScript ?? '', repository)).toBe(expected)
+  })
+
+  it('lets VitePress resolve the brand link from the effective site base', async () => {
     const config = await readFile(
       resolve(root, 'docs/.vitepress/config.mts'),
       'utf8',
@@ -101,7 +137,7 @@ describe('GitHub Pages deployment', () => {
 
     expect(config).toContain("const siteBase = process.env.BASE_PATH || '/'")
     expect(config).toContain('base: siteBase')
-    expect(config).toContain('logoLink: siteBase')
+    expect(config).not.toContain('logoLink:')
     expect(config).toContain('transformHead({ siteData })')
     expect(config).toContain('`${siteData.base}kubernetes-logo.svg`')
     expect(config).not.toContain("href: '/kubernetes-logo.svg'")
