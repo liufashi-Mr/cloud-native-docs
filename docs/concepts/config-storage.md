@@ -15,7 +15,7 @@
 
 Secret 中的 base64 只是编码，不是 encryption；能读取 Secret API 或节点/容器内明文的主体仍可能取得内容。不要把敏感值提交到 Git，优先使用最小权限、etcd encryption at rest、短期凭据与合适的外部密钥方案。
 
-通过 env/envFrom 注入的值在 container 启动时确定，API 对象改变不会自动更新既有进程环境。以普通 projected volume 方式挂载的 ConfigMap/Secret 文件通常会由 kubelet最终更新，但传播有延迟，应用还必须重新读取；使用 `subPath` 挂载的单文件不会收到这种自动更新。是否热加载由应用负责。
+通过 env/envFrom 注入的值在 container 启动时确定，API 对象改变不会自动更新既有进程环境。ConfigMap volume 与 Secret volume 是不同的 volume source；`projected` volume 则可以把 ConfigMap、Secret 等多个 source 组合到同一目录。以这些 volume 挂载的文件通常会由 kubelet 最终更新，但传播有延迟，应用还必须重新读取；使用 `subPath` 挂载的单文件不会收到这种自动更新。是否热加载由应用负责。
 
 ```yaml
 apiVersion: v1
@@ -38,26 +38,32 @@ stringData:
 
 ## Volume 生命周期
 
-Pod `spec.volumes` 声明卷来源，container `volumeMounts` 把解析后的 volume 挂进自己的文件系统。同一 Pod 内多个 containers 可以共享某些 volume。Volume 生命周期由类型决定：`emptyDir` 随 Pod sandbox 生命周期存在，container 重启通常不会清空它，但 Pod 被删除或换到新 Pod 后数据消失；持久卷则独立于单个 Pod 生命周期。
+Pod `spec.volumes` 声明卷来源，container `volumeMounts` 把解析后的 volume 挂进自己的文件系统。同一 Pod 内多个 containers 可以共享某些 volume。Volume 生命周期由类型决定：`emptyDir` 与该 Pod UID 在当前 Node 上的生命周期一致，container 崩溃或同一 Pod 的 sandbox 被重新创建时数据仍会保留；当这个 Pod 从 Node 上被删除时，`emptyDir` 数据才随之删除。持久卷则独立于单个 Pod 生命周期。
 
 不要把 container 可写层当持久存储。它随容器替换而丢失，而且不会天然被同 Pod 的其他 containers 共享。
 
 ## PV、PVC、StorageClass 与 CSI
 
-PersistentVolume（PV）表示集群可用的一份存储资源；PersistentVolumeClaim（PVC）是命名空间内应用对容量、access modes 和 StorageClass 等能力的请求。控制平面把兼容 PVC 与 PV 绑定，通常是一对一独占 claim 关系。Pod spec 引用 PVC，kubelet 再让 container mount 由该 claim 解析出的 volume；Pod 并不直接 mount PVC API object。
+PersistentVolume（PV）表示集群可用的一份存储资源；PersistentVolumeClaim（PVC）是命名空间内应用对容量、access modes 和 StorageClass 等能力的请求。volume binder / PV controller 观察这些 API objects，并通过 API Server 写入绑定字段，把兼容 PVC 与 PV 关联起来，通常形成一对一独占 claim 关系。PVC 只是被观察和更新的声明，不会主动请求 provisioner 或自行绑定 PV。Pod spec 引用 PVC，kubelet 再让 container mount 由该 claim 解析出的 volume；Pod 并不直接 mount PVC API object。
 
-StorageClass 描述一类存储及 provisioner 参数，并可触发 dynamic provisioning：PVC 找不到预建 PV 时，外部 CSI provisioner 可能创建后端卷与 PV。某些 StorageClass 使用 `WaitForFirstConsumer`，会等 Pod 调度约束已知后再供应或绑定，避免在错误 topology 创建存储。
+StorageClass 描述一类存储及 provisioner 参数，并可触发 dynamic provisioning。external-provisioner 观察 API Server 提供的 PVC 与 StorageClass 事件，调用 CSI controller service 的 `CreateVolume`；CSI driver/controller 创建后端 volume 并返回标识，external-provisioner 再通过 API Server 创建 PV API object。某些 StorageClass 使用 `WaitForFirstConsumer`，会等 Pod 调度约束已知后再供应或绑定，避免在错误 topology 创建存储。
 
 ```mermaid
 flowchart LR
-  PS["Pod spec"] -->|references claim name 引用申领名| PVC["PersistentVolumeClaim API object"]
-  SC["StorageClass API object"] -.->|guides dynamic provisioning 指导动态供应| CP["CSI provisioner controller"]
-  PVC -.->|requests class and capacity 请求类别与容量| CP
-  CP -->|creates backend volume 创建后端卷| BS["Storage system volume"]
-  CP -->|creates or updates representation 创建或更新表示| PV["PersistentVolume API object"]
-  PVC -->|binds one compatible volume 绑定兼容卷| PV
-  KL["kubelet"] -->|invokes CSI node operations 调用节点操作| CSI["CSI node plugin"]
-  CSI -->|mounts resolved volume 挂载解析后的卷| VM["container volume mount"]
+  C["Client"] -->|submits claim 提交申领| API["API Server"]
+  API -->|persists claim state 持久化申领状态| PVC["PersistentVolumeClaim API object"]
+  API -->|serves PVC and StorageClass watch events 提供申领与存储类事件| EP["external-provisioner"]
+  EP -->|calls CSI CreateVolume 调用卷创建接口| CC["CSI controller service or plugin"]
+  CC -->|creates backend volume 创建后端卷| BS["Storage system volume"]
+  CC -->|returns volume identity 返回卷标识| EP
+  EP -->|creates PV through API Server 通过 API Server 创建 PV| API
+  API -->|persists PV state 持久化 PV 状态| PV["PersistentVolume API object"]
+  API -->|serves PVC and PV watch events 提供申领与 PV 事件| VB["volume binder or PV controller"]
+  VB -->|writes binding fields 写入绑定字段| API
+  API -->|publishes assigned Pod and bound claim 发布已分配 Pod 与绑定申领| KL["kubelet"]
+  KL -->|calls NodeStageVolume and NodePublishVolume 调用节点暂存与发布| CSI["CSI node plugin"]
+  CSI -->|stages and publishes resolved volume 暂存并发布解析后的卷| VM["container volume mount"]
+  PS["Pod spec"] -->|references claim name 引用申领名| PVC
   PV -.->|identifies backend storage 标识后端存储| BS
 ```
 

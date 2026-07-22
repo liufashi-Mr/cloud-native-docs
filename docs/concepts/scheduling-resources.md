@@ -106,7 +106,9 @@ spec:
 
 ```bash
 kubectl -n demo get pod -l app=worker -o wide
-kubectl -n demo describe pod <pending-pod>
+# 选择一个 Pending Pod；若输出为空，先用上一行确认实际状态。
+PENDING_POD=$(kubectl -n demo get pods --field-selector=status.phase=Pending -o jsonpath='{.items[0].metadata.name}')
+kubectl -n demo describe pod "$PENDING_POD"
 kubectl get nodes -L topology.kubernetes.io/zone
 kubectl -n demo get pdb worker
 ```

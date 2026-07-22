@@ -44,7 +44,7 @@ kubectl -n demo get endpointslice -l kubernetes.io/service-name=web -o wide
 kubectl -n demo run dns-check --rm -it --restart=Never --image=busybox:1.36 -- nslookup web
 ```
 
-如果 Service selector 与 Pod labels 不匹配，控制器就不会发布这些 Pod 的 endpoint；如果 endpoint readiness 不可用，数据面通常不会把它作为可用后端。看到 Service 有 ClusterIP 并不表示它已有 usable endpoints，应先检查 selector、labels、Pod Ready condition 与 EndpointSlice conditions。
+如果 Service selector 与 Pod labels 不匹配，控制器就不会发布这些 Pod 的 endpoint。通常 `conditions.ready=false` 的 endpoint 不应作为可用后端；`conditions.ready=null` 表示未知，为兼容旧 endpoint，消费者应把 null 解释为 ready。另一个显式例外是 Service 把 `publishNotReadyAddresses` 设为 true：处理该 Service endpoint 的 agent 应忽略 ready/not-ready 指示，常用于 StatefulSet 的 peer discovery。看到 Service 有 ClusterIP 并不表示它已有 usable endpoints，应先检查 selector、labels、Pod Ready condition、Service 配置与 EndpointSlice conditions。
 
 ## 外部入口：Ingress 与 Gateway API
 

@@ -126,6 +126,95 @@ describe('content contract', () => {
     expect(chapter).not.toContain('CNI and CSI node plugins')
   })
 
+  it('describes API persistence and storage actors without making resources active', () => {
+    const resourceModel = readFileSync(
+      resolve(root, 'docs/concepts/resource-model.md'),
+      'utf8',
+    )
+    const storage = readFileSync(
+      resolve(root, 'docs/concepts/config-storage.md'),
+      'utf8',
+    )
+
+    expect(resourceModel).toContain('通过 API Server 访问和持久化')
+    expect(resourceModel).toContain('后端通常是 etcd')
+    expect(resourceModel).not.toContain('保存在 API Server 中')
+
+    for (const phrase of [
+      '`emptyDir` 与该 Pod UID 在当前 Node 上的生命周期一致',
+      'container 崩溃或同一 Pod 的 sandbox 被重新创建',
+      'external-provisioner',
+      'CSI controller service',
+      'volume binder / PV controller',
+      'NodeStageVolume',
+      'NodePublishVolume',
+    ]) {
+      expect(storage, `storage chapter is missing ${phrase}`).toContain(phrase)
+    }
+
+    for (const relation of [
+      'API -->|serves PVC and StorageClass watch events 提供申领与存储类事件| EP["external-provisioner"]',
+      'EP -->|calls CSI CreateVolume 调用卷创建接口| CC["CSI controller service or plugin"]',
+      'CC -->|creates backend volume 创建后端卷| BS["Storage system volume"]',
+      'EP -->|creates PV through API Server 通过 API Server 创建 PV| API',
+      'API -->|serves PVC and PV watch events 提供申领与 PV 事件| VB["volume binder or PV controller"]',
+      'VB -->|writes binding fields 写入绑定字段| API',
+      'KL -->|calls NodeStageVolume and NodePublishVolume 调用节点暂存与发布| CSI["CSI node plugin"]',
+    ]) {
+      expect(storage, `storage diagram is missing ${relation}`).toContain(
+        relation,
+      )
+    }
+
+    expect(storage).not.toContain('随 Pod sandbox 生命周期存在')
+    expect(storage).not.toContain('PVC -->|binds')
+    expect(storage).not.toContain('PVC -.->|requests')
+  })
+
+  it('documents volume source, endpoint readiness, and shell variable caveats', () => {
+    const storage = readFileSync(
+      resolve(root, 'docs/concepts/config-storage.md'),
+      'utf8',
+    )
+    const networking = readFileSync(
+      resolve(root, 'docs/concepts/networking.md'),
+      'utf8',
+    )
+    const clusterNodes = readFileSync(
+      resolve(root, 'docs/concepts/cluster-nodes.md'),
+      'utf8',
+    )
+    const scheduling = readFileSync(
+      resolve(root, 'docs/concepts/scheduling-resources.md'),
+      'utf8',
+    )
+
+    for (const phrase of [
+      'ConfigMap volume 与 Secret volume 是不同的 volume source',
+      '`projected` volume',
+      '由 kubelet 最终更新',
+    ]) {
+      expect(storage, `storage chapter is missing ${phrase}`).toContain(phrase)
+    }
+
+    for (const phrase of [
+      '`conditions.ready=false`',
+      '`conditions.ready=null`',
+      '`publishNotReadyAddresses`',
+    ]) {
+      expect(networking, `networking chapter is missing ${phrase}`).toContain(
+        phrase,
+      )
+    }
+
+    expect(clusterNodes).toContain('NODE_NAME=')
+    expect(clusterNodes).toContain('kubectl describe node "$NODE_NAME"')
+    expect(clusterNodes).not.toContain('<node-name>')
+    expect(scheduling).toContain('PENDING_POD=')
+    expect(scheduling).toContain('kubectl -n demo describe pod "$PENDING_POD"')
+    expect(scheduling).not.toContain('<pending-pod>')
+  })
+
   it('lists the seven core concept chapters in learning order', () => {
     const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
     const group = config.match(/text: '核心概念',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)

@@ -56,7 +56,9 @@ Control plane 高可用与 workload 高可用是不同问题：API Server 或 et
 ```bash
 kubectl cluster-info
 kubectl get nodes -o wide
-kubectl describe node <node-name>
+# 选择要检查的节点；也可以把变量改为一个明确的节点名。
+NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+kubectl describe node "$NODE_NAME"
 kubectl get pods -A -o wide
 kubectl get --raw='/readyz?verbose'
 ```
