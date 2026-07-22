@@ -132,7 +132,10 @@ describe('GitHub Pages deployment', () => {
       ({ uses }) => uses === 'actions/configure-pages@v6',
     )
 
-    expect(configurePages?.with).toEqual({ enablement: true })
+    expect(configurePages?.with).toEqual({
+      enablement: true,
+      token: '${{ secrets.PAGES_ENABLEMENT_TOKEN }}',
+    })
   })
 
   it.each([
