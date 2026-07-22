@@ -24,12 +24,14 @@ flowchart TD
     RC["ReplicaSet controller actor"]
     EC["EndpointSlice controller actor"]
     IC["Ingress or Gateway controller actor"]
+    SPA["service proxy agent actor"]
     HC["HPA controller actor"]
     KL["kubelet actor"]
     CR["container runtime actor"]
   end
   subgraph PLANE["data plane"]
     PX["managed proxy or gateway data plane"]
+    SD["optional Service data plane"]
     C["container process"]
     EP["ready endpoint"]
   end
@@ -37,7 +39,7 @@ flowchart TD
   D -.->|is watched by 被观察| DC
   DC -->|creates or updates 创建或更新| RS
   RS -.->|is watched by 被观察| RC
-  RC -->|creates or updates 创建或更新| P
+  RC -->|creates deletes or adopts 创建删除或收养| P
   S -->|selects 选择 Pods by labels| P
   P -->|references 引用| CM
   P -->|references 引用 claim| PVC
@@ -45,10 +47,14 @@ flowchart TD
   P -.->|is watched by 被观察| EC
   EC -->|creates or updates 创建或更新| ES
   IG -.->|is watched by 被观察| IC
+  S -.->|is watched by 被观察| IC
+  ES -.->|is watched by 被观察| IC
   IC -->|configures 配置| PX
-  S -.->|is consumed by 被消费| PX
-  ES -.->|is consumed by 被消费| PX
+  S -.->|is watched by 被观察| SPA
+  ES -.->|is watched by 被观察| SPA
+  SPA -->|configures 配置| SD
   PX -->|forwards 转发| EP
+  SD -->|forwards 转发| EP
   HPA -.->|is watched by 被观察| HC
   HC -->|updates scale subresource 更新伸缩子资源| D
   P -.->|is watched by assigned kubelet 被分配节点的 kubelet 观察| KL
@@ -59,11 +65,11 @@ flowchart TD
   classDef actor fill:#fff3d6,stroke:#8a6500,color:#2d2a22
   classDef plane fill:#eaf1fb,stroke:#315e91,color:#1f2933
   class D,RS,P,S,ES,IG,CM,PVC,HPA api
-  class DC,RC,EC,IC,HC,KL,CR actor
-  class PX,C,EP plane
+  class DC,RC,EC,IC,SPA,HC,KL,CR actor
+  class PX,SD,C,EP plane
 ```
 
-图中的 `creates or updates` 表示 actor 通过 API Server 写 API object，不是一个资源对象主动调用另一个资源。`selects` 是 label selector 计算出的动态集合，`references` 是 spec 中按名称或类型保存的引用。Ingress/Gateway object 只保存路由配置；controller 负责 `watches`，proxy/gateway data plane 才 `forwards` 请求。
+图中的写操作表示 actor 通过 API Server 管理 API object，不是一个资源对象主动调用另一个资源；ReplicaSet controller 对 Pods 的动作是 creates、deletes or adopts，通常不能原地更新 Pod spec。`selects` 是 label selector 计算出的动态集合，`references` 是 spec 中按名称或类型保存的引用。Service/EndpointSlice metadata 先被具体实现的 service proxy agent 或 Ingress/Gateway controller 观察，actor 再配置所管理的数据面；proxy/gateway 或可选 Service data plane 才 `forwards` 请求。图不限定 agent 是 kube-proxy、eBPF controller 还是其他实现。
 
 ## 对象关系表
 

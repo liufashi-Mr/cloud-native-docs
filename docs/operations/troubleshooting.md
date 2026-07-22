@@ -60,14 +60,19 @@ kubectl -n "$NS" get pods -l "app=$APP" -o custom-columns='NAME:.metadata.name,O
 ```bash
 NS=${NS:-demo}
 APP=${APP:-web}
-POD=$(kubectl -n "$NS" get pods -l "app=$APP" --field-selector=status.phase=Pending -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -n "$POD" ]; then
-  kubectl -n "$NS" get pod "$POD" -o wide
-  kubectl -n "$NS" describe pod "$POD"
-  kubectl -n "$NS" get events --field-selector "involvedObject.kind=Pod,involvedObject.name=$POD" --sort-by=.lastTimestamp
-  kubectl -n "$NS" get pod "$POD" -o jsonpath='{.spec.nodeName}{"\n"}{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}'
+if ! POD_REFS=$(kubectl -n "$NS" get pods -l "app=$APP" --field-selector=status.phase=Pending -o name); then
+  exit 1
+fi
+if [ -n "$POD_REFS" ]; then
+  for POD_REF in $POD_REFS; do
+    POD=${POD_REF#pod/}
+    kubectl -n "$NS" get "$POD_REF" -o wide
+    kubectl -n "$NS" describe "$POD_REF"
+    kubectl -n "$NS" get events --field-selector "involvedObject.kind=Pod,involvedObject.name=$POD" --sort-by=.lastTimestamp
+    kubectl -n "$NS" get "$POD_REF" -o jsonpath='{.spec.nodeName}{"\n"}{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}'
+  done
 else
-  echo "no Pending web Pod found in $NS"
+  echo "no Pending web Pods found in $NS"
 fi
 kubectl get nodes -o custom-columns='NAME:.metadata.name,TAINTS:.spec.taints,ALLOCATABLE_CPU:.status.allocatable.cpu,ALLOCATABLE_MEMORY:.status.allocatable.memory'
 ```
@@ -83,14 +88,18 @@ kubectl get nodes -o custom-columns='NAME:.metadata.name,TAINTS:.spec.taints,ALL
 ```bash
 NS=${NS:-demo}
 APP=${APP:-web}
-POD=$(kubectl -n "$NS" get pods -l "app=$APP" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -n "$POD" ]; then
-  kubectl -n "$NS" describe pod "$POD"
-  kubectl -n "$NS" get pod "$POD" -o jsonpath='{range .status.initContainerStatuses[*]}init {.name}{" state="}{.state}{"\n"}{end}{range .status.containerStatuses[*]}{.name}{" state="}{.state}{" last="}{.lastState}{" restarts="}{.restartCount}{"\n"}{end}'
-  kubectl -n "$NS" logs "$POD" --all-containers=true --tail=200
-  kubectl -n "$NS" logs "$POD" --all-containers=true --previous --tail=200
+if ! POD_REFS=$(kubectl -n "$NS" get pods -l "app=$APP" -o name); then
+  exit 1
+fi
+if [ -n "$POD_REFS" ]; then
+  for POD_REF in $POD_REFS; do
+    kubectl -n "$NS" describe "$POD_REF"
+    kubectl -n "$NS" get "$POD_REF" -o jsonpath='{range .status.initContainerStatuses[*]}init {.name}{" state="}{.state}{"\n"}{end}{range .status.containerStatuses[*]}{.name}{" state="}{.state}{" last="}{.lastState}{" restarts="}{.restartCount}{"\n"}{end}'
+    kubectl -n "$NS" logs "$POD_REF" --all-containers=true --tail=200
+    kubectl -n "$NS" logs "$POD_REF" --all-containers=true --previous --tail=200
+  done
 else
-  echo "no web Pod found in $NS"
+  echo "no web Pods found in $NS"
 fi
 kubectl -n "$NS" get secret
 ```
@@ -106,13 +115,17 @@ CrashLoopBackOff 不是根因，而是等待下一次重启的状态；优先找
 ```bash
 NS=${NS:-demo}
 APP=${APP:-web}
-POD=$(kubectl -n "$NS" get pods -l "app=$APP" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -n "$POD" ]; then
-  kubectl -n "$NS" get pod "$POD" -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,READY:.status.conditions[?(@.type=="Ready")].status,RESTARTS:.status.containerStatuses[*].restartCount'
-  kubectl -n "$NS" describe pod "$POD"
-  kubectl -n "$NS" get pod "$POD" -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{" message="}{.message}{"\n"}{end}'
+if ! POD_REFS=$(kubectl -n "$NS" get pods -l "app=$APP" -o name); then
+  exit 1
+fi
+if [ -n "$POD_REFS" ]; then
+  for POD_REF in $POD_REFS; do
+    kubectl -n "$NS" get "$POD_REF" -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,READY:.status.conditions[?(@.type=="Ready")].status,DELETING:.metadata.deletionTimestamp,RESTARTS:.status.containerStatuses[*].restartCount'
+    kubectl -n "$NS" describe "$POD_REF"
+    kubectl -n "$NS" get "$POD_REF" -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{" message="}{.message}{"\n"}{end}'
+  done
 else
-  echo "no web Pod found in $NS"
+  echo "no web Pods found in $NS"
 fi
 ```
 
@@ -120,7 +133,7 @@ fi
 
 ## 6. EndpointSlice 已填充
 
-**可观察状态：** `kubernetes.io/service-name` label 对应目标 Service，endpoints 中有 Pod 地址、targetRef、zone 与 conditions。empty endpoints 通常说明 selector 没匹配 Pod；有地址但 `ready=false` 则回到上一步。
+**可观察状态：** `kubernetes.io/service-name` label 对应目标 Service，endpoints 中有 Pod 地址、targetRef、zone 与 conditions。empty endpoints 通常说明 selector 没匹配 Pod。`ready=false` 既可能来自 readiness 失败，也可能因为 Pod 已有 `deletionTimestamp`、endpoint 已 `terminating=true`；必须连同 `serving` 和 Pod 删除状态判断，不能一律回到 probe。
 
 **常见原因：** Service selector 与 Pod labels 不一致、Service 无 selector 而又没有手工 EndpointSlice、Pod 正在终止或未 Ready、端口名/targetPort 与 Pod port 不一致。`conditions.ready=null` 表示未知，但兼容语义要求消费者把 null 解释为 ready；`publishNotReadyAddresses` 要求处理该 Service endpoint 的 agent 忽略 ready/not-ready 指示。两者都不能简化成“列表非空就一定健康”。
 
@@ -128,9 +141,11 @@ fi
 NS=${NS:-demo}
 SERVICE=${SERVICE:-web}
 kubectl -n "$NS" get service "$SERVICE" -o yaml
-kubectl -n "$NS" get pods --show-labels
+kubectl -n "$NS" get pods -o custom-columns='NAME:.metadata.name,LABELS:.metadata.labels,READY:.status.conditions[?(@.type=="Ready")].status,DELETING:.metadata.deletionTimestamp'
 kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o wide
-ENDPOINTS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{" ready="}{.conditions.ready}{" terminating="}{.conditions.terminating}{" target="}{.targetRef.name}{"\n"}{end}' 2>/dev/null)
+if ! ENDPOINTS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{" ready="}{.conditions.ready}{" serving="}{.conditions.serving}{" terminating="}{.conditions.terminating}{" target="}{.targetRef.name}{"\n"}{end}'); then
+  exit 1
+fi
 if [ -n "$ENDPOINTS" ]; then
   printf '%s\n' "$ENDPOINTS"
 else
@@ -149,43 +164,91 @@ selectorless Service 是例外：controller 不会凭空发现外部后端，需
 ```bash
 NS=${NS:-demo}
 SERVICE=${SERVICE:-web}
-DEBUG_POD=${DEBUG_POD:-netcheck}
-if ! kubectl -n "$NS" get pod "$DEBUG_POD" >/dev/null 2>&1; then
-  kubectl -n "$NS" run "$DEBUG_POD" --image=curlimages/curl:8.10.1 --restart=Never --command -- sleep 3600
-fi
-kubectl -n "$NS" wait --for=condition=Ready pod/"$DEBUG_POD" --timeout=90s
-kubectl -n "$NS" exec "$DEBUG_POD" -- cat /etc/resolv.conf
-kubectl -n "$NS" exec "$DEBUG_POD" -- nslookup "$SERVICE.$NS.svc.cluster.local"
-kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$SERVICE:80/"
-kubectl -n "$NS" get networkpolicy -o wide
-kubectl -n "$NS" describe networkpolicy
+DEBUG_POD=${DEBUG_POD:-netcheck-$$}
+(
+  set -e
+  cleanup() {
+    kubectl -n "$NS" delete pod "$DEBUG_POD" --ignore-not-found --wait=false || true
+  }
+  trap cleanup EXIT
+  kubectl -n "$NS" delete pod "$DEBUG_POD" --ignore-not-found --wait=true
+  kubectl -n "$NS" run "$DEBUG_POD" --image=curlimages/curl:8.10.1 --restart=Never --labels=diagnostic=netcheck --command -- sleep 3600
+  kubectl -n "$NS" wait --for=condition=Ready pod/"$DEBUG_POD" --timeout=90s
+  kubectl -n "$NS" exec "$DEBUG_POD" -- cat /etc/resolv.conf
+  kubectl -n "$NS" exec "$DEBUG_POD" -- nslookup "$SERVICE.$NS.svc.cluster.local"
+  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$SERVICE:80/"
+
+  if ! ENDPOINT_ROWS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{"|"}{.conditions.ready}{"|"}{.conditions.terminating}{"\n"}{end}'); then
+    exit 1
+  fi
+  ENDPOINT_IP=
+  while IFS='|' read -r CANDIDATE_IP CANDIDATE_READY CANDIDATE_TERMINATING; do
+    if [ -n "$CANDIDATE_IP" ] && [ "$CANDIDATE_TERMINATING" != "true" ] && { [ "$CANDIDATE_READY" = "true" ] || [ -z "$CANDIDATE_READY" ]; }; then
+      ENDPOINT_IP=$CANDIDATE_IP
+      break
+    fi
+  done <<EOF
+$ENDPOINT_ROWS
+EOF
+  if ! ENDPOINT_PORTS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].ports[*]}{.port}{"\n"}{end}'); then
+    exit 1
+  fi
+  ENDPOINT_PORT=
+  for CANDIDATE_PORT in $ENDPOINT_PORTS; do
+    ENDPOINT_PORT=$CANDIDATE_PORT
+    break
+  done
+  if [ -z "$ENDPOINT_IP" ] || [ -z "$ENDPOINT_PORT" ]; then
+    echo "no usable direct endpoint found for $SERVICE in $NS" >&2
+    exit 1
+  fi
+  case "$ENDPOINT_IP" in
+    *:*) ENDPOINT_HOST="[$ENDPOINT_IP]" ;;
+    *) ENDPOINT_HOST=$ENDPOINT_IP ;;
+  esac
+  echo "checking direct endpoint $ENDPOINT_HOST:$ENDPOINT_PORT"
+  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$ENDPOINT_HOST:$ENDPOINT_PORT/"
+  kubectl -n "$NS" get networkpolicy -o wide
+  kubectl -n "$NS" describe networkpolicy
+)
 ```
 
 NetworkPolicy 是按方向和所有适用 policy 的允许并集计算的；源 egress 与目标 ingress 都可能需要放行，而且 CNI 必须实现 enforcement。若同一 debug Pod 直连 endpoint 成功而 Service IP 失败，集中检查 Service port 和集群 Service data plane；若直连也失败，回到应用监听地址、readiness 与 policy。
 
 ## 8. 入口路由可达
 
-**可观察状态：** Ingress 或 Gateway/HTTPRoute 已被对应 controller 接受，status 有地址和 conditions，managed proxy / gateway data plane 实际加载了 host/path/backend 配置；外部请求带正确 Host/SNI 能到达 Service。
+**可观察状态：** 对 Ingress，检查 `status.loadBalancer`、IngressClass、controller events/logs 和 HTTP host/path 行为；Ingress 没有 Gateway API 的标准 Accepted/ResolvedRefs conditions。对 Gateway API，分别检查 Gateway 的 Accepted/Programmed 和 HTTPRoute 的 Accepted 与 ResolvedRefs parent conditions。
 
-**常见原因：** IngressClass/GatewayClass 不存在、controller 未运行、host/path 或 backend port 错、Route 未 Accepted/ResolvedRefs、load balancer/DNS/TLS 未就绪、外部防火墙或 NetworkPolicy 阻断入口数据面。API object 存在不代表 proxy 已配置。
+**常见原因：** IngressClass/GatewayClass 不存在、controller 未运行、host/path 或 backend port 错、Route 未 Accepted/ResolvedRefs、load balancer/DNS 未就绪、外部防火墙或 NetworkPolicy 阻断入口数据面。API object 存在不代表 proxy 已配置。下面的 curl 只验证 HTTP Host routing，不验证 TLS 或 SNI；TLS 应另用实际证书域名发起 HTTPS 请求。
 
 ```bash
 NS=${NS:-demo}
 INGRESS=${INGRESS:-web}
 HOST=${HOST:-web.example.test}
 kubectl -n "$NS" get ingress "$INGRESS" -o yaml
+kubectl -n "$NS" describe ingress "$INGRESS"
 kubectl get ingressclass
-kubectl get gatewayclass
-kubectl -n "$NS" get gateway,httproute
-ADDRESS=$(kubectl -n "$NS" get ingress "$INGRESS" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+if ! ADDRESS=$(kubectl -n "$NS" get ingress "$INGRESS" -o jsonpath='{.status.loadBalancer.ingress[0].ip}'); then
+  exit 1
+fi
 if [ -z "$ADDRESS" ]; then
-  ADDRESS=$(kubectl -n "$NS" get ingress "$INGRESS" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+  if ! ADDRESS=$(kubectl -n "$NS" get ingress "$INGRESS" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'); then
+    exit 1
+  fi
 fi
 if [ -n "$ADDRESS" ]; then
   curl --fail --show-error --max-time 10 -H "Host: $HOST" "http://$ADDRESS/"
 else
   echo "ingress $INGRESS in $NS has no load balancer address"
 fi
+```
+
+```bash
+NS=${NS:-demo}
+kubectl get gatewayclass
+kubectl -n "$NS" get gateway,httproute -o yaml
+kubectl -n "$NS" get gateway -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.conditions[*]}  {.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}{end}'
+kubectl -n "$NS" get httproute -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.parents[*]}  parent={.parentRef.name}{"\n"}{range .conditions[*]}    {.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}{end}{end}'
 ```
 
 Ingress/Gateway resource、controller 和 proxy/data plane 是三层：resource 保存配置，controller 观察 API 并配置实现，data plane 才转发请求。实现可能通过 ClusterIP，也可能直接消费 Service/EndpointSlice metadata；不要假定固定经过 kube-proxy。

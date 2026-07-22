@@ -10,10 +10,10 @@ RollingUpdate 的两个预算相对期望副本数计算：
 
 | 字段 | 限制 | 百分比取整 | 影响 |
 | --- | --- | --- | --- |
-| `maxUnavailable` | 更新期间最多可低于期望值的 available Pods | 向下取整 | 越小越保守，但发布可能更慢或因容量不足停住 |
-| `maxSurge` | 更新期间最多可高于期望值创建的 Pods | 向上取整 | 越大越快，但需要更多临时资源 |
+| `maxUnavailable` | 更新期间相对期望副本最多允许多少 Pods 不 available | 向下取整 | controller 依据新旧 ReplicaSet 的 available replicas 决定何时缩旧副本 |
+| `maxSurge` | 活动更新预算中最多允许多少非 terminating Pods 超出期望副本 | 向上取整 | 越大越快，但需要更多临时资源；不是所有 Pod 对象的硬上限 |
 
-两者不能同时为 0；默认各为 25%。available 不是“Pod 对象存在”，而是 Ready 并持续满足 `minReadySeconds`。例如期望 4 副本、`maxUnavailable: 1`、`maxSurge: 1` 时，过程中最多 5 个 Pod，至少保持 3 个 available；调度容量、镜像拉取、readiness 或 quota 仍可能令 rollout 停滞。
+两者不能同时为 0；默认各为 25%。available 不是“Pod 对象存在”，而是 Ready 并持续满足 `minReadySeconds`。例如期望 4 副本、`maxUnavailable: 1`、`maxSurge: 1` 时，controller 的活动预算允许最多 5 个非 terminating Pods，并在缩减旧 ReplicaSet 时以至少 3 个 available 为门槛。terminating Pods 不计入 available replicas；它们进入终止后也不再占新旧 ReplicaSet 的活动副本/surge 预算，但在 grace period 内 Pod 对象和进程仍可能存在，所以实际 Pod 总数可能暂时超过 5。调度容量、镜像拉取、readiness、长宽限期或 quota 仍可能令 rollout 停滞。
 
 ```bash
 kubectl -n demo set image deployment/web web=example/web:1.5.0

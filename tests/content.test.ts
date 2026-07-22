@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
+import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 
 import { markdownFences } from './support/markdown'
 
 const root = resolve(import.meta.dirname, '..')
+const markdownParser = new MarkdownIt()
 const contentFiles = [
   'docs/index.md',
   'docs/guide/deployment-flow.md',
@@ -75,6 +77,54 @@ function readRequiredContent(file: string): string | null {
   }
 
   return readFileSync(absoluteFile, 'utf8')
+}
+
+interface MermaidEdge {
+  from: string
+  label: string
+  to: string
+}
+
+function mermaidEdges(source: string): MermaidEdge[] {
+  const edgePattern = /^\s*([A-Za-z][\w]*)(?:\[[^\]]*\])?\s+(?:-->|-\.->)\|([^|]+)\|\s+([A-Za-z][\w]*)/gm
+  return Array.from(source.matchAll(edgePattern), (match) => ({
+    from: match[1],
+    label: match[2].trim(),
+    to: match[3],
+  }))
+}
+
+function levelTwoHeadings(source: string): string[] {
+  const tokens = markdownParser.parse(source, {})
+  return tokens.flatMap((token, index) =>
+    token.type === 'heading_open' && token.tag === 'h2'
+      ? [tokens[index + 1]?.content ?? '']
+      : [],
+  )
+}
+
+function markdownTables(source: string): string[][][] {
+  const tables: string[][][] = []
+  let table: string[][] | null = null
+  let row: string[] | null = null
+  let inCell = false
+
+  for (const token of markdownParser.parse(source, {})) {
+    if (token.type === 'table_open') table = []
+    else if (token.type === 'tr_open') row = []
+    else if (token.type === 'th_open' || token.type === 'td_open') inCell = true
+    else if (token.type === 'inline' && inCell) row?.push(token.content)
+    else if (token.type === 'th_close' || token.type === 'td_close') inCell = false
+    else if (token.type === 'tr_close' && table !== null && row !== null) {
+      table.push(row)
+      row = null
+    } else if (token.type === 'table_close' && table !== null) {
+      tables.push(table)
+      table = null
+    }
+  }
+
+  return tables
 }
 
 function resolveRootAbsoluteHref(href: string): {
@@ -312,6 +362,37 @@ describe('content contract', () => {
     expect(yaml).toContain('terminationGracePeriodSeconds:')
   })
 
+  it('treats endpoint withdrawal and node termination as concurrent processes', () => {
+    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    if (chapter === null) return
+
+    for (const phrase of [
+      '控制面 endpoint 更新与节点上的终止处理异步并发',
+      '不保证 EndpointSlice propagation 先于 preStop 或 TERM',
+      '`terminating=true`',
+      '`ready=false`',
+      '`serving=true`',
+      'draining',
+    ]) {
+      expect(chapter, `health lifecycle chapter is missing ${phrase}`).toContain(phrase)
+    }
+  })
+
+  it('uses a fixed public image with self-contained probe behavior', () => {
+    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    if (chapter === null) return
+
+    const yaml = markdownFences(
+      chapter,
+      'docs/operations/health-lifecycle.md',
+    ).find((fence) => fence.language === 'yaml')?.content ?? ''
+
+    expect(yaml).toContain('image: busybox:1.36.1')
+    expect(yaml).toContain('httpd -f -p 8080')
+    expect(yaml.match(/path: \/healthz/g)).toHaveLength(3)
+    expect(yaml).not.toContain('example/web')
+  })
+
   it('connects rollout and autoscaling controllers without overstating PDB', () => {
     const chapter = readRequiredContent('docs/operations/release-scaling.md')
     if (chapter === null) return
@@ -348,6 +429,39 @@ describe('content contract', () => {
     expect(chapter).toContain('PDB 不直接控制 Deployment rollout')
   })
 
+  it('accounts for terminating Pods outside the rolling update replica budget', () => {
+    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    if (chapter === null) return
+
+    expect(chapter).toContain('非 terminating Pods')
+    expect(chapter).toContain('terminating Pods 不计入 available replicas')
+    expect(chapter).toContain('实际 Pod 总数可能暂时超过')
+    expect(chapter).not.toContain('过程中最多 5 个 Pod')
+  })
+
+  it('directs metrics through HPA and workload controllers before Pods', () => {
+    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    if (chapter === null) return
+
+    const diagram = markdownFences(
+      chapter,
+      'docs/operations/release-scaling.md',
+    ).find(
+      (fence) =>
+        fence.language === 'mermaid' && fence.content.includes('HPA controller'),
+    )
+    expect(diagram).toBeDefined()
+    const edges = mermaidEdges(diagram?.content ?? '')
+    const hasEdge = (from: string, to: string) =>
+      edges.some((edge) => edge.from === from && edge.to === to)
+
+    expect(hasEdge('MA', 'HC'), 'Metrics API must feed the HPA controller').toBe(true)
+    expect(hasEdge('HC', 'WR'), 'HPA must write workload replicas').toBe(true)
+    expect(hasEdge('WR', 'WC'), 'workload replicas must feed its controller').toBe(true)
+    expect(hasEdge('WC', 'P'), 'workload controller must manage Pods').toBe(true)
+    expect(hasEdge('HC', 'P'), 'HPA must not directly manage Pods').toBe(false)
+  })
+
   it('provides the ordered observable troubleshooting path and copyable commands', () => {
     const chapter = readRequiredContent('docs/operations/troubleshooting.md')
     if (chapter === null) return
@@ -362,12 +476,9 @@ describe('content contract', () => {
       'Service 可达',
       '入口路由可达',
     ]
-    let previous = -1
-    for (const stage of orderedStages) {
-      const index = chapter.indexOf(stage)
-      expect(index, `troubleshooting flow is missing ${stage}`).toBeGreaterThan(previous)
-      previous = index
-    }
+    expect(levelTwoHeadings(chapter).slice(0, orderedStages.length)).toEqual(
+      orderedStages.map((stage, index) => `${index + 1}. ${stage}`),
+    )
 
     for (const symptom of [
       'Pending',
@@ -395,41 +506,93 @@ describe('content contract', () => {
       expect(syntaxCheck.stderr, fence.location).toBe('')
       expect(syntaxCheck.status, fence.location).toBe(0)
     }
+
+    const commandSource = commands.map((fence) => fence.content).join('\n')
+    expect(commandSource).not.toContain('.items[0]')
+    expect(commandSource).not.toContain('2>/dev/null')
+    expect(commandSource).not.toMatch(/--show-labels[^\n]*-o custom-columns/)
+    expect(commandSource).toContain('direct endpoint')
+    expect(commandSource).toContain('trap cleanup EXIT')
+
+    for (const detail of [
+      'deletionTimestamp',
+      'conditions.terminating',
+      'conditions.serving',
+      'publishNotReadyAddresses',
+    ]) {
+      expect(chapter, `troubleshooting chapter is missing ${detail}`).toContain(detail)
+    }
+  })
+
+  it('separates Ingress evidence from Gateway API route conditions', () => {
+    const chapter = readRequiredContent('docs/operations/troubleshooting.md')
+    if (chapter === null) return
+
+    expect(chapter).toContain('Ingress 没有 Gateway API 的标准 Accepted/ResolvedRefs conditions')
+    expect(chapter).toContain('HTTPRoute 的 Accepted 与 ResolvedRefs')
+    expect(chapter).toContain('只验证 HTTP Host routing，不验证 TLS 或 SNI')
+    expect(chapter).toContain('kubectl -n "$NS" describe ingress "$INGRESS"')
+    expect(chapter).toContain('kubectl -n "$NS" get gateway,httproute -o yaml')
   })
 
   it('maps object scope, ownership, references, lifetime, and primary commands', () => {
     const chapter = readRequiredContent('docs/reference/concept-map.md')
     if (chapter === null) return
 
-    expect(chapter).toMatch(
-      /\|\s*对象[^|]*\|\s*作用域[^|]*\|\s*谁创建或管理[^|]*\|\s*选择或引用[^|]*\|\s*生命周期[^|]*\|\s*主要命令[^|]*\|/,
+    const relationshipTable = markdownTables(chapter).find((table) =>
+      table[0]?.join('|') === '对象|作用域|谁创建或管理它|选择或引用什么|生命周期|主要命令',
     )
-    for (const objectName of [
-      'Deployment',
-      'Service',
-      'EndpointSlice',
-      'PersistentVolumeClaim',
-      'ServiceAccount',
-      'RoleBinding',
-      'HorizontalPodAutoscaler',
-      'PodDisruptionBudget',
-    ]) {
-      expect(chapter, `concept map is missing ${objectName}`).toContain(objectName)
+    expect(relationshipTable, 'concept map is missing its relationship table').toBeDefined()
+    const rows = new Map(
+      relationshipTable?.slice(1).map((row) => [row[0], row]) ?? [],
+    )
+    const contracts: Record<string, [string, string, string, string, string]> = {
+      Deployment: ['Namespace', 'Deployment controller', 'selector', '级联', 'kubectl rollout'],
+      Service: ['Namespace', 'Service controller', 'selector', '独立', 'kubectl get service'],
+      EndpointSlice: ['Namespace', 'EndpointSlice controller', 'Service', '调谐', 'kubectl get endpointslice'],
+      PersistentVolumeClaim: ['Namespace', 'storage controllers', 'StorageClass', 'reclaim policy', 'kubectl describe pvc'],
+      ServiceAccount: ['Namespace', '用户', 'Pod spec', '独立身份', 'kubectl get serviceaccount'],
+      HorizontalPodAutoscaler: ['Namespace', 'HPA controller', 'scaleTargetRef', '独立对象', 'kubectl describe hpa'],
+      PodDisruptionBudget: ['Namespace', 'Eviction API', 'selector', '独立预算', 'kubectl describe pdb'],
     }
 
-    for (const classLabel of ['API object', 'actor', 'data plane']) {
-      expect(chapter, `concept map is missing ${classLabel}`).toContain(classLabel)
+    for (const [objectName, expectedColumns] of Object.entries(contracts)) {
+      const row = rows.get(objectName)
+      expect(row, `relationship table is missing ${objectName}`).toBeDefined()
+      expect(row).toHaveLength(6)
+      expectedColumns.forEach((value, index) => {
+        expect(row?.[index + 1], `${objectName} column ${index + 2}`).toContain(value)
+      })
     }
-    for (const edgeLabel of [
-      'creates or updates',
-      'selects',
-      'references',
-      'is watched by',
-      'configures',
-      'forwards',
-    ]) {
-      expect(chapter, `concept map is missing edge ${edgeLabel}`).toContain(edgeLabel)
-    }
+  })
+
+  it('routes Service metadata through actors before traffic data planes', () => {
+    const chapter = readRequiredContent('docs/reference/concept-map.md')
+    if (chapter === null) return
+
+    const diagram = markdownFences(
+      chapter,
+      'docs/reference/concept-map.md',
+    ).find((fence) => fence.language === 'mermaid')
+    expect(diagram).toBeDefined()
+    const edges = mermaidEdges(diagram?.content ?? '')
+    const hasEdge = (from: string, to: string, label?: string) =>
+      edges.some(
+        (edge) =>
+          edge.from === from &&
+          edge.to === to &&
+          (label === undefined || edge.label.includes(label)),
+      )
+
+    expect(hasEdge('S', 'SPA', 'is watched by')).toBe(true)
+    expect(hasEdge('ES', 'SPA', 'is watched by')).toBe(true)
+    expect(hasEdge('SPA', 'SD', 'configures')).toBe(true)
+    expect(hasEdge('S', 'IC', 'is watched by')).toBe(true)
+    expect(hasEdge('ES', 'IC', 'is watched by')).toBe(true)
+    expect(hasEdge('IC', 'PX', 'configures')).toBe(true)
+    expect(hasEdge('S', 'PX')).toBe(false)
+    expect(hasEdge('ES', 'PX')).toBe(false)
+    expect(hasEdge('RC', 'P', 'creates deletes or adopts')).toBe(true)
   })
 
   it('lists operations and reference chapters after core concepts', () => {

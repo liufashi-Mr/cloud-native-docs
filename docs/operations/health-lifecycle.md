@@ -27,9 +27,9 @@ startupProbe 成功前，kubelet 不执行同一 container 的 readinessProbe �
 
 readiness 应回答“接一个新请求是否合理”，liveness 只回答“是否必须重启”。把短暂的数据库故障写进 liveness 常会制造重启风暴；把只检查 PID 的命令写进 readiness 又可能过早放量。
 
-## 一个完整的 probe 与 hook 示例
+## 一个完整的 probe 与 preStop 示例
 
-下面的应用镜像约定提供 `/startup`、`/ready` 和 `/live`，并包含 `/bin/sh`。这个主清单不依赖集群外的自定义 controller，可以独立进入 Ready。
+下面使用固定版本的公开 BusyBox 镜像：启动命令先创建 `/www/healthz`，再以前台 `httpd` 监听 8080，所以三类 HTTP probe 都检查一个真实存在的 handler。preStop 先移除该文件、等待 5 秒，再由 kubelet 继续发送 TERM；这个例子不依赖自定义镜像或外部 controller，可以独立进入 Ready。
 
 ```yaml
 apiVersion: apps/v1
@@ -50,27 +50,31 @@ spec:
       terminationGracePeriodSeconds: 45
       containers:
         - name: web
-          image: example/web:1.4.2
+          image: busybox:1.36.1
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /www
+              printf 'ok\n' > /www/healthz
+              exec httpd -f -p 8080 -h /www
           ports:
             - name: http
               containerPort: 8080
           lifecycle:
-            postStart:
-              exec:
-                command: ["/bin/sh", "-c", "touch /tmp/post-started"]
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 10"]
+                command: ["/bin/sh", "-c", "rm -f /www/healthz; sleep 5"]
           startupProbe:
             httpGet:
-              path: /startup
+              path: /healthz
               port: http
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /ready
+              path: /healthz
               port: http
             periodSeconds: 5
             timeoutSeconds: 2
@@ -78,7 +82,7 @@ spec:
             successThreshold: 1
           livenessProbe:
             httpGet:
-              path: /live
+              path: /healthz
               port: http
             periodSeconds: 10
             timeoutSeconds: 2
@@ -102,10 +106,15 @@ preStop 只在 kubelet 管理的终止流程中、container 仍在运行且宽�
 
 ## 删除 Pod 时实际发生什么
 
-1. API 对象获得 `deletionTimestamp`，terminationGracePeriodSeconds 的倒计时开始；endpoint controller 会根据终止与就绪状态更新 EndpointSlice。
-2. kubelet 对仍在运行且配置了 hook 的 containers 执行 preStop。若 hook 在宽限期结束仍未完成，kubelet 会请求一次很短的额外宽限，然后继续终止，不能把它当成可依赖的延长机制。
-3. 对每个 container，preStop 返回后，runtime 向 PID 1 发送镜像 `STOPSIGNAL` 或默认 TERM；应用应停止接新请求、完成有限清理并退出。普通 containers 之间没有固定顺序；原生 sidecar container 具有单独的反向终止顺序语义。
-4. 宽限期耗尽后，仍存活的进程会被强制终止。最终 API Server 删除 Pod 对象。
+删除请求让 API 对象获得 `deletionTimestamp`，随后触发两条没有全局排序保证的路径：控制面 controller 观察 Pod/Service 变化并更新 EndpointSlice；目标 Node 上的 kubelet 开始本地 termination grace period。控制面 endpoint 更新与节点上的终止处理异步并发，受 watch、调谐和网络传播延迟影响；Kubernetes 不保证 EndpointSlice propagation 先于 preStop 或 TERM，也不保证代理在进程退出前已经完成摘流。
+
+只有 kubelet 对**同一个 container**的本地处理有以下顺序：
+
+1. 若 container 仍在运行、配置了 preStop 且 grace 尚未耗尽，kubelet 先执行 hook。若 hook 在宽限期结束仍未完成，kubelet 会请求一次很短的额外宽限，然后继续终止，不能把它当成可依赖的延长机制。
+2. preStop 返回后，runtime 向 PID 1 发送镜像 `STOPSIGNAL` 或默认 TERM；应用应停止接新请求、完成有限清理并退出。普通 containers 之间没有固定顺序；原生 sidecar container 具有单独的反向终止顺序语义。
+3. 宽限期耗尽后，仍存活的进程会被强制终止。最终 API Server 删除 Pod 对象。
+
+EndpointSlice 用三个 conditions 描述终止中的后端：`terminating=true` 表示 endpoint 对应的 Pod 正在终止；为兼容只理解旧 `ready` 字段的 load balancer，terminating endpoint 通常写成 `ready=false`；`serving=true` 则表示该 terminating endpoint 当前仍能服务。理解这些字段的 agent 可以用 serving 与 terminating 做 connection draining，但仍必须容忍上述传播竞态。`publishNotReadyAddresses` 是另一项显式例外，消费该 Service endpoint 的 agent 应忽略 ready/not-ready 指示。
 
 SIGTERM 不是“等待到宽限期结束才发送”。让 preStop 只做短暂排空延迟，把真正的优雅退出放在进程的 TERM handler 中，并让两者总时长小于宽限期。节点失联、强制删除或进程自身崩溃也可能绕过完整流程，所以持久数据一致性不能只依赖 hook。
 
@@ -118,12 +127,16 @@ SIGTERM 不是“等待到宽限期结束才发送”。让 preStop 只做短暂
 Pod conditions 记录 Initialized、PodScheduled、ContainersReady、Ready 以及自定义 readiness gates。只有内置就绪条件和所有 gate 都为 true，Pod 才 Ready。对 selector Service，EndpointSlice controller 通常据此写入 endpoint：`conditions.ready=false` 不应接收常规流量；`conditions.ready=null` 表示未知，但为兼容旧 endpoint，消费者应把 null 解释为 ready。Service 设置 `publishNotReadyAddresses` 时，消费该 Service endpoint 的 agent 应忽略 ready/not-ready 指示，消费者必须理解这一显式例外，而不是把“出现在 EndpointSlice”直接等同于可用。
 
 ```bash
-POD=$(kubectl -n demo get pods -l app=web -o jsonpath='{.items[0].metadata.name}')
-if [ -n "$POD" ]; then
-  kubectl -n demo get pod "$POD" -o jsonpath='{.status.phase}{"\n"}{range .status.containerStatuses[*]}{.name}{" state="}{.state}{" restarts="}{.restartCount}{"\n"}{end}'
-  kubectl -n demo get pod "$POD" -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}'
+if ! POD_REFS=$(kubectl -n demo get pods -l app=web -o name); then
+  exit 1
+fi
+if [ -n "$POD_REFS" ]; then
+  for POD_REF in $POD_REFS; do
+    kubectl -n demo get "$POD_REF" -o jsonpath='{.metadata.name}{" phase="}{.status.phase}{"\n"}{range .status.containerStatuses[*]}{.name}{" state="}{.state}{" restarts="}{.restartCount}{"\n"}{end}'
+    kubectl -n demo get "$POD_REF" -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{" reason="}{.reason}{"\n"}{end}'
+  done
 else
-  echo "no web Pod found in demo namespace"
+  echo "no web Pods found in demo namespace"
 fi
 ```
 
