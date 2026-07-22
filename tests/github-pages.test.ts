@@ -9,7 +9,7 @@ import { parse } from 'yaml'
 interface WorkflowStep {
   id?: string
   uses?: string
-  with?: Record<string, string>
+  with?: Record<string, boolean | string>
   run?: string
 }
 
@@ -39,6 +39,7 @@ interface PagesWorkflow {
 }
 
 const root = process.cwd()
+const nodeVersionPath = resolve(root, '.nvmrc')
 const workflowPath = resolve(root, '.github/workflows/deploy-pages.yml')
 
 async function readWorkflow() {
@@ -90,7 +91,7 @@ describe('GitHub Pages deployment', () => {
     ])
     expect(
       build.steps.find(({ uses }) => uses === 'actions/setup-node@v7')?.with,
-    ).toEqual({ 'node-version': '22', cache: 'npm' })
+    ).toEqual({ 'node-version-file': '.nvmrc', cache: 'npm' })
     expect(build.steps.filter(({ run }) => run).map(({ run }) => run)).toEqual(
       expect.arrayContaining(['npm ci', 'npm test', 'npm run typecheck']),
     )
@@ -110,10 +111,28 @@ describe('GitHub Pages deployment', () => {
       name: 'github-pages',
       url: '${{ steps.deployment.outputs.page_url }}',
     })
-    expect(deploy.steps).toEqual([
-      { uses: 'actions/configure-pages@v6' },
-      { id: 'deployment', uses: 'actions/deploy-pages@v5' },
+    expect(deploy.steps.map(({ uses }) => uses)).toEqual([
+      'actions/configure-pages@v6',
+      'actions/deploy-pages@v5',
     ])
+    expect(
+      deploy.steps.find(({ uses }) => uses === 'actions/deploy-pages@v5')?.id,
+    ).toBe('deployment')
+  })
+
+  it('pins local and CI builds to Node 24', async () => {
+    expect(existsSync(nodeVersionPath)).toBe(true)
+
+    expect(await readFile(nodeVersionPath, 'utf8')).toBe('24\n')
+  })
+
+  it('enables GitHub Pages before deployment', async () => {
+    const workflow = await readWorkflow()
+    const configurePages = workflow.jobs.deploy.steps.find(
+      ({ uses }) => uses === 'actions/configure-pages@v6',
+    )
+
+    expect(configurePages?.with).toEqual({ enablement: true })
   })
 
   it.each([
