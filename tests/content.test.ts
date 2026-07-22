@@ -1,6 +1,9 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
+
+import { markdownFences } from './support/markdown'
 
 const root = resolve(import.meta.dirname, '..')
 const contentFiles = [
@@ -159,8 +162,9 @@ describe('content contract', () => {
       'EP -->|creates PV through API Server 通过 API Server 创建 PV| API',
       'API -->|serves PVC and PV watch events 提供申领与 PV 事件| VB["volume binder or PV controller"]',
       'VB -->|writes binding fields 写入绑定字段| API',
-      'KL -->|calls NodeStageVolume and NodePublishVolume 调用节点暂存与发布| CSI["CSI node plugin"]',
-      'CSI -->|may stage volume at 可在此暂存卷| ST["kubelet-managed global staging path"]',
+      'KL -->|calls NodePublishVolume for Pod target 调用 NodePublishVolume 发布到 Pod 路径| CSI["CSI node plugin"]',
+      'KL -->|may call NodeStageVolume when capability is advertised 驱动声明能力时可调用 NodeStageVolume| CSI',
+      'CSI -->|may stage when STAGE_UNSTAGE_VOLUME is supported 支持该能力时可暂存| ST["kubelet-managed global staging path"]',
       'CSI -->|publishes volume to 把卷发布到| HP["kubelet-managed host-side Pod volume path"]',
       'KL -->|passes host path in CRI container config 通过 CRI 容器配置传递主机路径| CR["CRI container runtime"]',
       'HP -.->|is referenced as mount source 被引用为挂载源| CR',
@@ -219,8 +223,25 @@ describe('content contract', () => {
     expect(clusterNodes).toContain('kubectl describe node "$NODE_NAME"')
     expect(clusterNodes).not.toContain('<node-name>')
     expect(scheduling).toContain('PENDING_POD=')
+    expect(scheduling).toContain('if [ -n "$PENDING_POD" ]; then')
     expect(scheduling).toContain('kubectl -n demo describe pod "$PENDING_POD"')
+    expect(scheduling).toContain('else')
     expect(scheduling).not.toContain('<pending-pod>')
+
+    const pendingPodFence = markdownFences(
+      scheduling,
+      'docs/concepts/scheduling-resources.md',
+    ).find(
+      (fence) =>
+        fence.language === 'bash' && fence.content.includes('PENDING_POD='),
+    )
+    expect(pendingPodFence).toBeDefined()
+    const syntaxCheck = spawnSync('bash', ['-n'], {
+      input: pendingPodFence?.content,
+      encoding: 'utf8',
+    })
+    expect(syntaxCheck.stderr).toBe('')
+    expect(syntaxCheck.status).toBe(0)
   })
 
   it('lists the seven core concept chapters in learning order', () => {

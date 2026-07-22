@@ -50,4 +50,15 @@ describe('documentation Mermaid diagrams', () => {
       'flowchart LR\n  A -->|calls| B',
     ])
   })
+
+  it('keeps fence language case-sensitive like the VitePress plugin', () => {
+    const markdown = [
+      '```Mermaid',
+      'flowchart LR',
+      '  A -->|calls| B',
+      '```',
+    ].join('\n')
+
+    expect(mermaidFences(markdown)).toEqual([])
+  })
 })

@@ -20,4 +20,14 @@ describe('Mermaid fence transformer', () => {
     )
     expect(html).not.toContain('<script>')
   })
+
+  it('leaves differently-cased fence languages as ordinary code', async () => {
+    const markdown = await createMarkdownRenderer(resolve(import.meta.dirname, '..'))
+    markdown.use(mermaidFencePlugin)
+
+    const html = markdown.render('```Mermaid\nflowchart LR\n  A --> B\n```')
+
+    expect(html).not.toContain('<MermaidDiagram')
+    expect(html).toContain('<div class="language-Mermaid')
+  })
 })

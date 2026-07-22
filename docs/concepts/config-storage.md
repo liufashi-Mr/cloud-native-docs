@@ -44,7 +44,7 @@ Pod `spec.volumes` 声明卷来源，container `volumeMounts` 把解析后的 vo
 
 ## PV、PVC、StorageClass 与 CSI
 
-PersistentVolume（PV）表示集群可用的一份存储资源；PersistentVolumeClaim（PVC）是命名空间内应用对容量、access modes 和 StorageClass 等能力的请求。volume binder / PV controller 观察这些 API objects，并通过 API Server 写入绑定字段，把兼容 PVC 与 PV 关联起来，通常形成一对一独占 claim 关系。PVC 只是被观察和更新的声明，不会主动请求 provisioner 或自行绑定 PV。Pod spec 引用 PVC；kubelet 解析 claim 后调用 CSI node plugin，把 volume 发布到 kubelet 管理的 host-side Pod volume path，再通过 CRI container config 让 runtime 将该路径挂入 container。Pod 并不直接 mount PVC API object，CSI node plugin 也不直接创建 container mount。
+PersistentVolume（PV）表示集群可用的一份存储资源；PersistentVolumeClaim（PVC）是命名空间内应用对容量、access modes 和 StorageClass 等能力的请求。volume binder / PV controller 观察这些 API objects，并通过 API Server 写入绑定字段，把兼容 PVC 与 PV 关联起来，通常形成一对一独占 claim 关系。PVC 只是被观察和更新的声明，不会主动请求 provisioner 或自行绑定 PV。Pod spec 引用 PVC；kubelet 解析 claim 后调用 CSI node plugin 的 `NodePublishVolume`，把 volume 发布到 kubelet 管理的 host-side Pod volume path。如果驱动声明 `STAGE_UNSTAGE_VOLUME` capability，kubelet 还会调用 `NodeStageVolume` 使用全局 staging path。随后 kubelet 通过 CRI container config 让 runtime 将 Pod volume path 挂入 container。Pod 并不直接 mount PVC API object，CSI node plugin 也不直接创建 container mount。
 
 StorageClass 描述一类存储及 provisioner 参数，并可触发 dynamic provisioning。external-provisioner 观察 API Server 提供的 PVC 与 StorageClass 事件，调用 CSI controller service 的 `CreateVolume`；CSI driver/controller 创建后端 volume 并返回标识，external-provisioner 再通过 API Server 创建 PV API object。某些 StorageClass 使用 `WaitForFirstConsumer`，会等 Pod 调度约束已知后再供应或绑定，避免在错误 topology 创建存储。
 
@@ -61,8 +61,9 @@ flowchart LR
   API -->|serves PVC and PV watch events 提供申领与 PV 事件| VB["volume binder or PV controller"]
   VB -->|writes binding fields 写入绑定字段| API
   API -->|publishes assigned Pod and bound claim 发布已分配 Pod 与绑定申领| KL["kubelet"]
-  KL -->|calls NodeStageVolume and NodePublishVolume 调用节点暂存与发布| CSI["CSI node plugin"]
-  CSI -->|may stage volume at 可在此暂存卷| ST["kubelet-managed global staging path"]
+  KL -->|calls NodePublishVolume for Pod target 调用 NodePublishVolume 发布到 Pod 路径| CSI["CSI node plugin"]
+  KL -->|may call NodeStageVolume when capability is advertised 驱动声明能力时可调用 NodeStageVolume| CSI
+  CSI -->|may stage when STAGE_UNSTAGE_VOLUME is supported 支持该能力时可暂存| ST["kubelet-managed global staging path"]
   CSI -->|publishes volume to 把卷发布到| HP["kubelet-managed host-side Pod volume path"]
   KL -->|passes host path in CRI container config 通过 CRI 容器配置传递主机路径| CR["CRI container runtime"]
   HP -.->|is referenced as mount source 被引用为挂载源| CR

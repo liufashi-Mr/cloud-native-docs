@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import MarkdownIt from 'markdown-it'
 
+import { fenceLanguage } from '../../docs/.vitepress/markdown/fence-info'
+
 const markdown = new MarkdownIt()
 const docsRoot = resolve(import.meta.dirname, '..', '..', 'docs')
 
@@ -33,7 +35,7 @@ export function markdownFences(
     if (token.type !== 'fence') return []
 
     const info = token.info.trim()
-    const language = info.split(/\s+/, 1)[0]?.toLowerCase() ?? ''
+    const language = fenceLanguage(info)
     const line = (token.map?.[0] ?? 0) + 1
     return [{
       content: token.content.trim(),

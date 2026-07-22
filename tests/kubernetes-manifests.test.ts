@@ -54,6 +54,96 @@ describe(`Kubernetes ${KUBERNETES_SCHEMA_TARGET} YAML examples`, () => {
     ).toThrow(/unknown or unvalidated kind/i)
   })
 
+  it('enforces controller-specific restartPolicy in both directions', () => {
+    const deployment = (restartPolicy: string) => ({
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'web' },
+      spec: {
+        selector: { matchLabels: { app: 'web' } },
+        template: {
+          metadata: { labels: { app: 'web' } },
+          spec: {
+            restartPolicy,
+            containers: [{ name: 'web', image: 'nginx' }],
+          },
+        },
+      },
+    })
+    const cronJob = (restartPolicy: string) => ({
+      apiVersion: 'batch/v1',
+      kind: 'CronJob',
+      metadata: { name: 'report' },
+      spec: {
+        schedule: '15 * * * *',
+        jobTemplate: {
+          spec: {
+            template: {
+              spec: {
+                restartPolicy,
+                containers: [{ name: 'report', image: 'example/report:1.0' }],
+              },
+            },
+          },
+        },
+      },
+    })
+    const job = (restartPolicy: string) => ({
+      apiVersion: 'batch/v1',
+      kind: 'Job',
+      metadata: { name: 'report-once' },
+      spec: {
+        template: {
+          spec: {
+            restartPolicy,
+            containers: [{ name: 'report', image: 'example/report:1.0' }],
+          },
+        },
+      },
+    })
+
+    expect(() => validateKubernetesManifest(deployment('Always'))).not.toThrow()
+    expect(() => validateKubernetesManifest(deployment('Never'))).toThrow(
+      /restartPolicy/,
+    )
+    expect(() => validateKubernetesManifest(job('Never'))).not.toThrow()
+    expect(() => validateKubernetesManifest(job('Always'))).toThrow(
+      /restartPolicy/,
+    )
+    expect(() => validateKubernetesManifest(cronJob('Never'))).not.toThrow()
+    expect(() => validateKubernetesManifest(cronJob('OnFailure'))).not.toThrow()
+    expect(() => validateKubernetesManifest(cronJob('Always'))).toThrow(
+      /restartPolicy/,
+    )
+  })
+
+  it('accepts selectorless and explicitly empty v1.31 variants', () => {
+    const manifests = [
+      {
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: { name: 'external-backend' },
+        spec: { ports: [{ port: 443, targetPort: 8443 }] },
+      },
+      {
+        apiVersion: 'networking.k8s.io/v1',
+        kind: 'NetworkPolicy',
+        metadata: { name: 'default-deny' },
+        spec: { podSelector: {}, ingress: [] },
+      },
+      {
+        apiVersion: 'policy/v1',
+        kind: 'PodDisruptionBudget',
+        metadata: { name: 'all-pods' },
+        spec: { minAvailable: 1, selector: {} },
+      },
+    ]
+
+    for (const manifest of manifests) {
+      expect(() => validateKubernetesManifest(manifest)).not.toThrow()
+    }
+  })
+
   it.each([
     {
       name: 'Deployment with a selector that misses template labels',

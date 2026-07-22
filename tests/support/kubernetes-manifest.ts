@@ -1,5 +1,6 @@
 type JsonObject = Record<string, unknown>
 type Validator = (manifest: JsonObject, location: string) => void
+type PodSpecContext = 'deployment' | 'job' | 'pod'
 
 /**
  * Focused offline validators target the built-in APIs documented for Kubernetes
@@ -24,6 +25,15 @@ function array(value: unknown, location: string, path: string): unknown[] {
   if (!Array.isArray(value) || value.length === 0) {
     fail(location, path, 'must be a non-empty array')
   }
+  return value
+}
+
+function possiblyEmptyArray(
+  value: unknown,
+  location: string,
+  path: string,
+): unknown[] {
+  if (!Array.isArray(value)) fail(location, path, 'must be an array')
   return value
 }
 
@@ -177,16 +187,37 @@ function validateVolumes(
   return names
 }
 
-function validatePodSpec(value: unknown, location: string, path: string): void {
+function validatePodSpec(
+  value: unknown,
+  location: string,
+  path: string,
+  context: PodSpecContext,
+): void {
   const spec = object(value, location, path)
   const volumeNames = validateVolumes(spec.volumes, location, `${path}.volumes`)
   validateContainers(spec.containers, location, `${path}.containers`, volumeNames)
   optionalString(spec.serviceAccountName, location, `${path}.serviceAccountName`)
-  if (
-    spec.restartPolicy !== undefined &&
-    !['Always', 'Never', 'OnFailure'].includes(String(spec.restartPolicy))
-  ) {
-    fail(location, `${path}.restartPolicy`, 'has an unsupported value')
+  const allowedRestartPolicies: Record<PodSpecContext, string[]> = {
+    deployment: ['Always'],
+    job: ['Never', 'OnFailure'],
+    pod: ['Always', 'Never', 'OnFailure'],
+  }
+  if (context === 'job' && spec.restartPolicy === undefined) {
+    fail(location, `${path}.restartPolicy`, 'is required for a Job Pod template')
+  }
+  if (spec.restartPolicy !== undefined) {
+    const restartPolicy = string(
+      spec.restartPolicy,
+      location,
+      `${path}.restartPolicy`,
+    )
+    if (!allowedRestartPolicies[context].includes(restartPolicy)) {
+      fail(
+        location,
+        `${path}.restartPolicy`,
+        `must be one of ${allowedRestartPolicies[context].join(', ')} for ${context}`,
+      )
+    }
   }
 }
 
@@ -213,12 +244,14 @@ function validateDeployment(manifest: JsonObject, location: string): void {
       fail(location, 'spec.selector.matchLabels', `does not match template label ${key}`)
     }
   }
-  validatePodSpec(template.spec, location, 'spec.template.spec')
+  validatePodSpec(template.spec, location, 'spec.template.spec', 'deployment')
 }
 
 function validateService(manifest: JsonObject, location: string): void {
   const spec = object(manifest.spec, location, 'spec')
-  labels(spec.selector, location, 'spec.selector')
+  if (spec.selector !== undefined) {
+    labels(spec.selector, location, 'spec.selector')
+  }
   for (const [index, entry] of array(spec.ports, location, 'spec.ports').entries()) {
     const path = `spec.ports[${index}]`
     const port = object(entry, location, path)
@@ -328,13 +361,30 @@ function validateRoleBinding(manifest: JsonObject, location: string): void {
   string(roleRef.name, location, 'roleRef.name')
 }
 
+function validateJobSpec(
+  value: unknown,
+  location: string,
+  path: string,
+): void {
+  const jobSpec = object(value, location, path)
+  const template = object(jobSpec.template, location, `${path}.template`)
+  validatePodSpec(
+    template.spec,
+    location,
+    `${path}.template.spec`,
+    'job',
+  )
+}
+
+function validateJob(manifest: JsonObject, location: string): void {
+  validateJobSpec(manifest.spec, location, 'spec')
+}
+
 function validateCronJob(manifest: JsonObject, location: string): void {
   const spec = object(manifest.spec, location, 'spec')
   string(spec.schedule, location, 'spec.schedule')
   const jobTemplate = object(spec.jobTemplate, location, 'spec.jobTemplate')
-  const jobSpec = object(jobTemplate.spec, location, 'spec.jobTemplate.spec')
-  const template = object(jobSpec.template, location, 'spec.jobTemplate.spec.template')
-  validatePodSpec(template.spec, location, 'spec.jobTemplate.spec.template.spec')
+  validateJobSpec(jobTemplate.spec, location, 'spec.jobTemplate.spec')
 }
 
 function validateIngress(manifest: JsonObject, location: string): void {
@@ -375,15 +425,17 @@ function validateIngress(manifest: JsonObject, location: string): void {
 function validateNetworkPolicy(manifest: JsonObject, location: string): void {
   const spec = object(manifest.spec, location, 'spec')
   object(spec.podSelector, location, 'spec.podSelector')
-  const policyTypes = stringArray(spec.policyTypes, location, 'spec.policyTypes')
-  for (const policyType of policyTypes) {
-    if (!['Egress', 'Ingress'].includes(policyType)) {
-      fail(location, 'spec.policyTypes', `contains ${policyType}`)
+  if (spec.policyTypes !== undefined) {
+    const policyTypes = stringArray(spec.policyTypes, location, 'spec.policyTypes')
+    for (const policyType of policyTypes) {
+      if (!['Egress', 'Ingress'].includes(policyType)) {
+        fail(location, 'spec.policyTypes', `contains ${policyType}`)
+      }
     }
   }
   for (const direction of ['egress', 'ingress']) {
     if (spec[direction] === undefined) continue
-    for (const [index, rule] of array(
+    for (const [index, rule] of possiblyEmptyArray(
       spec[direction],
       location,
       `spec.${direction}`,
@@ -402,7 +454,16 @@ function validatePdb(manifest: JsonObject, location: string): void {
     fail(location, 'spec', 'must set exactly one of minAvailable or maxUnavailable')
   }
   const selector = object(spec.selector, location, 'spec.selector')
-  labels(selector.matchLabels, location, 'spec.selector.matchLabels')
+  if (selector.matchLabels !== undefined) {
+    labels(selector.matchLabels, location, 'spec.selector.matchLabels')
+  }
+  if (selector.matchExpressions !== undefined) {
+    possiblyEmptyArray(
+      selector.matchExpressions,
+      location,
+      'spec.selector.matchExpressions',
+    )
+  }
 }
 
 const validators: Record<string, { apiVersion: string; validate: Validator }> = {
@@ -410,6 +471,7 @@ const validators: Record<string, { apiVersion: string; validate: Validator }> = 
   CronJob: { apiVersion: 'batch/v1', validate: validateCronJob },
   Deployment: { apiVersion: 'apps/v1', validate: validateDeployment },
   Ingress: { apiVersion: 'networking.k8s.io/v1', validate: validateIngress },
+  Job: { apiVersion: 'batch/v1', validate: validateJob },
   Namespace: { apiVersion: 'v1', validate: () => undefined },
   NetworkPolicy: {
     apiVersion: 'networking.k8s.io/v1',
@@ -418,7 +480,7 @@ const validators: Record<string, { apiVersion: string; validate: Validator }> = 
   Pod: {
     apiVersion: 'v1',
     validate: (manifest, location) =>
-      validatePodSpec(manifest.spec, location, 'spec'),
+      validatePodSpec(manifest.spec, location, 'spec', 'pod'),
   },
   PodDisruptionBudget: { apiVersion: 'policy/v1', validate: validatePdb },
   PersistentVolumeClaim: { apiVersion: 'v1', validate: validatePvc },
