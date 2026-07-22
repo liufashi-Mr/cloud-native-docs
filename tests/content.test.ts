@@ -58,6 +58,118 @@ describe('content contract', () => {
     }
   })
 
+  it('distinguishes object envelopes from resource-specific state', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+
+    for (const phrase of [
+      'apiVersion、kind 和 metadata 是顶层对象的必需信封字段。',
+      'spec 和 status 取决于资源类型；ConfigMap 和 Secret 没有 spec/status。',
+      '用户声明 spec，通常不写 status。',
+      '`Pod.status.phase`、`Pod.status.conditions`',
+      '`Deployment.status.readyReplicas`',
+      '`Pod.spec.nodeName`',
+    ]) {
+      expect(home, `home page is missing ${phrase}`).toContain(phrase)
+    }
+
+    expect(home).not.toContain('status | 控制器写入的实际状态 | 可用副本、条件、分配到的节点')
+  })
+
+  it('keeps workload creation, API persistence, and observed status distinct', () => {
+    const flow = readFileSync(
+      resolve(root, 'docs/guide/deployment-flow.md'),
+      'utf8',
+    )
+
+    for (const phrase of [
+      'API Server 持久化完整的 API 对象（包括 metadata、spec 和 status）',
+      'workload controller 创建 Pod API 对象；kubelet 和容器运行时创建容器',
+      '`spec.replicas` 表示期望副本数，`status.replicas` 表示观察到的副本数',
+      'EndpointSlice controller 的输入是 Service 和 Pod 事件',
+    ]) {
+      expect(flow, `deployment flow is missing ${phrase}`).toContain(phrase)
+    }
+
+    expect(flow).not.toContain('每个组件更新自己的 `status`')
+    expect(flow).not.toContain('participant P as Pod')
+
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    expect(home).toContain(
+      'RC -->|creates 创建| P["Pod API object"]',
+    )
+    expect(home).toContain('CR -->|creates 创建| C["Container"]')
+  })
+
+  it('separates ingress resources from their managed traffic dataplane', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const flow = readFileSync(
+      resolve(root, 'docs/guide/deployment-flow.md'),
+      'utf8',
+    )
+
+    for (const phrase of [
+      'Ingress / Gateway resource',
+      'managed proxy / gateway data plane',
+      'Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面',
+      'Service data plane',
+    ]) {
+      expect(`${home}\n${flow}`, `content is missing ${phrase}`).toContain(
+        phrase,
+      )
+    }
+
+    expect(flow).toContain(
+      'Note over IG,IC: Resource stores configuration; controller watches API Server',
+    )
+    expect(flow).not.toContain('A-->>IG:')
+  })
+
+  it('keeps the runnable example self-contained and selects all replica logs', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const flow = readFileSync(
+      resolve(root, 'docs/guide/deployment-flow.md'),
+      'utf8',
+    )
+
+    expect(home).toContain('kind: Namespace')
+    expect(home).toContain('name: demo')
+    expect(flow).toContain(
+      'kubectl logs deployment/web --all-pods=true --all-containers=true --prefix=true',
+    )
+    expect(flow).toContain('该命令会读取 Deployment 选择的所有 Pod')
+  })
+
+  it('uses an exact allowlist for the planned future routes', () => {
+    const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
+    const plannedRoutes = [
+      '/concepts/resource-model',
+      '/concepts/cluster-nodes',
+      '/concepts/workloads',
+      '/concepts/networking',
+      '/concepts/config-storage',
+      '/concepts/security',
+      '/concepts/scheduling-resources',
+      '/operations/health-lifecycle',
+      '/operations/release-scaling',
+      '/operations/troubleshooting',
+      '/reference/concept-map',
+    ]
+
+    const allowlist = config.match(
+      /const plannedFutureRoutes = \[([\s\S]*?)\]\n/,
+    )
+    expect(allowlist, 'config is missing plannedFutureRoutes').not.toBeNull()
+
+    const configuredRoutes = Array.from(
+      allowlist?.[1].matchAll(/'([^']+)'/g) ?? [],
+      (match) => match[1],
+    )
+
+    expect(configuredRoutes).toEqual(plannedRoutes)
+    expect(config).toContain('ignoreDeadLinks: plannedFutureRoutes')
+    expect(config).not.toContain('ignoreDeadLinks: [/^\\/(?:concepts|operations|reference)\\//]')
+  })
+
   it('keeps configuration and storage arrows consumer-first', () => {
     const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
 
@@ -89,8 +201,8 @@ describe('content contract', () => {
       'S->>A: bind Pod to Node',
       'A-->>KL: assigned Pod watch event',
       'EP->>A: update EndpointSlice endpoint conditions',
-      'I->>DP: route to Service',
-      'DP->>P: forward to ready Pod',
+      'PX->>SD: route to Service',
+      'SD->>RP: forward to ready Pod',
     ]) {
       expect(flow, `deployment flow is missing ${interaction}`).toContain(
         interaction,
@@ -128,9 +240,9 @@ describe('content contract', () => {
     const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
 
     for (const relation of [
-      'DP["Service dataplane (kube-proxy / eBPF)"]',
-      'E -.->|provides ready endpoint metadata 提供就绪 endpoint 元数据| DP',
-      'DP -->|forwards 转发| P["Ready Pod"]',
+      'SD["Service data plane (kube-proxy / eBPF)"]',
+      'E -.->|consumed by 被消费| SD',
+      'SD -->|forwards 转发| RP["Ready Pod"]',
       'EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求',
     ]) {
       expect(home, `home page is missing ${relation}`).toContain(relation)
@@ -141,6 +253,19 @@ describe('content contract', () => {
 
   it('keeps relative Markdown links valid', () => {
     const markdownLink = /\[[^\]]*\]\(([^)]+)\)/g
+    const plannedFutureRoutes = new Set([
+      '/concepts/resource-model',
+      '/concepts/cluster-nodes',
+      '/concepts/workloads',
+      '/concepts/networking',
+      '/concepts/config-storage',
+      '/concepts/security',
+      '/concepts/scheduling-resources',
+      '/operations/health-lifecycle',
+      '/operations/release-scaling',
+      '/operations/troubleshooting',
+      '/reference/concept-map',
+    ])
 
     for (const file of contentFiles) {
       const absoluteFile = resolve(root, file)
@@ -149,7 +274,22 @@ describe('content contract', () => {
       const markdown = readFileSync(absoluteFile, 'utf8')
       for (const match of markdown.matchAll(markdownLink)) {
         const href = match[1].trim().replace(/^<|>$/g, '')
-        if (/^(?:[a-z]+:|#|\/)/i.test(href)) continue
+        if (/^(?:[a-z]+:|#)/i.test(href)) continue
+
+        if (href.startsWith('/')) {
+          const pathname = decodeURIComponent(href.split(/[?#]/, 1)[0])
+          const target = resolve(root, 'docs', pathname.slice(1))
+          const candidates = extname(target)
+            ? [target]
+            : [target, `${target}.md`, resolve(target, 'index.md')]
+
+          expect(
+            candidates.some((candidate) => existsSync(candidate)) ||
+              plannedFutureRoutes.has(pathname),
+            `${file} contains a broken root-absolute link: ${href}`,
+          ).toBe(true)
+          continue
+        }
 
         const pathname = decodeURIComponent(href.split(/[?#]/, 1)[0])
         const target = resolve(dirname(absoluteFile), pathname)

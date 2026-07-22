@@ -20,7 +20,7 @@ describe('production build', () => {
     expect(existsSync(resolve(dist, 'superpowers'))).toBe(false)
   })
 
-  it('does not preload Mermaid on the diagram-free home page', () => {
+  it('does not eagerly preload Mermaid', () => {
     const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
 
     expect(home).not.toMatch(/(?:href|src)="[^"]*mermaid[^"]*"/i)

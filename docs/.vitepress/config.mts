@@ -2,14 +2,28 @@ import { defineConfig } from 'vitepress'
 
 import { mermaidFencePlugin } from './markdown/mermaid-fence'
 
+const plannedFutureRoutes = [
+  '/concepts/resource-model',
+  '/concepts/cluster-nodes',
+  '/concepts/workloads',
+  '/concepts/networking',
+  '/concepts/config-storage',
+  '/concepts/security',
+  '/concepts/scheduling-resources',
+  '/operations/health-lifecycle',
+  '/operations/release-scaling',
+  '/operations/troubleshooting',
+  '/reference/concept-map',
+]
+
 export default defineConfig({
   lang: 'zh-CN',
   title: 'K8s 概念手册',
   description: '用关系与场景串联 Kubernetes 核心概念。',
   appearance: false,
   srcExclude: ['superpowers/**'],
-  // Reserve the section URLs used by the reading path while later chapters land.
-  ignoreDeadLinks: [/^\/(?:concepts|operations|reference)\//],
+  // Remove entries as the corresponding future chapters land.
+  ignoreDeadLinks: plannedFutureRoutes,
   head: [
     [
       'script',

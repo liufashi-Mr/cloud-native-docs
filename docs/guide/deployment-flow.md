@@ -1,6 +1,8 @@
 # 发布与调谐之旅
 
-一次 `Deployment` 发布会穿过 API Server、控制器、调度器和节点代理。过程是异步的：命令提交的是期望状态，随后每个组件更新自己的 `status`，直到观察到的状态逐步收敛。
+一次 `Deployment` 发布会穿过 API Server、控制器、调度器和节点代理。过程是异步的：`kubectl apply` 提交期望状态后，不同控制循环通过 API Server 观察对象并写回各自负责的字段，直到观察状态逐步收敛。API Server 持久化完整的 API 对象（包括 metadata、spec 和 status），而不是只保存 spec；资源类型不支持的字段不会凭空出现。
+
+## 控制平面与节点
 
 ```mermaid
 sequenceDiagram
@@ -11,55 +13,82 @@ sequenceDiagram
   participant E as etcd
   participant DC as Deployment controller
   participant RC as ReplicaSet controller
-  participant P as Pod
   participant S as Scheduler
   participant N as Node
   participant KL as kubelet
   participant CR as Container runtime
-  participant EP as EndpointSlice controller
-  participant I as Ingress / Gateway
-  participant DP as Service data plane (kube-proxy / eBPF)
 
   D->>K: kubectl apply
   K->>A: submit desired object
-  A->>AD: authenticate, authorize, validate
+  A->>AD: authenticate, authorize action, admit
   AD-->>A: allow or reject
-  A->>E: persist spec
+  A->>E: persist complete Deployment object
   E-->>A: stored
   A-->>K: accepted
   A-->>DC: Deployment watch event
   DC->>A: create or update ReplicaSet
+  A->>E: persist ReplicaSet object
   A-->>RC: ReplicaSet watch event
   RC->>A: create Pod
-  A-->>P: Pod object stored
+  A->>E: persist Pod API object
   A-->>S: unscheduled Pod watch event
   S->>A: bind Pod to Node
+  A->>E: persist Pod spec.nodeName
   Note over N,KL: Node hosts the kubelet
   A-->>KL: assigned Pod watch event
-  KL->>CR: start container
-  CR-->>KL: report running
-  KL->>A: update Pod readiness/status
-  A-->>EP: Pod and Service watch event
-  EP->>A: update EndpointSlice endpoint conditions
-  I->>DP: route to Service
-  DP->>P: forward to ready Pod
+  KL->>CR: create sandbox and containers
+  CR-->>KL: report runtime state
+  KL->>A: update Pod status
+  A->>E: persist Pod status
 ```
+
+workload controller 创建 Pod API 对象；kubelet 和容器运行时创建容器。Pod 对象不是主动参与者：控制器、Scheduler 和 kubelet 都通过 API Server 的 watch 与写入推进流程，API Server 再把当前对象状态持久化到 etcd。
+
+## 就绪与请求路径
+
+```mermaid
+sequenceDiagram
+  participant KL as kubelet
+  participant A as API Server
+  participant E as etcd
+  participant EP as EndpointSlice controller
+  participant SD as Service data plane
+  participant IG as Ingress / Gateway resource
+  participant IC as Ingress / Gateway controller
+  participant PX as managed proxy / gateway data plane
+  participant C as Client
+  participant RP as Ready Pod
+
+  KL->>A: update Pod Ready condition
+  A->>E: persist Pod status
+  A-->>EP: Service and Pod watch events
+  EP->>A: update EndpointSlice endpoint conditions
+  A->>E: persist EndpointSlice object
+  A-->>SD: EndpointSlice watch event
+  Note over IG,IC: Resource stores configuration; controller watches API Server
+  A-->>IC: Ingress / Gateway resource watch event
+  IC->>PX: configure routes
+  C->>PX: send request
+  PX->>SD: route to Service
+  SD->>RP: forward to ready Pod
+```
+
+EndpointSlice controller 的输入是 Service 和 Pod 事件，输出是经 API Server 持久化的 EndpointSlice endpoint 记录与条件。Service data plane 消费这些元数据；它与负责生成元数据的 controller 不是同一个角色。Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面，真正的流量经过代理、Service 数据面和 Ready Pod。
 
 ## 阶段一：提交对象
 
-把清单保存为 `web.yaml`，指定命名空间后提交：
+把清单保存为 `web.yaml`。首页的多文档 YAML 已包含 `demo` Namespace，因此可直接提交，并用变量保持后续命令一致：
 
 ```bash
 NS=demo
-kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply --namespace "$NS" -f web.yaml
+kubectl apply -f web.yaml
 ```
 
-API Server 先完成认证、鉴权、准入和 schema 校验，再把对象的 `spec` 写入 etcd。成功响应只表示对象已接受，并不表示 Pod 已运行。拒绝通常发生在这里，先检查命令输出和准入策略事件。
+API Server 先认证请求身份，再鉴权该身份请求执行的动作，随后完成准入和 schema 校验。接受后，它把完整的当前 API 对象持久化到 etcd。成功响应只表示对象已接受，并不表示 Pod 已运行；拒绝通常发生在这里，先检查命令输出和准入策略事件。
 
 ## 阶段二：控制器创建工作负载
 
-Deployment controller 观察到新的 `spec` 后创建或更新 ReplicaSet；ReplicaSet 再创建 Pod。Deployment、ReplicaSet 和 Pod 的 `status` 会分别记录条件、期望副本和当前阶段。控制器可能重试多次，观察到短暂的中间状态是正常的。
+Deployment controller 观察到 Deployment 后创建或更新 ReplicaSet API 对象；ReplicaSet controller 再创建 Pod API 对象。`spec.replicas` 表示期望副本数，`status.replicas` 表示观察到的副本数，`status.readyReplicas` 则表示已就绪副本数。控制器可能重试多次，短暂不一致是异步调谐的正常中间状态。
 
 ```bash
 kubectl -n "$NS" get deployment,replicaset,pod
@@ -68,25 +97,29 @@ kubectl -n "$NS" describe deployment web
 
 ## 阶段三：调度到节点
 
-Scheduler 根据 Pod 的资源 `requests`、亲和性、污点容忍等约束选择 Node，并把绑定结果写回 API Server。没有合适节点时，Pod 会保持 `Pending`，Deployment 的可用副本不会增加。
+Scheduler 根据 Pod 的资源 `requests`、亲和性、污点容忍等约束选择 Node，并通过 API Server 绑定 Pod；结果表现为 `Pod.spec.nodeName`。没有合适节点时，Pod 会保持 `Pending`，Deployment 的可用副本不会增加。
 
 ```bash
 kubectl -n "$NS" get pod -o wide
 kubectl -n "$NS" describe pod -l app=web
 ```
 
-## 阶段四：节点启动容器
+## 阶段四：节点创建容器
 
-kubelet 监听分配到本节点的 Pod，调用容器运行时拉取镜像、创建 sandbox、启动容器，并持续把状态汇报给 API Server。镜像拉取失败、挂载失败或探针配置错误会在 Pod Events 中留下原因。
+kubelet 观察通过 `spec.nodeName` 分配到本节点的 Pod API 对象，调用容器运行时拉取镜像、创建 sandbox 和容器，并把 `Pod.status` 汇报给 API Server。镜像拉取失败、挂载失败或探针配置错误会在 Pod Events 中留下原因。
 
 ```bash
-kubectl -n "$NS" logs deployment/web --all-containers=true
+kubectl logs deployment/web --all-pods=true --all-containers=true --prefix=true --namespace "$NS"
 kubectl -n "$NS" describe pod -l app=web
 ```
 
+该命令会读取 Deployment 选择的所有 Pod；当前 `kubectl logs` 的 `--all-pods` 负责选择全部副本，`--prefix` 为每行增加 Pod 和容器前缀，避免多副本日志混在一起。
+
 ## 阶段五：就绪后接入流量
 
-容器进程运行不代表可以接收请求。readinessProbe 成功后，kubelet 将 Pod 的 Ready 条件写回 API Server；EndpointSlice controller 通过 API Server 发布 endpoint 记录及其 ready 条件。readiness 决定 endpoint 是否具备接收流量的资格，而不是简单决定记录何时生成。Ingress 或 Gateway 把请求交给 Service 数据面（例如 kube-proxy 或 eBPF），数据面再转发到符合条件的 Ready Pod。
+容器进程运行不代表可以接收请求。readinessProbe 的结果由 kubelet 写入 Pod Ready 条件；EndpointSlice controller 根据 Service selector、Pod labels 和 Ready 条件更新 EndpointSlice。endpoint 记录可以在 Pod 未就绪时已经存在，ready 条件决定 Service 数据面是否将其视为合格后端。
+
+Ingress 或 Gateway 对象只声明主机名、路径和后端等配置。对应 controller 观察这些资源并配置代理或网关数据面；请求随后由该数据面路由到 Service 数据面，再转发到符合条件的 Ready Pod。
 
 ```bash
 kubectl -n "$NS" get pod,endpointslice,service
@@ -109,6 +142,6 @@ kubectl -n "$NS" get deployment web -o yaml
 - Pod 一直 Pending：检查资源请求、节点污点、亲和性和调度事件。
 - 容器反复重启：检查镜像、启动命令、环境变量以及 `kubectl logs` 输出。
 - Pod 不 Ready：检查 readinessProbe 路径、端口和依赖服务。
-- Service 没有 endpoint：核对 selector 与 Pod labels，并确认 Pod 已 Ready。
+- Service 没有 endpoint：核对 selector 与 Pod labels，并检查 EndpointSlice 的 ready 条件。
 
 需要按症状逐层定位时，继续阅读[故障排查](/operations/troubleshooting)。该页面会补充事件、条件和回滚的系统化检查清单。

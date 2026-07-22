@@ -8,15 +8,15 @@
 
 ## 对象的共同骨架
 
-几乎所有 Kubernetes API 对象都遵循同一套骨架：
+对提交给 API Server 的顶层资源清单来说，apiVersion、kind 和 metadata 是顶层对象的必需信封字段。spec 和 status 取决于资源类型；ConfigMap 和 Secret 没有 spec/status。
 
-| 字段 | 作用 | 你通常会写什么 |
+| 字段 | 适用范围 | 作用与示例 |
 | --- | --- | --- |
-| `apiVersion` | 选择 API 组和版本 | `apps/v1`、`v1` |
-| `kind` | 声明对象类型 | `Deployment`、`Service` |
-| `metadata` | 身份与组织信息 | `name`、`namespace`、`labels`、`annotations` |
-| `spec` | 期望状态 | 副本数、镜像、端口、选择器、资源请求 |
-| `status` | 控制器写入的实际状态 | 可用副本、条件、分配到的节点 |
+| `apiVersion` | 顶层对象必需 | 选择 API 组和版本，如 `apps/v1`、`v1` |
+| `kind` | 顶层对象必需 | 声明对象类型，如 `Deployment`、`Service` |
+| `metadata` | 顶层对象必需 | 提供 `name`、`namespace`、`labels`、`annotations` 等身份信息 |
+| `spec` | 取决于资源类型 | 用户声明的期望状态，如副本数、容器、端口和调度约束 |
+| `status` | 取决于资源类型 | 控制器或 kubelet 写入的观察状态，通常通过 status 子资源更新 |
 
 ```yaml
 apiVersion: apps/v1
@@ -38,7 +38,7 @@ spec:
           image: example/web:1.0
 ```
 
-`spec` 是你想要什么，`status` 是系统目前做到什么；查看两者的差异通常比猜测后台命令更有效。
+用户声明 spec，通常不写 status。`Pod.status.phase`、`Pod.status.conditions` 描述 Pod 的观察状态，`Deployment.status.readyReplicas` 表示已就绪副本数；调度器分配的节点则写在期望配置 `Pod.spec.nodeName`，不是 status。查看 spec 与 status 的差异通常比猜测后台命令更有效。
 
 ## 四条关键关系
 
@@ -46,25 +46,32 @@ spec:
 
 ```mermaid
 flowchart LR
-  D["Deployment"] -->|manages 管理| R["ReplicaSet"]
-  R -->|creates 创建| P["Pod"]
-  P -->|contains 包含| C["Container"]
+  D["Deployment controller"] -->|creates / updates 创建或更新| R["ReplicaSet API object"]
+  R -.->|watched by 被观察| RC["ReplicaSet controller"]
+  RC -->|creates 创建| P["Pod API object"]
+  P -.->|watched on assigned node 分配后被观察| K["kubelet"]
+  K -->|invokes 调用| CR["Container runtime"]
+  CR -->|creates 创建| C["Container"]
 ```
+
+Deployment、ReplicaSet 等 workload controller 创建 Pod API 对象；kubelet 和容器运行时创建容器。Pod 对象只是容器应如何运行的 API 记录，不会自己启动进程。
 
 ### 请求路径关系
 
 ```mermaid
 flowchart LR
-  X["外部请求"] -->|routes 路由| I["Ingress / Gateway"]
-  I -->|routes 路由| S["Service"]
-  S -->|uses data plane 使用数据面| DP["Service dataplane (kube-proxy / eBPF)"]
-  E["EndpointSlice metadata"]
-  E -.->|provides ready endpoint metadata 提供就绪 endpoint 元数据| DP
-  S -.->|has endpoint metadata in 端点元数据位于| E
-  DP -->|forwards 转发| P["Ready Pod"]
+  IG["Ingress / Gateway resource"] -.->|watched by 被观察| IC["Ingress / Gateway controller"]
+  IC -->|configures 配置| PX["managed proxy / gateway data plane"]
+  X["外部请求"] -->|reaches 到达| PX
+  PX -->|routes 路由| SD["Service data plane (kube-proxy / eBPF)"]
+  S["Service selector"] -.->|input 输入| EC["EndpointSlice controller"]
+  PR["Pod labels + readiness"] -.->|input 输入| EC
+  EC -->|publishes through API Server 通过 API Server 发布| E["EndpointSlice metadata"]
+  E -.->|consumed by 被消费| SD
+  SD -->|forwards 转发| RP["Ready Pod"]
 ```
 
-EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求；EndpointSlice controller 通过 API Server 发布记录和就绪条件，Service 数据面再根据这些条件选择可用后端。
+Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面，资源自身不承载请求。EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求；EndpointSlice controller 以 Service selector、Pod labels 和 readiness 为输入，通过 API Server 发布 endpoint 记录和条件，Service 数据面消费这些记录并选择可用后端。
 
 ### 配置与存储关系
 
@@ -94,19 +101,26 @@ flowchart LR
 
 | 起点 | 动词 | 终点 | 含义 |
 | --- | --- | --- | --- |
-| Deployment | manages | ReplicaSet | 管理发布版本和副本期望 |
-| ReplicaSet | creates | Pod | 创建并维持指定数量的 Pod |
+| Deployment controller | manages | ReplicaSet | 管理发布版本和副本期望 |
+| ReplicaSet controller | creates | Pod API object | 通过 API Server 创建并维持指定数量的 Pod 对象 |
+| kubelet / container runtime | creates | Container | 在已分配节点上创建容器 |
 | Service | selects | Pod | 以标签选择可达后端，由 EndpointSlice 记录 endpoint |
-| Ingress / Gateway | routes | Service | 按主机名或路径转发请求 |
+| Ingress / Gateway controller | configures | proxy / gateway data plane | 把路由配置转换为实际代理行为 |
+| proxy / gateway data plane | routes | Service data plane | 按主机名或路径转发请求 |
 | Pod | references | ConfigMap / Secret | 通过环境变量或文件引用配置 |
 | Pod | mounts | PVC | 把声明的存储挂载到 Pod |
-| API Server | authorizes | client | 认证、鉴权并接受对象写入 |
+| API Server | authorizes | requested action | 为已认证身份检查请求的动作是否允许 |
 
 ## 一个可运行的最小例子
 
 下面的 `Deployment` 和 `Service` 使用同一个 `app: web` 标签；探针、资源请求和限制让调度与流量分发都有明确依据。
 
 ```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
