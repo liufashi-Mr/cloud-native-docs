@@ -20,6 +20,29 @@ const SVG =
 
 let viewportWidth = 1000
 let viewportHeight = 700
+let toolbarBounds: DOMRect | null = null
+let animationFrameSequence = 0
+let animationFrameCallbacks = new Map<number, FrameRequestCallback>()
+
+function rect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+    toJSON: () => ({}),
+  }
+}
+
+function flushAnimationFrame(): void {
+  const callbacks = Array.from(animationFrameCallbacks.values())
+  animationFrameCallbacks.clear()
+  callbacks.forEach((callback) => callback(performance.now()))
+}
 
 function viewport(): HTMLElement {
   const element = document.querySelector<HTMLElement>(
@@ -94,6 +117,35 @@ function cssDeclarations(source: string, selector: string): string {
   return declarations
 }
 
+function cssHexColor(declarations: string, property: string): string {
+  const color = declarations.match(
+    new RegExp(`\\b${property}:\\s*(#[\\da-f]{6})\\s*;`, 'i'),
+  )?.[1]
+  if (!color) throw new Error(`hex color not found for ${property}`)
+  return color
+}
+
+function relativeLuminance(hex: string): number {
+  const channels = hex
+    .slice(1)
+    .match(/.{2}/g)
+    ?.map((channel) => Number.parseInt(channel, 16) / 255)
+  if (!channels) throw new Error(`invalid color: ${hex}`)
+
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4,
+  )
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722
+}
+
+function contrastRatio(first: string, second: string): number {
+  const lighter = Math.max(relativeLuminance(first), relativeLuminance(second))
+  const darker = Math.min(relativeLuminance(first), relativeLuminance(second))
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
 async function mountViewer() {
   const wrapper = mount(MermaidFullscreenViewer, {
     attachTo: document.body,
@@ -107,7 +159,23 @@ describe('MermaidFullscreenViewer', () => {
   beforeEach(() => {
     viewportWidth = 1000
     viewportHeight = 700
+    toolbarBounds = null
+    animationFrameSequence = 0
+    animationFrameCallbacks = new Map()
     document.body.style.overflow = ''
+
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        const id = ++animationFrameSequence
+        animationFrameCallbacks.set(id, callback)
+        return id
+      }),
+    )
+    vi.stubGlobal(
+      'cancelAnimationFrame',
+      vi.fn((id: number) => animationFrameCallbacks.delete(id)),
+    )
 
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(
       function (this: HTMLElement) {
@@ -128,34 +196,21 @@ describe('MermaidFullscreenViewer', () => {
       'getBoundingClientRect',
     ).mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains('mermaid-fullscreen-viewer__viewport')) {
-        return {
-          x: 100,
-          y: 50,
-          left: 100,
-          top: 50,
-          right: 100 + viewportWidth,
-          bottom: 50 + viewportHeight,
-          width: viewportWidth,
-          height: viewportHeight,
-          toJSON: () => ({}),
-        }
+        return rect(100, 50, viewportWidth, viewportHeight)
       }
-      return {
-        x: 0,
-        y: 0,
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-        width: 0,
-        height: 0,
-        toJSON: () => ({}),
+      if (
+        toolbarBounds &&
+        this.classList.contains('mermaid-fullscreen-viewer__toolbar')
+      ) {
+        return toolbarBounds
       }
+      return rect(0, 0, 0, 0)
     })
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     document.body.style.overflow = ''
   })
 
@@ -186,7 +241,7 @@ describe('MermaidFullscreenViewer', () => {
     }
   })
 
-  it('locks body scrolling, restores the previous value, and closes on Escape', async () => {
+  it('locks body scrolling, restores the previous value, and requests close once', async () => {
     document.body.style.overflow = 'scroll'
     const wrapper = await mountViewer()
 
@@ -196,10 +251,60 @@ describe('MermaidFullscreenViewer', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
-    expect(wrapper.emitted('close')).toHaveLength(2)
+    expect(wrapper.emitted('close')).toHaveLength(1)
 
     wrapper.unmount()
+    expect(document.body.style.overflow).toBe('scroll')
+  })
+
+  it('coordinates scroll lock, keyboard ownership, and close across modal instances', async () => {
+    document.body.style.overflow = 'scroll'
+    const first = await mountViewer()
+    const second = await mountViewer()
+    const dialogs = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+    )
+    const firstDialog = dialogs[0]
+    const secondDialog = dialogs[1]
+    const secondControls = Array.from(
+      secondDialog.querySelectorAll<HTMLButtonElement>('button'),
+    )
+    const secondFirstControl = secondControls[0]
+    const secondClose = secondControls.at(-1)
+    if (!secondClose) throw new Error('second close button not found')
+
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(document.activeElement).toBe(secondClose)
+
+    const tabEvent = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Tab',
+    })
+    const preventDefault = vi.spyOn(tabEvent, 'preventDefault')
+    secondClose.dispatchEvent(tabEvent)
+    await nextTick()
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(document.activeElement).toBe(secondFirstControl)
+    expect(firstDialog.contains(document.activeElement)).toBe(false)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(first.emitted('close')).toBeUndefined()
+    expect(second.emitted('close')).toHaveLength(1)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    secondClose.click()
+    await nextTick()
+    expect(first.emitted('close')).toBeUndefined()
+    expect(second.emitted('close')).toHaveLength(1)
+
+    first.unmount()
+    expect(document.body.style.overflow).toBe('hidden')
+    second.unmount()
     expect(document.body.style.overflow).toBe('scroll')
   })
 
@@ -221,6 +326,7 @@ describe('MermaidFullscreenViewer', () => {
 
     viewportWidth = 800
     window.dispatchEvent(new Event('resize'))
+    flushAnimationFrame()
     await nextTick()
     const renderedSurface = surface()
     const transformBeforeUnmount = renderedSurface.style.transform
@@ -241,6 +347,39 @@ describe('MermaidFullscreenViewer', () => {
 
     expect(renderedSurface.style.transform).toBe(transformBeforeUnmount)
     expect(wrapper.emitted('close')?.length ?? 0).toBe(closeCountBeforeUnmount)
+  })
+
+  it('coalesces resize fits without reparsing SVG and cancels pending work', async () => {
+    const parseSvg = vi.spyOn(DOMParser.prototype, 'parseFromString')
+    const wrapper = await mountViewer()
+    const initialTransform = transform()
+
+    expect(parseSvg).toHaveBeenCalledOnce()
+
+    viewportWidth = 900
+    window.dispatchEvent(new Event('resize'))
+    viewportWidth = 800
+    window.dispatchEvent(new Event('resize'))
+    viewportWidth = 700
+    window.dispatchEvent(new Event('resize'))
+
+    expect(parseSvg).toHaveBeenCalledOnce()
+    expect(requestAnimationFrame).toHaveBeenCalledOnce()
+    expect(transform()).toEqual(initialTransform)
+
+    flushAnimationFrame()
+    await nextTick()
+    expect(transform().scale).toBeCloseTo(604 / 1200)
+    expect(transform().x).toBeCloseTo(48)
+    expect(transform().y).toBeCloseTo(199)
+
+    viewportWidth = 600
+    window.dispatchEvent(new Event('resize'))
+    expect(animationFrameCallbacks.size).toBe(1)
+    wrapper.unmount()
+
+    expect(cancelAnimationFrame).toHaveBeenCalled()
+    expect(animationFrameCallbacks.size).toBe(0)
   })
 
   it('fits initially, resets to fit, and refits after window resize', async () => {
@@ -265,13 +404,67 @@ describe('MermaidFullscreenViewer', () => {
     viewportWidth = 800
     viewportHeight = 500
     window.dispatchEvent(new Event('resize'))
+    flushAnimationFrame()
     await nextTick()
     expect(transform().scale).toBeCloseTo(704 / 1200)
     expect(transform().x).toBeCloseTo(48)
     expect(transform().y).toBeCloseTo(74)
   })
 
-  it('zooms with controls and keeps the wheel pointer position anchored', async () => {
+  it('fits the diagram clear of a toolbar obstructing viewport edges', async () => {
+    toolbarBounds = rect(900, 62, 188, 50)
+    const wrapper = mount(MermaidFullscreenViewer, {
+      attachTo: document.body,
+      props: {
+        svg: '<svg viewBox="0 0 1200 1000"><text>diagram</text></svg>',
+      },
+    })
+    await nextTick()
+
+    const fitted = transform()
+    const viewportBounds = viewport().getBoundingClientRect()
+    const diagramBounds = rect(
+      viewportBounds.left + fitted.x,
+      viewportBounds.top + fitted.y,
+      1200 * fitted.scale,
+      1000 * fitted.scale,
+    )
+    const toolbar = toolbarBounds
+    if (!toolbar) throw new Error('toolbar bounds not configured')
+
+    expect(
+      diagramBounds.right <= toolbar.left ||
+        diagramBounds.left >= toolbar.right ||
+        diagramBounds.bottom <= toolbar.top ||
+        diagramBounds.top >= toolbar.bottom,
+    ).toBe(true)
+
+    toolbarBounds = rect(506, 688, 188, 50)
+    window.dispatchEvent(new Event('resize'))
+    flushAnimationFrame()
+    await nextTick()
+    const resized = transform()
+    const resizedDiagramBounds = rect(
+      viewportBounds.left + resized.x,
+      viewportBounds.top + resized.y,
+      1200 * resized.scale,
+      1000 * resized.scale,
+    )
+    expect(
+      resizedDiagramBounds.right <= toolbarBounds.left ||
+        resizedDiagramBounds.left >= toolbarBounds.right ||
+        resizedDiagramBounds.bottom <= toolbarBounds.top ||
+        resizedDiagramBounds.top >= toolbarBounds.bottom,
+    ).toBe(true)
+
+    button('放大图表').click()
+    button('重置图表视图').click()
+    await nextTick()
+    expect(transform()).toEqual(resized)
+    wrapper.unmount()
+  })
+
+  it('zooms with controls and scales wheel input continuously around its pointer', async () => {
     await mountViewer()
     const fitted = transform()
     const center = { x: viewportWidth / 2, y: viewportHeight / 2 }
@@ -302,20 +495,86 @@ describe('MermaidFullscreenViewer', () => {
       diagramCenterBeforeZoom.y,
     )
 
-    const event = new WheelEvent('wheel', {
+    const pointer = { x: 200, y: 200 }
+    const diagramPointBeforeWheel = {
+      x: (pointer.x - restored.x) / restored.scale,
+      y: (pointer.y - restored.y) / restored.scale,
+    }
+    const smallPixelEvent = new WheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
       clientX: 300,
       clientY: 250,
       deltaY: -1,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL,
     })
-    viewport().dispatchEvent(event)
+    viewport().dispatchEvent(smallPixelEvent)
     await nextTick()
 
-    expect(event.defaultPrevented).toBe(true)
-    expect(transform().scale).toBeCloseTo(fitted.scale * 1.2)
-    expect(transform().x).toBeCloseTo(17.6)
-    expect(transform().y).toBeCloseTo(108.8)
+    const smallPixelZoom = transform()
+    expect(smallPixelEvent.defaultPrevented).toBe(true)
+    expect(smallPixelZoom.scale).toBeGreaterThan(fitted.scale)
+    expect(smallPixelZoom.scale).toBeLessThan(fitted.scale * 1.02)
+    expect((pointer.x - smallPixelZoom.x) / smallPixelZoom.scale).toBeCloseTo(
+      diagramPointBeforeWheel.x,
+    )
+    expect((pointer.y - smallPixelZoom.y) / smallPixelZoom.scale).toBeCloseTo(
+      diagramPointBeforeWheel.y,
+    )
+    expect(
+      document
+        .querySelector('.mermaid-fullscreen-viewer')
+        ?.classList.contains('mermaid-fullscreen-viewer--wheel-zooming'),
+    ).toBe(true)
+
+    button('重置图表视图').click()
+    const largePixelEvent = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 300,
+      clientY: 250,
+      deltaY: -120,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+    })
+    viewport().dispatchEvent(largePixelEvent)
+    await nextTick()
+    const largePixelScale = transform().scale
+    expect(largePixelScale).toBeGreaterThan(smallPixelZoom.scale)
+
+    button('重置图表视图').click()
+    const lineEvent = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 300,
+      clientY: 250,
+      deltaY: -1,
+      deltaMode: WheelEvent.DOM_DELTA_LINE,
+    })
+    viewport().dispatchEvent(lineEvent)
+    await nextTick()
+    expect(transform().scale).toBeGreaterThan(smallPixelZoom.scale)
+    expect(transform().scale).toBeLessThan(largePixelScale)
+
+    button('重置图表视图').click()
+    const pageEvent = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 300,
+      clientY: 250,
+      deltaY: -1,
+      deltaMode: WheelEvent.DOM_DELTA_PAGE,
+    })
+    viewport().dispatchEvent(pageEvent)
+    await nextTick()
+    expect(transform().scale).toBeGreaterThan(largePixelScale)
+
+    flushAnimationFrame()
+    await nextTick()
+    expect(
+      document
+        .querySelector('.mermaid-fullscreen-viewer')
+        ?.classList.contains('mermaid-fullscreen-viewer--wheel-zooming'),
+    ).toBe(false)
   })
 
   it('clamps zoom between half the fitted scale and four', async () => {
@@ -562,6 +821,32 @@ describe('MermaidFullscreenViewer', () => {
     }
     expect(lightRule).toMatch(/\bcolor-scheme:\s*light\s*;/)
     expect(darkRule).toMatch(/\bcolor-scheme:\s*dark\s*;/)
+
+    const darkToolbarRule = cssDeclarations(
+      styles,
+      ':global(.dark) .mermaid-fullscreen-viewer__toolbar',
+    )
+    const darkToolbarHoverRule = cssDeclarations(
+      styles,
+      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover',
+    )
+    const darkFocusRule = cssDeclarations(
+      styles,
+      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:focus-visible',
+    )
+    const darkFocusColor = cssHexColor(darkFocusRule, 'outline-color')
+    expect(
+      contrastRatio(
+        darkFocusColor,
+        cssHexColor(darkToolbarRule, 'background'),
+      ),
+    ).toBeGreaterThanOrEqual(3)
+    expect(
+      contrastRatio(
+        darkFocusColor,
+        cssHexColor(darkToolbarHoverRule, 'background'),
+      ),
+    ).toBeGreaterThanOrEqual(3)
 
     const toolbarButtonRule = cssDeclarations(
       styles,

@@ -1,3 +1,29 @@
+<script lang="ts">
+let modalSequence = 0
+const modalStack: number[] = []
+let bodyOverflowSnapshot = ''
+
+function registerModal(id: number): void {
+  if (modalStack.length === 0) {
+    bodyOverflowSnapshot = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  modalStack.push(id)
+}
+
+function unregisterModal(id: number): void {
+  const index = modalStack.indexOf(id)
+  if (index !== -1) modalStack.splice(index, 1)
+  if (modalStack.length === 0) {
+    document.body.style.overflow = bodyOverflowSnapshot
+  }
+}
+
+function isTopModal(id: number): boolean {
+  return modalStack.at(-1) === id
+}
+</script>
+
 <script setup lang="ts">
 import { RotateCcw, X, ZoomIn, ZoomOut } from '@lucide/vue'
 import {
@@ -25,6 +51,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const modalId = ++modalSequence
 const titleId = `mermaid-fullscreen-viewer-${useId()}`
 const viewport = ref<HTMLElement>()
 const toolbar = ref<HTMLElement>()
@@ -33,11 +60,14 @@ const transform = ref<DiagramTransform>({ scale: 1, x: 0, y: 0 })
 const fittedScale = ref(1)
 const diagramSize = ref({ width: 1000, height: 600 })
 const isDragging = ref(false)
+const isWheelZooming = ref(false)
 
 let activePointerId: number | null = null
 let lastPointerX = 0
 let lastPointerY = 0
-let previousBodyOverflow = ''
+let closeRequested = false
+let wheelAnimationFrame: number | undefined
+let resizeAnimationFrame: number | undefined
 
 const surfaceStyle = computed(() => ({
   width: `${diagramSize.value.width}px`,
@@ -91,12 +121,42 @@ function fitToView(): void {
   const element = viewport.value
   if (!element) return
 
+  const viewportBounds = element.getBoundingClientRect()
+  const toolbarBounds = toolbar.value?.getBoundingClientRect()
+  const basePadding = 48
+  let padding = basePadding
+  if (
+    toolbarBounds &&
+    toolbarBounds.width > 0 &&
+    toolbarBounds.height > 0 &&
+    toolbarBounds.right > viewportBounds.left &&
+    toolbarBounds.left < viewportBounds.right &&
+    toolbarBounds.bottom > viewportBounds.top &&
+    toolbarBounds.top < viewportBounds.bottom
+  ) {
+    const edgeObstructions = [
+      toolbarBounds.left - viewportBounds.left < basePadding
+        ? toolbarBounds.right - viewportBounds.left
+        : 0,
+      viewportBounds.right - toolbarBounds.right < basePadding
+        ? viewportBounds.right - toolbarBounds.left
+        : 0,
+      toolbarBounds.top - viewportBounds.top < basePadding
+        ? toolbarBounds.bottom - viewportBounds.top
+        : 0,
+      viewportBounds.bottom - toolbarBounds.bottom < basePadding
+        ? viewportBounds.bottom - toolbarBounds.top
+        : 0,
+    ]
+    padding = Math.max(basePadding, ...edgeObstructions)
+  }
+
   const nextTransform = fitDiagram(
     element.clientWidth,
     element.clientHeight,
     diagramSize.value.width,
     diagramSize.value.height,
-    48,
+    padding,
   )
   transform.value = nextTransform
   fittedScale.value = nextTransform.scale
@@ -130,11 +190,26 @@ function handleWheel(event: WheelEvent): void {
 
   event.preventDefault()
   const bounds = element.getBoundingClientRect()
+  const deltaUnit =
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? Math.max(1, element.clientHeight)
+        : 1
+  const zoomFactor = Math.exp(-event.deltaY * deltaUnit * 0.0015)
   zoomAt(
-    transform.value.scale * (event.deltaY < 0 ? 1.2 : 1 / 1.2),
+    transform.value.scale * zoomFactor,
     event.clientX - bounds.left,
     event.clientY - bounds.top,
   )
+  isWheelZooming.value = true
+  if (wheelAnimationFrame !== undefined) {
+    cancelAnimationFrame(wheelAnimationFrame)
+  }
+  wheelAnimationFrame = requestAnimationFrame(() => {
+    wheelAnimationFrame = undefined
+    isWheelZooming.value = false
+  })
 }
 
 function handlePointerDown(event: PointerEvent): void {
@@ -180,9 +255,16 @@ function focusableToolbarButtons(): HTMLButtonElement[] {
   return Array.from(toolbar.value.querySelectorAll<HTMLButtonElement>('button'))
 }
 
+function requestClose(): void {
+  if (closeRequested) return
+  closeRequested = true
+  emit('close')
+}
+
 function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (!isTopModal(modalId)) return
   if (event.key === 'Escape') {
-    emit('close')
+    requestClose()
     return
   }
   if (event.key !== 'Tab') return
@@ -203,8 +285,11 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
 }
 
 function handleResize(): void {
-  diagramSize.value = parseDiagramSize(props.svg)
-  fitToView()
+  if (resizeAnimationFrame !== undefined) return
+  resizeAnimationFrame = requestAnimationFrame(() => {
+    resizeAnimationFrame = undefined
+    fitToView()
+  })
 }
 
 watch(
@@ -217,8 +302,7 @@ watch(
 )
 
 onMounted(() => {
-  previousBodyOverflow = document.body.style.overflow
-  document.body.style.overflow = 'hidden'
+  registerModal(modalId)
   diagramSize.value = parseDiagramSize(props.svg)
   window.addEventListener('resize', handleResize)
   document.addEventListener('keydown', handleDocumentKeydown)
@@ -229,7 +313,13 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('keydown', handleDocumentKeydown)
-  document.body.style.overflow = previousBodyOverflow
+  if (wheelAnimationFrame !== undefined) {
+    cancelAnimationFrame(wheelAnimationFrame)
+  }
+  if (resizeAnimationFrame !== undefined) {
+    cancelAnimationFrame(resizeAnimationFrame)
+  }
+  unregisterModal(modalId)
 })
 </script>
 
@@ -237,7 +327,10 @@ onUnmounted(() => {
   <Teleport to="body">
     <section
       class="mermaid-fullscreen-viewer"
-      :class="{ 'mermaid-fullscreen-viewer--dragging': isDragging }"
+      :class="{
+        'mermaid-fullscreen-viewer--dragging': isDragging,
+        'mermaid-fullscreen-viewer--wheel-zooming': isWheelZooming,
+      }"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="titleId"
@@ -280,7 +373,7 @@ onUnmounted(() => {
           ref="closeButton"
           type="button"
           aria-label="关闭全屏图表"
-          @click="emit('close')"
+          @click="requestClose"
         >
           <X aria-hidden="true" />
         </button>
@@ -341,7 +434,8 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.mermaid-fullscreen-viewer--dragging .mermaid-fullscreen-viewer__surface {
+.mermaid-fullscreen-viewer--dragging .mermaid-fullscreen-viewer__surface,
+.mermaid-fullscreen-viewer--wheel-zooming .mermaid-fullscreen-viewer__surface {
   transition: none;
 }
 
@@ -400,6 +494,10 @@ onUnmounted(() => {
 .mermaid-fullscreen-viewer__toolbar button:focus-visible {
   outline: 3px solid #0069c2;
   outline-offset: 1px;
+}
+
+:global(.dark) .mermaid-fullscreen-viewer__toolbar button:focus-visible {
+  outline-color: #80c7ff;
 }
 
 .mermaid-fullscreen-viewer__toolbar button :deep(svg) {
