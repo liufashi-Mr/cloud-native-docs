@@ -402,6 +402,15 @@ body {
     padding-left: 20px;
   }
 
+  .vp-doc div[class*='language-'],
+  .vp-doc .vp-block {
+    box-sizing: border-box;
+    margin-right: 0;
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .vp-doc h1 {
     font-size: 28px;
   }
@@ -438,16 +447,29 @@ body {
     margin-top: 8px;
     box-shadow: none;
   }
+
+  .k8s-appearance__modes button {
+    min-width: 0;
+    padding: 0 8px;
+  }
+
+  .k8s-appearance__mode-label {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .VPSidebar,
-  .VPNavBar .title,
-  .VPNavBar .content-body,
-  .VPNavBar .divider-line,
-  .VPDocAsideOutline .outline-marker,
-  .k8s-appearance__trigger,
-  .k8s-appearance__modes button {
-    transition: none;
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

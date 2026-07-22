@@ -152,32 +152,35 @@ onBeforeUnmount(() => {
         <button
           type="button"
           data-mode="auto"
+          aria-label="跟随系统"
           :aria-pressed="mode === 'auto'"
           title="跟随系统"
           @click="selectMode('auto')"
         >
           <Monitor :size="16" aria-hidden="true" />
-          <span>跟随系统</span>
+          <span class="k8s-appearance__mode-label">跟随系统</span>
         </button>
         <button
           type="button"
           data-mode="light"
+          aria-label="浅色"
           :aria-pressed="mode === 'light'"
           title="浅色"
           @click="selectMode('light')"
         >
           <Sun :size="16" aria-hidden="true" />
-          <span>浅色</span>
+          <span class="k8s-appearance__mode-label">浅色</span>
         </button>
         <button
           type="button"
           data-mode="dark"
+          aria-label="深色"
           :aria-pressed="mode === 'dark'"
           title="深色"
           @click="selectMode('dark')"
         >
           <Moon :size="16" aria-hidden="true" />
-          <span>深色</span>
+          <span class="k8s-appearance__mode-label">深色</span>
         </button>
       </div>
     </div>

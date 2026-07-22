@@ -106,6 +106,25 @@ describe('AppearanceControl', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
+  it('keeps icon-only mobile mode controls accessibly named', async () => {
+    installMatchMedia()
+    const wrapper = mountControl()
+
+    await wrapper.get('button[aria-label="外观设置"]').trigger('click')
+
+    for (const [mode, label] of [
+      ['auto', '跟随系统'],
+      ['light', '浅色'],
+      ['dark', '深色'],
+    ] as const) {
+      const button = wrapper.get(`button[data-mode="${mode}"]`)
+      expect(button.attributes('aria-label')).toBe(label)
+      expect(button.attributes('title')).toBe(label)
+      expect(button.get('.k8s-appearance__mode-label').text()).toBe(label)
+      expect(button.get('svg').attributes('aria-hidden')).toBe('true')
+    }
+  })
+
   it('focuses the selected color when the popover opens', async () => {
     installMatchMedia()
     const wrapper = mountControl()
