@@ -58,6 +58,47 @@ describe('diagram viewport geometry', () => {
     })
   })
 
+  it.each([
+    { minimum: -4, maximum: -0.1, requested: 2, expected: 2 },
+    { minimum: 0, maximum: 4, requested: 0, expected: 0.1 },
+    {
+      minimum: Number.NaN,
+      maximum: 4,
+      requested: Number.POSITIVE_INFINITY,
+      expected: 4,
+    },
+    { minimum: 5, maximum: 2, requested: 3, expected: 3 },
+  ])(
+    'normalizes zoom bounds $minimum and $maximum to a positive finite range',
+    ({ minimum, maximum, requested, expected }) => {
+      const result = zoomDiagram(
+        { scale: 1, x: 0, y: 0 },
+        requested,
+        0,
+        0,
+        minimum,
+        maximum,
+      )
+
+      expect(result.scale).toBe(expected)
+      expect(Number.isFinite(result.scale)).toBe(true)
+      expect(result.scale).toBeGreaterThan(0)
+    },
+  )
+
+  it('preserves the anchor diagram coordinate from a non-unit scale', () => {
+    const current = { scale: 2, x: 40, y: -20 }
+    const anchor = { x: 160, y: 100 }
+    const before = {
+      x: (anchor.x - current.x) / current.scale,
+      y: (anchor.y - current.y) / current.scale,
+    }
+    const result = zoomDiagram(current, 0.75, anchor.x, anchor.y)
+
+    expect((anchor.x - result.x) / result.scale).toBeCloseTo(before.x)
+    expect((anchor.y - result.y) / result.scale).toBeCloseTo(before.y)
+  })
+
   it('keeps fit dimensions finite when padding consumes the viewport', () => {
     expect(fitDiagram(80, 60, 1000, 500, 100)).toEqual({
       scale: 0.001,

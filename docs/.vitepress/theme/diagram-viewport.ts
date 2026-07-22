@@ -61,7 +61,13 @@ export function zoomDiagram(
   const currentY = finiteOr(current.y, 0)
   const anchorLeft = finiteOr(anchorX, 0)
   const anchorTop = finiteOr(anchorY, 0)
-  const scale = clamp(requestedScale, minimumScale, maximumScale)
+  const normalizedMinimumScale = positiveFiniteOr(minimumScale, 0.1)
+  const normalizedMaximumScale = positiveFiniteOr(maximumScale, 4)
+  const scale = clamp(
+    requestedScale,
+    normalizedMinimumScale,
+    normalizedMaximumScale,
+  )
   const ratio = scale / currentScale
 
   return {
