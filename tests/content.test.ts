@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
@@ -18,6 +18,33 @@ const contentFiles = [
   'docs/operations/troubleshooting.md',
   'docs/reference/concept-map.md',
 ]
+
+const docsRoot = resolve(root, 'docs')
+
+function resolveRootAbsoluteHref(href: string): {
+  pathname: string
+  target: string
+} | null {
+  if (!href.startsWith('/') || href.startsWith('//')) return null
+
+  const pathname = decodeURIComponent(href.split(/[?#]/, 1)[0])
+  if (pathname.split(/[\\/]+/).includes('..')) {
+    throw new Error(`root-absolute Markdown link escapes docs: ${href}`)
+  }
+
+  const target = resolve(docsRoot, pathname.slice(1))
+  const relativeTarget = relative(docsRoot, target)
+  const escapesDocs =
+    relativeTarget === '..' ||
+    relativeTarget.startsWith(`..${sep}`) ||
+    isAbsolute(relativeTarget)
+
+  if (escapesDocs) {
+    throw new Error(`root-absolute Markdown link escapes docs: ${href}`)
+  }
+
+  return { pathname, target }
+}
 
 describe('content contract', () => {
   it.each(contentFiles)('%s exists', (file) => {
@@ -98,6 +125,9 @@ describe('content contract', () => {
       'RC -->|creates 创建| P["Pod API object"]',
     )
     expect(home).toContain('CR -->|creates 创建| C["Container"]')
+    expect(home).not.toContain('Pod API object"] -->|creates')
+    expect(home).not.toContain('ReplicaSet API object"] -->|creates')
+    expect(home).not.toContain('容器由 Pod 的工作负载对象创建')
   })
 
   it('separates ingress resources from their managed traffic dataplane', () => {
@@ -111,7 +141,8 @@ describe('content contract', () => {
       'Ingress / Gateway resource',
       'managed proxy / gateway data plane',
       'Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面',
-      'Service data plane',
+      'optional Service data plane',
+      '实现可以经由 ClusterIP / kube-proxy / eBPF，也可以直接消费 Service / EndpointSlice 元数据并代理到 endpoint',
     ]) {
       expect(`${home}\n${flow}`, `content is missing ${phrase}`).toContain(
         phrase,
@@ -119,7 +150,7 @@ describe('content contract', () => {
     }
 
     expect(flow).toContain(
-      'Note over IG,IC: Resource stores configuration; controller watches API Server',
+      'Note over IG,IC: Resource stores configuration and controller watches API Server',
     )
     expect(flow).not.toContain('A-->>IG:')
   })
@@ -170,20 +201,23 @@ describe('content contract', () => {
     expect(config).not.toContain('ignoreDeadLinks: [/^\\/(?:concepts|operations|reference)\\//]')
   })
 
-  it('keeps configuration and storage arrows consumer-first', () => {
+  it('distinguishes claim references from container volume mounts', () => {
     const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
 
     for (const relation of [
       'P -->|references 引用| CM["ConfigMap"]',
       'P -->|references 引用| SEC["Secret"]',
-      'P -->|mounts 挂载| PVC["PersistentVolumeClaim"]',
+      'PS["Pod spec"] -->|references 引用| PVC["PersistentVolumeClaim"]',
+      'C["Container"] -->|mounts 挂载| V["Volume resolved from claim"]',
       '| Pod | references | ConfigMap / Secret |',
-      '| Pod | mounts | PVC |',
+      '| Pod spec | references | PVC |',
+      '| Container | mounts | volume resolved from claim |',
     ]) {
       expect(home, `home page is missing ${relation}`).toContain(relation)
     }
 
     expect(home).not.toContain('| PVC | mounts | Pod |')
+    expect(home).not.toContain('| Pod | mounts | PVC |')
   })
 
   it('mediates control-plane actions through the API Server', () => {
@@ -201,8 +235,9 @@ describe('content contract', () => {
       'S->>A: bind Pod to Node',
       'A-->>KL: assigned Pod watch event',
       'EP->>A: update EndpointSlice endpoint conditions',
-      'PX->>SD: route to Service',
-      'SD->>RP: forward to ready Pod',
+      'PX->>SD: forward via ClusterIP / Service data plane',
+      'SD->>RP: forward to ready endpoint',
+      'PX->>RP: proxy directly using Service / EndpointSlice metadata',
     ]) {
       expect(flow, `deployment flow is missing ${interaction}`).toContain(
         interaction,
@@ -240,9 +275,9 @@ describe('content contract', () => {
     const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
 
     for (const relation of [
-      'SD["Service data plane (kube-proxy / eBPF)"]',
-      'E -.->|consumed by 被消费| SD',
-      'SD -->|forwards 转发| RP["Ready Pod"]',
+      'SD["optional Service data plane (ClusterIP / kube-proxy / eBPF)"]',
+      'PX -->|or proxies directly 或直接代理| RP["Ready endpoint"]',
+      'SD -->|forwards 转发| RP',
       'EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求',
     ]) {
       expect(home, `home page is missing ${relation}`).toContain(relation)
@@ -274,11 +309,12 @@ describe('content contract', () => {
       const markdown = readFileSync(absoluteFile, 'utf8')
       for (const match of markdown.matchAll(markdownLink)) {
         const href = match[1].trim().replace(/^<|>$/g, '')
-        if (/^(?:[a-z]+:|#)/i.test(href)) continue
+        if (/^(?:[a-z]+:|#)/i.test(href) || href.startsWith('//')) continue
 
         if (href.startsWith('/')) {
-          const pathname = decodeURIComponent(href.split(/[?#]/, 1)[0])
-          const target = resolve(root, 'docs', pathname.slice(1))
+          const resolvedHref = resolveRootAbsoluteHref(href)
+          expect(resolvedHref).not.toBeNull()
+          const { pathname, target } = resolvedHref!
           const candidates = extname(target)
             ? [target]
             : [target, `${target}.md`, resolve(target, 'index.md')]
@@ -303,5 +339,21 @@ describe('content contract', () => {
         ).toBe(true)
       }
     }
+  })
+
+  it('contains root-absolute links within docs and ignores protocol-relative URLs', () => {
+    expect(resolveRootAbsoluteHref('//cdn.example.com/asset.css')).toBeNull()
+    expect(resolveRootAbsoluteHref('/concepts/workloads')?.target).toBe(
+      resolve(docsRoot, 'concepts/workloads'),
+    )
+    expect(() => resolveRootAbsoluteHref('/../package.json')).toThrow(
+      'escapes docs',
+    )
+    expect(() => resolveRootAbsoluteHref('/%2e%2e/package.json')).toThrow(
+      'escapes docs',
+    )
+    expect(() => resolveRootAbsoluteHref('/%2e%2e%5cpackage.json')).toThrow(
+      'escapes docs',
+    )
   })
 })

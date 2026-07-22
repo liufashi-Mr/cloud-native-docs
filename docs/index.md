@@ -54,7 +54,7 @@ flowchart LR
   CR -->|creates 创建| C["Container"]
 ```
 
-Deployment、ReplicaSet 等 workload controller 创建 Pod API 对象；kubelet 和容器运行时创建容器。Pod 对象只是容器应如何运行的 API 记录，不会自己启动进程。
+Deployment controller 创建或更新 ReplicaSet API 对象，ReplicaSet controller 创建 Pod API 对象；kubelet 和容器运行时创建容器。Pod 对象只是容器应如何运行的 API 记录，不会自己启动进程。
 
 ### 请求路径关系
 
@@ -63,15 +63,18 @@ flowchart LR
   IG["Ingress / Gateway resource"] -.->|watched by 被观察| IC["Ingress / Gateway controller"]
   IC -->|configures 配置| PX["managed proxy / gateway data plane"]
   X["外部请求"] -->|reaches 到达| PX
-  PX -->|routes 路由| SD["Service data plane (kube-proxy / eBPF)"]
-  S["Service selector"] -.->|input 输入| EC["EndpointSlice controller"]
+  S["Service resource / selector"] -.->|input 输入| EC["EndpointSlice controller"]
   PR["Pod labels + readiness"] -.->|input 输入| EC
   EC -->|publishes through API Server 通过 API Server 发布| E["EndpointSlice metadata"]
+  S -.->|consumed by 被消费| PX
+  E -.->|consumed by 被消费| PX
+  PX -->|may use ClusterIP 可能经由 ClusterIP| SD["optional Service data plane (ClusterIP / kube-proxy / eBPF)"]
+  PX -->|or proxies directly 或直接代理| RP["Ready endpoint"]
   E -.->|consumed by 被消费| SD
-  SD -->|forwards 转发| RP["Ready Pod"]
+  SD -->|forwards 转发| RP
 ```
 
-Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面，资源自身不承载请求。EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求；EndpointSlice controller 以 Service selector、Pod labels 和 readiness 为输入，通过 API Server 发布 endpoint 记录和条件，Service 数据面消费这些记录并选择可用后端。
+Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面，资源自身不承载请求。代理面向一个 Service backend 路由，但实现可以经由 ClusterIP / kube-proxy / eBPF，也可以直接消费 Service / EndpointSlice 元数据并代理到 endpoint。EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求；EndpointSlice controller 以 Service selector、Pod labels 和 readiness 为输入，通过 API Server 发布 endpoint 记录和条件。
 
 ### 配置与存储关系
 
@@ -80,7 +83,9 @@ flowchart LR
   P["Pod"]
   P -->|references 引用| CM["ConfigMap"]
   P -->|references 引用| SEC["Secret"]
-  P -->|mounts 挂载| PVC["PersistentVolumeClaim"]
+  PS["Pod spec"] -->|references 引用| PVC["PersistentVolumeClaim"]
+  C["Container"] -->|mounts 挂载| V["Volume resolved from claim"]
+  PVC -.->|claim source 申领来源| V
 ```
 
 ### 控制平面关系
@@ -106,9 +111,10 @@ flowchart LR
 | kubelet / container runtime | creates | Container | 在已分配节点上创建容器 |
 | Service | selects | Pod | 以标签选择可达后端，由 EndpointSlice 记录 endpoint |
 | Ingress / Gateway controller | configures | proxy / gateway data plane | 把路由配置转换为实际代理行为 |
-| proxy / gateway data plane | routes | Service data plane | 按主机名或路径转发请求 |
+| proxy / gateway data plane | routes | Service backend | 可经 ClusterIP 数据面，也可直接代理到 endpoint |
 | Pod | references | ConfigMap / Secret | 通过环境变量或文件引用配置 |
-| Pod | mounts | PVC | 把声明的存储挂载到 Pod |
+| Pod spec | references | PVC | 通过 `persistentVolumeClaim.claimName` 声明卷来源 |
+| Container | mounts | volume resolved from claim | 通过 `volumeMounts` 挂载由 claim 解析出的卷 |
 | API Server | authorizes | requested action | 为已认证身份检查请求的动作是否允许 |
 
 ## 一个可运行的最小例子
@@ -175,7 +181,7 @@ spec:
 ## 常见误解
 
 - **Pod 不是稳定服务器。** Pod 可能被重新调度、替换，地址和本地文件都不应作为长期身份。
-- **Service 不运行容器。** Service 只提供虚拟 IP、DNS 和后端选择；容器由 Pod 的工作负载对象创建。
+- **Service 不运行容器。** Service 只提供虚拟 IP、DNS 和后端选择；workload controller 创建 Pod API 对象，kubelet 和容器运行时创建容器。
 - **Secret 默认不等于加密。** Secret 主要是 API 对象和访问控制语义，etcd 是否加密要看集群的静态加密配置。
 - **Namespace 不是硬安全边界。** 它提供命名和资源组织；真正的隔离还需要 RBAC、NetworkPolicy、准入策略和节点/集群边界。
 

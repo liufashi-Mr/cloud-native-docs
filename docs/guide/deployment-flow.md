@@ -52,7 +52,7 @@ sequenceDiagram
   participant A as API Server
   participant E as etcd
   participant EP as EndpointSlice controller
-  participant SD as Service data plane
+  participant SD as optional Service data plane
   participant IG as Ingress / Gateway resource
   participant IC as Ingress / Gateway controller
   participant PX as managed proxy / gateway data plane
@@ -65,15 +65,19 @@ sequenceDiagram
   EP->>A: update EndpointSlice endpoint conditions
   A->>E: persist EndpointSlice object
   A-->>SD: EndpointSlice watch event
-  Note over IG,IC: Resource stores configuration; controller watches API Server
-  A-->>IC: Ingress / Gateway resource watch event
-  IC->>PX: configure routes
+  Note over IG,IC: Resource stores configuration and controller watches API Server
+  A-->>IC: Ingress / Gateway, Service, EndpointSlice watch events
+  IC->>PX: configure Service backend route and eligible endpoints
   C->>PX: send request
-  PX->>SD: route to Service
-  SD->>RP: forward to ready Pod
+  alt Implementation uses ClusterIP / Service data plane
+    PX->>SD: forward via ClusterIP / Service data plane
+    SD->>RP: forward to ready endpoint
+  else Implementation proxies directly
+    PX->>RP: proxy directly using Service / EndpointSlice metadata
+  end
 ```
 
-EndpointSlice controller 的输入是 Service 和 Pod 事件，输出是经 API Server 持久化的 EndpointSlice endpoint 记录与条件。Service data plane 消费这些元数据；它与负责生成元数据的 controller 不是同一个角色。Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面，真正的流量经过代理、Service 数据面和 Ready Pod。
+EndpointSlice controller 的输入是 Service 和 Pod 事件，输出是经 API Server 持久化的 EndpointSlice endpoint 记录与条件。Ingress / Gateway 是配置资源；controller 观察它们并配置代理或网关数据面。代理面向 Service backend 路由，实现可以经由 ClusterIP / kube-proxy / eBPF，也可以直接消费 Service / EndpointSlice 元数据并代理到 endpoint；两条路径都只选择符合就绪条件的 endpoint。
 
 ## 阶段一：提交对象
 
@@ -117,9 +121,9 @@ kubectl -n "$NS" describe pod -l app=web
 
 ## 阶段五：就绪后接入流量
 
-容器进程运行不代表可以接收请求。readinessProbe 的结果由 kubelet 写入 Pod Ready 条件；EndpointSlice controller 根据 Service selector、Pod labels 和 Ready 条件更新 EndpointSlice。endpoint 记录可以在 Pod 未就绪时已经存在，ready 条件决定 Service 数据面是否将其视为合格后端。
+容器进程运行不代表可以接收请求。readinessProbe 的结果由 kubelet 写入 Pod Ready 条件；EndpointSlice controller 根据 Service selector、Pod labels 和 Ready 条件更新 EndpointSlice。endpoint 记录可以在 Pod 未就绪时已经存在，ready 条件决定代理或可选的 Service 数据面是否将其视为合格后端。
 
-Ingress 或 Gateway 对象只声明主机名、路径和后端等配置。对应 controller 观察这些资源并配置代理或网关数据面；请求随后由该数据面路由到 Service 数据面，再转发到符合条件的 Ready Pod。
+Ingress 或 Gateway 对象只声明主机名、路径和 Service backend 等配置。对应 controller 观察这些资源并配置代理或网关数据面。具体实现可能把请求发送到 ClusterIP 并经过 kube-proxy 或 eBPF 数据面，也可能消费 Service 和 EndpointSlice 元数据后直接代理到符合条件的 endpoint；不能假设所有实现都经过同一条 Service 数据面路径。
 
 ```bash
 kubectl -n "$NS" get pod,endpointslice,service
