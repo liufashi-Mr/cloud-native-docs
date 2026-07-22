@@ -8,6 +8,8 @@ export default defineConfig({
   description: '用关系与场景串联 Kubernetes 核心概念。',
   appearance: false,
   srcExclude: ['superpowers/**'],
+  // Reserve the section URLs used by the reading path while later chapters land.
+  ignoreDeadLinks: [/^\/(?:concepts|operations|reference)\//],
   head: [
     [
       'script',
@@ -111,6 +113,20 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    nav: [
+      { text: '概念', link: '/concepts/resource-model' },
+      { text: '运行实践', link: '/operations/health-lifecycle' },
+      { text: '速查', link: '/reference/concept-map' },
+    ],
+    sidebar: [
+      {
+        text: '开始',
+        items: [
+          { text: '概念总览', link: '/' },
+          { text: '发布与调谐之旅', link: '/guide/deployment-flow' },
+        ],
+      },
+    ],
     search: {
       provider: 'local',
     },
