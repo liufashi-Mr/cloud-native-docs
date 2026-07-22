@@ -17,6 +17,17 @@ Use the approved **A: lightweight overlay** direction:
 - Reserve enough space above the diagram so the button never covers Mermaid labels or edges.
 - Preserve an uncluttered appearance in both light and dark modes.
 
+### Full-Screen Operation Bar
+
+Use the approved **A: compact segmented** toolbar direction for the full-screen viewer:
+
+- Keep one light-weight toolbar surface with a 7px radius, 3px inner padding, and 2px control gaps.
+- Use four stable `30px` icon buttons with `16px` Lucide icons: zoom in, zoom out, reset, and close.
+- Add a one-pixel divider before the close button so the destructive exit action is visually grouped but still distinct.
+- In light mode use a white surface with a quiet gray border and restrained shadow. In dark mode use a neutral charcoal surface with a lighter border; do not introduce a purple or saturated gradient.
+- Keep hover states subtle and provide a high-contrast `:focus-visible` ring. Respect reduced motion by removing the toolbar transition.
+- Preserve the existing desktop top-right placement and mobile bottom-centered placement with safe-area insets. The compact controls must not change the diagram's fit geometry or cover diagram content.
+
 ## Layout And Scrolling
 
 The outer `.mermaid-diagram` remains the semantic `figure` and must not create a horizontal scroll container. A new inner shell owns the border, background, clipping, and positioned action.
