@@ -90,7 +90,9 @@ describe('MermaidDiagram', () => {
       startOnLoad: false,
       theme: 'default',
     })
-    expect(wrapper.find('svg').attributes('data-theme')).toBe('light')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-theme'),
+    ).toBe('light')
 
     vitepressData.isDark!.value = true
     await nextTick()
@@ -101,7 +103,9 @@ describe('MermaidDiagram', () => {
       startOnLoad: false,
       theme: 'dark',
     })
-    expect(wrapper.find('svg').attributes('data-theme')).toBe('dark')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-theme'),
+    ).toBe('dark')
   })
 
   it('ignores stale render results after a color-mode change', async () => {
@@ -123,11 +127,15 @@ describe('MermaidDiagram', () => {
 
     darkRender.resolve({ svg: '<svg data-theme="dark"></svg>' })
     await flushPromises()
-    expect(wrapper.find('svg').attributes('data-theme')).toBe('dark')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-theme'),
+    ).toBe('dark')
 
     lightRender.resolve({ svg: '<svg data-theme="light"></svg>' })
     await flushPromises()
-    expect(wrapper.find('svg').attributes('data-theme')).toBe('dark')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-theme'),
+    ).toBe('dark')
   })
 
   it('rerenders the SVG with the decoded source when encodedSource changes', async () => {
@@ -147,7 +155,9 @@ describe('MermaidDiagram', () => {
 
     expect(mermaid.render).toHaveBeenCalledTimes(2)
     expect(mermaid.render.mock.calls[1]?.[1]).toBe(updatedSource)
-    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-source'),
+    ).toBe('updated')
   })
 
   it('ignores stale render results after a source change', async () => {
@@ -170,11 +180,15 @@ describe('MermaidDiagram', () => {
 
     updatedRender.resolve({ svg: '<svg data-source="updated"></svg>' })
     await flushPromises()
-    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-source'),
+    ).toBe('updated')
 
     initialRender.resolve({ svg: '<svg data-source="initial"></svg>' })
     await flushPromises()
-    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+    expect(
+      wrapper.find('.mermaid-diagram__canvas svg').attributes('data-source'),
+    ).toBe('updated')
   })
 
   it('preserves a readable intrinsic width for wide rendered diagrams', async () => {
@@ -274,6 +288,7 @@ describe('MermaidDiagram', () => {
     })
     await nextTick()
     expect(wrapper.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(wrapper.find('.mermaid-diagram__shell').exists()).toBe(false)
     expect(wrapper.find('.mermaid-diagram__source').exists()).toBe(true)
 
     pendingRender.resolve({ svg: '<svg><text>diagram</text></svg>' })
@@ -287,6 +302,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     expect(errored.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(errored.find('.mermaid-diagram__shell').exists()).toBe(false)
     expect(errored.find('.mermaid-diagram__error').text()).toContain('bad diagram')
   })
 
@@ -316,7 +332,7 @@ describe('MermaidDiagram', () => {
     await flushPromises()
   })
 
-  it('keeps the full-screen action outside the horizontally scrolling canvas', async () => {
+  it('frames the rendered diagram with one fixed action and one scroll viewport', async () => {
     mermaid.render.mockResolvedValue({
       svg: '<svg viewBox="0 0 2371 1868"><text>wide diagram</text></svg>',
     })
@@ -327,12 +343,17 @@ describe('MermaidDiagram', () => {
     await flushPromises()
 
     const triggerSelector = 'button[aria-label="全屏查看图表"]'
-    expect(wrapper.get('.mermaid-diagram__actions').find(triggerSelector).exists()).toBe(
-      true,
-    )
+    const shell = wrapper.get('.mermaid-diagram__shell')
+    expect(shell.find(triggerSelector).exists()).toBe(true)
+    expect(shell.find('.mermaid-diagram__viewport').exists()).toBe(true)
+    expect(wrapper.find('.mermaid-diagram__actions').exists()).toBe(false)
     expect(wrapper.get('.mermaid-diagram__viewport').find(triggerSelector).exists()).toBe(
       false,
     )
+
+    const trigger = wrapper.get(triggerSelector)
+    expect(trigger.get('svg').attributes('width')).toBe('14')
+    expect(trigger.get('svg').attributes('height')).toBe('14')
 
     const componentSource = readFileSync(
       resolve(
@@ -341,12 +362,57 @@ describe('MermaidDiagram', () => {
       ),
       'utf8',
     )
-    expect(
-      componentSource.match(/\.mermaid-diagram\s*\{([^}]*)\}/)?.[1],
-    ).toMatch(/\boverflow-x:\s*auto\s*;/)
-    expect(
-      componentSource.match(/\.mermaid-diagram__viewport\s*\{([^}]*)\}/)?.[1],
-    ).toMatch(/\boverflow-x:\s*auto\s*;/)
+    const figureRule = componentSource.match(
+      /\.mermaid-diagram\s*\{([^}]*)\}/,
+    )?.[1]
+    const shellRule = componentSource.match(
+      /\.mermaid-diagram__shell\s*\{([^}]*)\}/,
+    )?.[1]
+    const viewportRule = componentSource.match(
+      /\.mermaid-diagram__viewport\s*\{([^}]*)\}/,
+    )?.[1]
+    const buttonRule = componentSource.match(
+      /\.mermaid-diagram__fullscreen\s*\{([^}]*)\}/,
+    )?.[1]
+    const focusRule = componentSource.match(
+      /\.mermaid-diagram__fullscreen:focus-visible\s*\{([^}]*)\}/,
+    )?.[1]
+    const reducedMotionRule = componentSource.match(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/,
+    )?.[1]
+
+    expect(figureRule).toBeDefined()
+    expect(figureRule).not.toMatch(/overflow-x/)
+    expect(shellRule).toMatch(/\bposition:\s*relative\s*;/)
+    expect(shellRule).toMatch(/\boverflow:\s*hidden\s*;/)
+    expect(shellRule).toMatch(/\bbackground:\s*var\(--vp-c-bg-soft\)\s*;/)
+    expect(shellRule).toMatch(
+      /\bborder:\s*1px\s+solid\s+var\(--vp-c-divider\)\s*;/,
+    )
+    expect(shellRule).toMatch(/\bborder-radius:\s*8px\s*;/)
+    expect(viewportRule).toMatch(/\bpadding:\s*40px\s+16px\s+16px\s*;/)
+    expect(viewportRule).toMatch(/\boverflow-x:\s*auto\s*;/)
+    expect(componentSource.match(/\boverflow-x:\s*auto\s*;/g)).toHaveLength(1)
+    expect(buttonRule).toMatch(/\bposition:\s*absolute\s*;/)
+    expect(buttonRule).toMatch(/\btop:\s*8px\s*;/)
+    expect(buttonRule).toMatch(/\bright:\s*8px\s*;/)
+    expect(buttonRule).toMatch(/\bwidth:\s*24px\s*;/)
+    expect(buttonRule).toMatch(/\bheight:\s*24px\s*;/)
+    expect(buttonRule).toMatch(/\bborder-radius:\s*5px\s*;/)
+    expect(buttonRule).toMatch(
+      /\bbackground:\s*var\(--vp-c-bg\)\s*;/,
+    )
+    expect(buttonRule).toMatch(
+      /\bborder:\s*1px\s+solid\s+var\(--vp-c-divider\)\s*;/,
+    )
+    expect(buttonRule).toMatch(/\bbox-shadow:\s*[^;]+;/)
+    expect(componentSource).toContain('<Maximize2 :size="14"')
+    expect(focusRule).toMatch(
+      /\boutline:\s*3px\s+solid\s+var\(--vp-c-brand-1\)\s*;/,
+    )
+    expect(reducedMotionRule).toMatch(
+      /\.mermaid-diagram__fullscreen\s*\{[^}]*\btransition:\s*none\s*;/,
+    )
   })
 
   it('updates an open viewer with the latest theme SVG without an extra render', async () => {

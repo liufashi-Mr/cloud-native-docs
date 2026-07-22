@@ -131,7 +131,17 @@ onUnmounted(() => {
 
 <template>
   <figure ref="figure" class="mermaid-diagram" tabindex="-1">
-    <template v-if="svg">
+    <div v-if="svg" class="mermaid-diagram__shell">
+      <button
+        ref="fullscreenTrigger"
+        class="mermaid-diagram__fullscreen"
+        type="button"
+        aria-label="全屏查看图表"
+        title="全屏查看图表"
+        @click="openViewer"
+      >
+        <Maximize2 :size="14" aria-hidden="true" />
+      </button>
       <div class="mermaid-diagram__viewport">
         <div
           ref="container"
@@ -141,19 +151,7 @@ onUnmounted(() => {
           v-html="svg"
         />
       </div>
-      <div class="mermaid-diagram__actions">
-        <button
-          ref="fullscreenTrigger"
-          class="mermaid-diagram__fullscreen"
-          type="button"
-          aria-label="全屏查看图表"
-          title="全屏查看图表"
-          @click="openViewer"
-        >
-          <Maximize2 :size="20" aria-hidden="true" />
-        </button>
-      </div>
-    </template>
+    </div>
     <pre v-else class="mermaid-diagram__source"><code>{{ source }}</code></pre>
     <figcaption v-if="errorMessage" class="mermaid-diagram__error" role="alert">
       图表渲染失败：{{ errorMessage }}
@@ -169,26 +167,31 @@ onUnmounted(() => {
 <style scoped>
 .mermaid-diagram {
   margin: 24px 0;
-  overflow-x: auto;
 }
 
-.mermaid-diagram__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
+.mermaid-diagram__shell {
+  position: relative;
+  overflow: hidden;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
 }
 
 .mermaid-diagram__fullscreen {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
   display: inline-grid;
-  flex: 0 0 40px;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   color: var(--vp-c-text-2);
-  background: var(--vp-c-bg-soft);
+  background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 12%);
   cursor: pointer;
   transition:
     color 120ms ease,
@@ -208,7 +211,9 @@ onUnmounted(() => {
 }
 
 .mermaid-diagram__viewport {
+  box-sizing: border-box;
   max-width: 100%;
+  padding: 40px 16px 16px;
   overflow-x: auto;
 }
 
