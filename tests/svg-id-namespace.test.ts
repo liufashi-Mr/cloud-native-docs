@@ -83,12 +83,12 @@ describe('namespaceSvgIds', () => {
     expect(shape?.getAttribute('xlink:href')).toBe(`#${prefix}fff`)
     expect(unknownLink?.getAttribute('href')).toBe('#missing')
 
-    expect(style).toContain(`#${prefix}node, #${prefix}label`)
-    expect(style).toContain(`url('#${prefix}arrow')`)
+    expect(style).toContain(`#${prefix}node,#${prefix}label`)
+    expect(style).toContain(`url(#${prefix}arrow)`)
     expect(style).toContain(`url(#${prefix}clip)`)
-    expect(style).toContain(`#${prefix}fff { stroke: #123456; }`)
-    expect(style).toContain('#unknown { filter: url(#missing); }')
-    expect(style).toContain('fill: #fff;')
+    expect(style).toContain(`#${prefix}fff{stroke:#123456}`)
+    expect(style).toContain('#unknown{filter:url(#missing)}')
+    expect(style).toContain('fill:#fff')
   })
 
   it('creates a CSS-safe prefix from an empty or digit-leading namespace', () => {
@@ -104,7 +104,12 @@ describe('namespaceSvgIds', () => {
     const source = `
       <svg xmlns="http://www.w3.org/2000/svg">
         <style>
-          #node { fill: #fff; content: "#node"; marker-end: url(#arrow); }
+          #node {
+            fill: #fff;
+            content: "#node";
+            marker-end: url(#arrow);
+            --marker-reference: url('#arrow');
+          }
           [fill="#fff"] { color: #123456; }
           @supports selector(#node) { #node { clip-path: url( '#clip' ); } }
           @scope (#node) { #node { stroke: #node; } }
@@ -117,12 +122,13 @@ describe('namespaceSvgIds', () => {
 
     const style = parseSvg(namespaceSvgIds(source, 'viewer'))
       .querySelector('style')?.textContent ?? ''
-    expect(style).toContain('#viewer-node { fill: #fff; content: "#node";')
-    expect(style).toContain('[fill="#fff"] { color: #123456; }')
+    expect(style).toContain('#viewer-node{fill:#fff;content:"#node";')
+    expect(style).toContain('--marker-reference:url(#viewer-arrow)')
+    expect(style).toContain('[fill="#fff"]{color:#123456}')
     expect(style).toContain('@supports selector(#viewer-node)')
-    expect(style).toContain('#viewer-node { clip-path: url(\'#viewer-clip\'); }')
+    expect(style).toContain('#viewer-node{clip-path:url(#viewer-clip)}')
     expect(style).toContain('@scope (#viewer-node)')
-    expect(style).toContain('stroke: #node;')
+    expect(style).toContain('stroke:#node')
   })
 
   it('gives duplicate source ids unique targets while references keep the first target', () => {
@@ -140,6 +146,29 @@ describe('namespaceSvgIds', () => {
     expect(root.querySelector('use')?.getAttribute('href')).toBe('#viewer-node')
   })
 
+  it('avoids generated target collisions and uniquifies empty source ids', () => {
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <g id="node-2" /><g id="node" /><g id="node" />
+        <g id="" /><g id="" />
+        <use href="#node-2" /><use href="#node" />
+      </svg>
+    `
+
+    const root = parseSvg(namespaceSvgIds(source, 'viewer'))
+    const ids = Array.from(root.querySelectorAll('[id]'), (element) => element.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toEqual([
+      'viewer-node-2',
+      'viewer-node',
+      'viewer-node-3',
+      'viewer-',
+      'viewer--2',
+    ])
+    expect(Array.from(root.querySelectorAll('use'), (element) => element.getAttribute('href')))
+      .toEqual(['#viewer-node-2', '#viewer-node'])
+  })
+
   it('rewrites namespaced XLink href attributes by namespace URI', () => {
     const source = `
       <svg xmlns="http://www.w3.org/2000/svg"
@@ -150,6 +179,19 @@ describe('namespaceSvgIds', () => {
 
     const root = parseSvg(namespaceSvgIds(source, 'viewer'))
     expect(root.querySelector('use')?.getAttribute('l:href')).toBe('#viewer-node')
+  })
+
+  it('keeps the original style text when CSS parsing fails', () => {
+    const invalidStyle = '#node { color: red; } }'
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>${invalidStyle}</style><g id="node" />
+      </svg>
+    `
+
+    expect(
+      parseSvg(namespaceSvgIds(source, 'viewer')).querySelector('style')?.textContent,
+    ).toBe(invalidStyle)
   })
 
   it.each([

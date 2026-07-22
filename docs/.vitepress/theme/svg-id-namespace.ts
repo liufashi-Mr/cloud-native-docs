@@ -1,8 +1,11 @@
+import { generate, parse, walk } from 'css-tree'
+
 const URL_REFERENCE_PATTERN = /url\(\s*(["']?)\s*#([^)"']+?)\s*\1\s*\)/gi
 const ARIA_REFERENCE_ATTRIBUTES = new Set([
   'aria-labelledby',
   'aria-describedby',
 ])
+const XLINK_NAMESPACE = 'http://www.w3.org/1999/xlink'
 
 function safeNamespace(namespace: string): string {
   const cleaned = namespace
@@ -40,39 +43,67 @@ function rewriteFragmentReference(
   return namespacedId ? `${match[1]}#${namespacedId}${match[3]}` : value
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function rewriteKnownIdSelectors(
-  selector: string,
-  idMap: ReadonlyMap<string, string>,
-): string {
-  const ids = Array.from(idMap.keys())
-    .filter(Boolean)
-    .sort((first, second) => second.length - first.length)
-  if (ids.length === 0) return selector
-
-  const pattern = new RegExp(
-    `#(${ids.map(escapeRegExp).join('|')})(?![A-Za-z0-9_-])`,
-    'g',
-  )
-  return selector.replace(
-    pattern,
-    (_match, id: string) => `#${idMap.get(id) ?? id}`,
-  )
-}
-
 function rewriteStyle(
   style: string,
   idMap: ReadonlyMap<string, string>,
 ): string {
-  const rewrittenUrls = rewriteUrlReferences(style, idMap)
+  try {
+    let parseFailed = false
+    const ast = parse(style, {
+      parseCustomProperty: true,
+      onParseError: () => {
+        parseFailed = true
+      },
+    })
+    if (parseFailed) return style
 
-  return rewrittenUrls.replace(/([^{}]+)\{/g, (block, prelude: string) => {
-    if (prelude.trimStart().startsWith('@')) return block
-    return `${rewriteKnownIdSelectors(prelude, idMap)}{`
-  })
+    walk(ast, (node) => {
+      if (node.type === 'IdSelector') {
+        const namespacedId = idMap.get(node.name)
+        if (namespacedId) node.name = namespacedId
+        return
+      }
+      if (node.type !== 'Url' || !node.value.startsWith('#')) return
+
+      const namespacedId = idMap.get(node.value.slice(1))
+      if (namespacedId) node.value = `#${namespacedId}`
+    })
+    return generate(ast)
+  } catch {
+    return style
+  }
+}
+
+function allocateElementIds(
+  elements: Element[],
+  prefix: string,
+): ReadonlyMap<string, string> {
+  const firstTargetBySource = new Map<string, string>()
+  const usedTargets = new Set<string>()
+
+  for (const element of elements) {
+    const sourceId = element.getAttribute('id') ?? ''
+    const baseTarget = `${prefix}${sourceId}`
+    let targetId = baseTarget
+    let suffix = 2
+    while (usedTargets.has(targetId)) {
+      targetId = `${baseTarget}-${suffix}`
+      suffix += 1
+    }
+
+    usedTargets.add(targetId)
+    if (!firstTargetBySource.has(sourceId)) {
+      firstTargetBySource.set(sourceId, targetId)
+    }
+    element.setAttribute('id', targetId)
+  }
+
+  return firstTargetBySource
+}
+
+function isHrefReference(attribute: Attr): boolean {
+  return attribute.localName.toLowerCase() === 'href' &&
+    (attribute.namespaceURI === null || attribute.namespaceURI === XLINK_NAMESPACE)
 }
 
 export function namespaceSvgIds(svg: string, namespace: string): string {
@@ -97,23 +128,14 @@ export function namespaceSvgIds(svg: string, namespace: string): string {
   if (elementsWithIds.length === 0) return svg
 
   const prefix = `${safeNamespace(namespace)}-`
-  const idMap = new Map<string, string>()
-  for (const element of elementsWithIds) {
-    const id = element.getAttribute('id') ?? ''
-    if (!idMap.has(id)) idMap.set(id, `${prefix}${id}`)
-  }
-
-  for (const element of elementsWithIds) {
-    const id = element.getAttribute('id') ?? ''
-    element.setAttribute('id', idMap.get(id) ?? `${prefix}${id}`)
-  }
+  const idMap = allocateElementIds(elementsWithIds, prefix)
 
   for (const element of elements) {
     for (const attribute of Array.from(element.attributes)) {
       const attributeName = attribute.name.toLowerCase()
       let value = attribute.value
 
-      if (attributeName === 'href' || attributeName === 'xlink:href') {
+      if (isHrefReference(attribute)) {
         value = rewriteFragmentReference(value, idMap)
       } else if (ARIA_REFERENCE_ATTRIBUTES.has(attributeName)) {
         value = value
@@ -124,7 +146,12 @@ export function namespaceSvgIds(svg: string, namespace: string): string {
       }
 
       value = rewriteUrlReferences(value, idMap)
-      if (value !== attribute.value) element.setAttribute(attribute.name, value)
+      if (value === attribute.value) continue
+      if (attribute.namespaceURI) {
+        element.setAttributeNS(attribute.namespaceURI, attribute.name, value)
+      } else {
+        element.setAttribute(attribute.name, value)
+      }
     }
   }
 
