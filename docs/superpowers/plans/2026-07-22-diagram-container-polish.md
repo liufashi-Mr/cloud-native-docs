@@ -364,7 +364,98 @@ git add docs/.vitepress/theme/components/MermaidDiagram.vue tests/mermaid-diagra
 git commit -m "style: frame Mermaid diagrams"
 ```
 
-### Task 4: Browser verification
+### Task 4: Refine the full-screen operation bar
+
+**Files:**
+- Modify: `docs/.vitepress/theme/components/MermaidFullscreenViewer.vue`
+- Modify: `tests/mermaid-fullscreen-viewer.test.ts`
+
+- [ ] **Step 1: Write failing toolbar style contracts**
+
+Read the component source in a focused test and assert the approved compact segmented contract: toolbar radius `7px`, padding `3px`, gap `2px`, each button `30px`, icon size `16px`, a close-button divider, separate dark-mode surface, and reduced-motion transition removal. Also assert the desktop top-right and mobile bottom-centered safe-area rules remain present.
+
+```ts
+const toolbarRule = componentSource.match(
+  /\.mermaid-fullscreen-viewer__toolbar\s*\{([^}]*)\}/,
+)?.[1]
+const buttonRule = componentSource.match(
+  /\.mermaid-fullscreen-viewer__toolbar button\s*\{([^}]*)\}/,
+)?.[1]
+
+expect(toolbarRule).toMatch(/border-radius:\s*7px/)
+expect(toolbarRule).toMatch(/padding:\s*3px/)
+expect(toolbarRule).toMatch(/gap:\s*2px/)
+expect(buttonRule).toMatch(/flex-basis:\s*30px/)
+expect(buttonRule).toMatch(/width:\s*30px/)
+expect(buttonRule).toMatch(/height:\s*30px/)
+expect(componentSource).toContain('<ZoomIn aria-hidden="true" />')
+expect(componentSource).toMatch(/close[^}]*border-left|border-left[^}]*(close|toolbar)/s)
+expect(componentSource).toContain('prefers-reduced-motion')
+```
+
+- [ ] **Step 2: Run the test and observe RED**
+
+```bash
+npm test -- tests/mermaid-fullscreen-viewer.test.ts
+```
+
+Expected: FAIL because the current viewer uses 40px controls, 4px padding, 4px gaps, and a larger radius.
+
+- [ ] **Step 3: Apply the compact segmented toolbar**
+
+Keep the existing four controls and labels, but adjust the CSS:
+
+```css
+.mermaid-fullscreen-viewer__toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: #fff;
+  border: 1px solid #cbd3dc;
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 12%);
+}
+
+.mermaid-fullscreen-viewer__toolbar button {
+  display: inline-grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 5px;
+}
+
+.mermaid-fullscreen-viewer__toolbar button :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.mermaid-fullscreen-viewer__toolbar button:last-child {
+  margin-left: 3px;
+  border-left: 1px solid #d7dde5;
+  border-radius: 0 5px 5px 0;
+}
+```
+
+Use `#252b32` and `#606a75` for the dark toolbar surface/border and a high-contrast dark focus ring already established by the viewer quality fix. Keep the existing safe-area placement and `@media (prefers-reduced-motion: reduce)` rule.
+
+- [ ] **Step 4: Verify and commit**
+
+```bash
+npm test -- tests/mermaid-fullscreen-viewer.test.ts
+npm run typecheck
+git diff --check
+```
+
+Commit:
+
+```bash
+git add docs/.vitepress/theme/components/MermaidFullscreenViewer.vue \
+  tests/mermaid-fullscreen-viewer.test.ts
+git commit -m "style: refine full-screen toolbar"
+```
+
+### Task 5: Browser verification
 
 **Files:**
 - Modify only if defects are found: `docs/.vitepress/theme/components/MermaidDiagram.vue`
