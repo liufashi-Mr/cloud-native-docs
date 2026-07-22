@@ -160,6 +160,11 @@ describe('content contract', () => {
       'API -->|serves PVC and PV watch events 提供申领与 PV 事件| VB["volume binder or PV controller"]',
       'VB -->|writes binding fields 写入绑定字段| API',
       'KL -->|calls NodeStageVolume and NodePublishVolume 调用节点暂存与发布| CSI["CSI node plugin"]',
+      'CSI -->|may stage volume at 可在此暂存卷| ST["kubelet-managed global staging path"]',
+      'CSI -->|publishes volume to 把卷发布到| HP["kubelet-managed host-side Pod volume path"]',
+      'KL -->|passes host path in CRI container config 通过 CRI 容器配置传递主机路径| CR["CRI container runtime"]',
+      'HP -.->|is referenced as mount source 被引用为挂载源| CR',
+      'CR -->|bind-mounts path into container 把路径绑定挂载进容器| VM["container volume mount"]',
     ]) {
       expect(storage, `storage diagram is missing ${relation}`).toContain(
         relation,
@@ -169,6 +174,9 @@ describe('content contract', () => {
     expect(storage).not.toContain('随 Pod sandbox 生命周期存在')
     expect(storage).not.toContain('PVC -->|binds')
     expect(storage).not.toContain('PVC -.->|requests')
+    expect(storage).not.toContain(
+      'CSI -->|stages and publishes resolved volume 暂存并发布解析后的卷| VM',
+    )
   })
 
   it('documents volume source, endpoint readiness, and shell variable caveats', () => {
