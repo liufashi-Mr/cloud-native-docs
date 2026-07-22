@@ -164,8 +164,7 @@ body {
 }
 
 .vp-doc table,
-.vp-doc div[class*='language-'],
-.vp-doc .mermaid-diagram {
+.vp-doc div[class*='language-'] {
   overflow-x: auto;
 }
 
@@ -217,12 +216,6 @@ body {
 
 .vp-doc .custom-block.tip {
   border-left-color: var(--k8s-accent-active);
-}
-
-.vp-doc .mermaid-diagram {
-  border-top: 1px solid var(--k8s-line);
-  border-bottom: 1px solid var(--k8s-line);
-  padding: 20px 0;
 }
 
 .k8s-appearance {

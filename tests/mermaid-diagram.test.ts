@@ -60,6 +60,20 @@ describe('MermaidDiagram', () => {
     expect(labelParagraphRule).toMatch(/\bline-height:\s*inherit\s*;/)
   })
 
+  it('does not let global theme styles restore the legacy Mermaid frame', () => {
+    const globalStyles = readFileSync(
+      resolve(process.cwd(), 'docs/.vitepress/theme/styles.css'),
+      'utf8',
+    )
+    const documentOverflowRule = globalStyles.match(
+      /\.vp-doc table,\s*\.vp-doc div\[class\*='language-'\][^{]*\{[^}]*\boverflow-x:\s*auto\s*;[^}]*\}/,
+    )?.[0]
+
+    expect(documentOverflowRule).toBeDefined()
+    expect(documentOverflowRule).not.toContain('.vp-doc .mermaid-diagram')
+    expect(globalStyles).not.toMatch(/\.vp-doc \.mermaid-diagram\s*\{/)
+  })
+
   it('loads the full-screen viewer synchronously', () => {
     const componentSource = readFileSync(
       resolve(
