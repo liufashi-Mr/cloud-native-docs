@@ -10,11 +10,12 @@ const styles = readFileSync(
 describe('responsive theme styles', () => {
   it('lets documents with an outline use the full main-column width', () => {
     const contentRule = styles.match(
-      /\.VPDoc\.has-aside \.content-container\s*{([^}]*)}/,
+      /\.VPDoc\.has-aside\s*>\s*\.container\s*>\s*\.content\s*>\s*\.content-container\s*{([^}]*)}/,
     )
 
     expect(contentRule?.[1]).toMatch(/max-width:\s*none/)
     expect(contentRule?.[1]).toMatch(/width:\s*100%/)
+    expect(contentRule?.[1]).not.toContain('!important')
   })
 
   it('keeps inline code in table cells intact while the table scrolls locally', () => {

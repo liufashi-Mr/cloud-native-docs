@@ -84,7 +84,7 @@ body {
   max-width: none;
 }
 
-.VPDoc.has-aside .content-container {
+.VPDoc.has-aside > .container > .content > .content-container {
   width: 100%;
   max-width: none;
 }
