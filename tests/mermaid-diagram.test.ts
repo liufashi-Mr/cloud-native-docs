@@ -60,7 +60,7 @@ describe('MermaidDiagram', () => {
     expect(labelParagraphRule).toMatch(/\bline-height:\s*inherit\s*;/)
   })
 
-  it('loads the full-screen viewer asynchronously', () => {
+  it('loads the full-screen viewer synchronously', () => {
     const componentSource = readFileSync(
       resolve(
         process.cwd(),
@@ -69,12 +69,10 @@ describe('MermaidDiagram', () => {
       'utf8',
     )
 
-    expect(componentSource).not.toMatch(
+    expect(componentSource).toMatch(
       /import\s+MermaidFullscreenViewer\s+from\s+['"]\.\/MermaidFullscreenViewer\.vue['"]/,
     )
-    expect(componentSource).toMatch(
-      /defineAsyncComponent\(\(\)\s*=>\s*import\(['"]\.\/MermaidFullscreenViewer\.vue['"]\)\)/,
-    )
+    expect(componentSource).not.toContain('defineAsyncComponent')
   })
 
   it('rerenders the SVG when VitePress changes color mode', async () => {
@@ -225,7 +223,7 @@ describe('MermaidDiagram', () => {
     const trigger = wrapper.get('button[aria-label="全屏查看图表"]')
     expect(trigger.attributes('title')).toBe('全屏查看图表')
     await trigger.trigger('click')
-    await flushPromises()
+    await nextTick()
 
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog).not.toBeNull()
@@ -251,7 +249,7 @@ describe('MermaidDiagram', () => {
     )
     trigger.element.focus()
     await trigger.trigger('click')
-    await flushPromises()
+    await nextTick()
     await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
     await nextTick()
 
@@ -259,7 +257,7 @@ describe('MermaidDiagram', () => {
     expect(document.activeElement).toBe(trigger.element)
 
     await trigger.trigger('click')
-    await flushPromises()
+    await nextTick()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
     await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
     await nextTick()
@@ -290,6 +288,32 @@ describe('MermaidDiagram', () => {
     await flushPromises()
     expect(errored.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
     expect(errored.find('.mermaid-diagram__error').text()).toContain('bad diagram')
+  })
+
+  it('clears the previous render error when a new render starts', async () => {
+    const pendingRender = deferred<{ svg: string }>()
+    mermaid.render
+      .mockRejectedValueOnce(new Error('initial render failed'))
+      .mockImplementationOnce(() => pendingRender.promise)
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      'initial render failed',
+    )
+
+    await wrapper.setProps({
+      encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
+    })
+    await flushPromises()
+
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    pendingRender.resolve({ svg: '<svg data-source="updated"></svg>' })
+    await flushPromises()
   })
 
   it('keeps the full-screen action outside the horizontally scrolling canvas', async () => {
@@ -338,7 +362,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await flushPromises()
+    await nextTick()
 
     expect(
       document.body.querySelector('.mermaid-fullscreen-viewer__surface')?.innerHTML,
@@ -371,7 +395,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await flushPromises()
+    await nextTick()
 
     await wrapper.setProps({
       encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
@@ -400,8 +424,10 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await flushPromises()
+    await nextTick()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    const figure = wrapper.get<HTMLElement>('figure').element
+    const focus = vi.spyOn(figure, 'focus')
 
     vitepressData.isDark!.value = true
     await nextTick()
@@ -412,6 +438,8 @@ describe('MermaidDiagram', () => {
     expect(wrapper.get('.mermaid-diagram__error').text()).toContain(
       'dark render failed',
     )
+    expect(document.activeElement).toBe(figure)
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('closes an open viewer when a source-change render fails', async () => {
@@ -427,8 +455,10 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await flushPromises()
+    await nextTick()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    const figure = wrapper.get<HTMLElement>('figure').element
+    const focus = vi.spyOn(figure, 'focus')
 
     await wrapper.setProps({
       encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
@@ -441,6 +471,8 @@ describe('MermaidDiagram', () => {
       'updated source failed',
     )
     expect(mermaid.render).toHaveBeenCalledTimes(2)
+    expect(document.activeElement).toBe(figure)
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('closes the viewer and restores body scrolling when unmounted', async () => {
@@ -455,7 +487,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await flushPromises()
+    await nextTick()
     expect(document.body.style.overflow).toBe('hidden')
 
     wrapper.unmount()

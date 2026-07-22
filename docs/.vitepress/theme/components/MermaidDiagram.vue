@@ -5,22 +5,15 @@ let diagramSequence = 0
 <script setup lang="ts">
 import { Maximize2 } from '@lucide/vue'
 import { useData } from 'vitepress'
-import {
-  computed,
-  defineAsyncComponent,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  watch,
-} from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
-const MermaidFullscreenViewer = defineAsyncComponent(() => import('./MermaidFullscreenViewer.vue'))
+import MermaidFullscreenViewer from './MermaidFullscreenViewer.vue'
 
 const props = defineProps<{
   encodedSource: string
 }>()
 
+const figure = ref<HTMLElement>()
 const container = ref<HTMLElement>()
 const fullscreenTrigger = ref<HTMLButtonElement>()
 const svg = ref('')
@@ -79,6 +72,7 @@ function closeViewer(): void {
 
 async function renderDiagram(): Promise<void> {
   const generation = ++renderGeneration
+  errorMessage.value = ''
   const theme = isDark.value ? 'dark' : 'default'
 
   try {
@@ -106,11 +100,18 @@ async function renderDiagram(): Promise<void> {
     }
   } catch (error) {
     if (!active || generation !== renderGeneration) return
+    const wasViewerOpen = viewerOpen.value
     viewerOpen.value = false
     svg.value = ''
     renderedViewBoxWidth.value = 0
     errorMessage.value =
       error instanceof Error ? error.message : '无法渲染此图表。'
+    if (wasViewerOpen) {
+      await nextTick()
+      if (active && generation === renderGeneration) {
+        figure.value?.focus({ preventScroll: true })
+      }
+    }
   }
 }
 
@@ -129,7 +130,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <figure class="mermaid-diagram">
+  <figure ref="figure" class="mermaid-diagram" tabindex="-1">
     <template v-if="svg">
       <div class="mermaid-diagram__viewport">
         <div
