@@ -13,10 +13,19 @@ const props = defineProps<{
 const container = ref<HTMLElement>()
 const svg = ref('')
 const errorMessage = ref('')
+const renderedViewBoxWidth = ref(0)
 const { isDark } = useData()
 let active = false
 let renderGeneration = 0
 let stopWatching: (() => void) | undefined
+
+const wideCanvasStyle = computed(() => {
+  if (renderedViewBoxWidth.value <= 960) return undefined
+
+  return {
+    '--mermaid-intrinsic-width': `${Math.min(renderedViewBoxWidth.value, 2000)}px`,
+  }
+})
 
 const source = computed(() => {
   try {
@@ -25,6 +34,24 @@ const source = computed(() => {
     return props.encodedSource
   }
 })
+
+function renderedSvgViewBoxWidth(): number {
+  const renderedSvg = container.value?.querySelector('svg')
+  if (!renderedSvg) return 0
+
+  const nativeWidth = renderedSvg.viewBox?.baseVal?.width
+  if (Number.isFinite(nativeWidth) && nativeWidth > 0) return nativeWidth
+
+  const values = renderedSvg
+    .getAttribute('viewBox')
+    ?.trim()
+    .split(/[\s,]+/)
+    .map(Number)
+  const attributeWidth = values?.length === 4 ? values[2] : 0
+  return Number.isFinite(attributeWidth) && attributeWidth > 0
+    ? attributeWidth
+    : 0
+}
 
 async function renderDiagram(): Promise<void> {
   const generation = ++renderGeneration
@@ -50,11 +77,13 @@ async function renderDiagram(): Promise<void> {
     errorMessage.value = ''
     await nextTick()
     if (active && generation === renderGeneration && container.value) {
+      renderedViewBoxWidth.value = renderedSvgViewBoxWidth()
       result.bindFunctions?.(container.value)
     }
   } catch (error) {
     if (!active || generation !== renderGeneration) return
     svg.value = ''
+    renderedViewBoxWidth.value = 0
     errorMessage.value =
       error instanceof Error ? error.message : '无法渲染此图表。'
   }
@@ -78,6 +107,8 @@ onUnmounted(() => {
       v-if="svg"
       ref="container"
       class="mermaid-diagram__canvas"
+      :class="{ 'mermaid-diagram__canvas--wide': wideCanvasStyle }"
+      :style="wideCanvasStyle"
       v-html="svg"
     />
     <pre v-else class="mermaid-diagram__source"><code>{{ source }}</code></pre>
@@ -96,6 +127,11 @@ onUnmounted(() => {
 .mermaid-diagram__canvas {
   min-width: max-content;
   text-align: center;
+}
+
+.mermaid-diagram__canvas--wide {
+  width: var(--mermaid-intrinsic-width);
+  min-width: var(--mermaid-intrinsic-width);
 }
 
 .mermaid-diagram__source {

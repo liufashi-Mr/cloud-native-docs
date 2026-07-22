@@ -8,6 +8,26 @@ const styles = readFileSync(
 )
 
 describe('responsive theme styles', () => {
+  it('lets documents with an outline use the full main-column width', () => {
+    const contentRule = styles.match(
+      /\.VPDoc\.has-aside \.content-container\s*{([^}]*)}/,
+    )
+
+    expect(contentRule?.[1]).toMatch(/max-width:\s*none/)
+    expect(contentRule?.[1]).toMatch(/width:\s*100%/)
+  })
+
+  it('keeps inline code in table cells intact while the table scrolls locally', () => {
+    const tableCodeRule = styles.match(
+      /\.vp-doc td code,\s*\.vp-doc th code\s*{([^}]*)}/,
+    )
+
+    expect(tableCodeRule?.[1]).toMatch(/white-space:\s*nowrap/)
+    expect(tableCodeRule?.[1]).toMatch(/overflow-wrap:\s*normal/)
+    expect(tableCodeRule?.[1]).toMatch(/word-break:\s*normal/)
+    expect(styles).toMatch(/\.vp-doc table\s*{[^}]*max-width:\s*100%/)
+  })
+
   it('maps brand text to foreground-safe accent tokens', () => {
     expect(styles).toMatch(
       /:root\s*{[^}]*--vp-c-brand-1:\s*var\(--k8s-accent-text\)/,

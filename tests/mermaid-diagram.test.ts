@@ -94,4 +94,36 @@ describe('MermaidDiagram', () => {
     await flushPromises()
     expect(wrapper.find('svg').attributes('data-theme')).toBe('dark')
   })
+
+  it('preserves a readable intrinsic width for wide rendered diagrams', async () => {
+    mermaid.render.mockResolvedValue({
+      svg: '<svg width="100%" viewBox="0 0 2371 1868"></svg>',
+    })
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart TD\nA --> B') },
+    })
+    await flushPromises()
+
+    const canvas = wrapper.find('.mermaid-diagram__canvas')
+    expect(canvas.classes()).toContain('mermaid-diagram__canvas--wide')
+    expect(canvas.attributes('style')).toContain(
+      '--mermaid-intrinsic-width: 2000px',
+    )
+  })
+
+  it('does not enlarge a simple rendered diagram', async () => {
+    mermaid.render.mockResolvedValue({
+      svg: '<svg width="100%" viewBox="0 0 640 360"></svg>',
+    })
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+
+    const canvas = wrapper.find('.mermaid-diagram__canvas')
+    expect(canvas.classes()).not.toContain('mermaid-diagram__canvas--wide')
+    expect(canvas.attributes('style')).toBeUndefined()
+  })
 })
