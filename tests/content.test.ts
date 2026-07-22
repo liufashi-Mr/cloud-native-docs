@@ -394,6 +394,20 @@ describe('content contract', () => {
     expect(yaml).not.toContain('example/web')
   })
 
+  it('prepares the demo Namespace before the standalone probe Deployment', () => {
+    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    if (chapter === null) return
+
+    const namespaceCommand =
+      'kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -'
+    const deploymentManifest = 'apiVersion: apps/v1\nkind: Deployment'
+
+    expect(chapter).toContain(namespaceCommand)
+    expect(chapter.indexOf(namespaceCommand)).toBeLessThan(
+      chapter.indexOf(deploymentManifest),
+    )
+  })
+
   it('parses the probe manifest and locks each probe handler to the running container', () => {
     const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
     if (chapter === null) return

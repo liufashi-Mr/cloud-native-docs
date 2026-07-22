@@ -31,6 +31,12 @@ readiness 应回答“接一个新请求是否合理”，liveness 只回答“�
 
 下面使用固定版本的公开 BusyBox 镜像：启动命令先创建 `/www/healthz`，再以前台 `httpd` 监听 8080，所以三类 HTTP probe 都检查一个真实存在的 handler。preStop 先移除该文件、等待 5 秒，再由 kubelet 继续发送 TERM；这个例子不依赖自定义镜像或外部 controller，可以独立进入 Ready。
 
+Deployment 明确写入 `demo` Namespace。独立运行本页示例前，先用下面的幂等命令创建或确认该 Namespace：
+
+```bash
+kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
+```
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
