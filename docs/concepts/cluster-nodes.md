@@ -17,9 +17,9 @@
 
 ## 节点组件与插件接口
 
-Node 是可调度计算资源的 API 表示和故障边界；机器上的 kubelet 注册或维护 Node 状态，观察分配给本节点的 Pod，并通过 CRI（Container Runtime Interface）请求 container runtime 创建 Pod sandbox 与 containers。容器运行时负责镜像和容器生命周期，不负责决定副本数。
+Node 是可调度计算资源的 API 表示和故障边界；机器上的 kubelet 注册或维护 Node 状态，观察分配给本节点的 Pod，并通过 CRI（Container Runtime Interface）请求 container runtime 创建 Pod sandbox 与 containers。建立 sandbox 时，CRI runtime 通常调用 CNI 插件配置 Pod 网络；具体实现也可能把 CNI 调用封装在 runtime 的网络集成层。容器运行时负责镜像和容器生命周期，不负责决定副本数。
 
-CNI（Container Network Interface）插件通常建立 Pod 网络、分配 Pod IP，并可能实现 NetworkPolicy。CSI（Container Storage Interface）驱动让控制器和节点侧插件执行存储供应、attach 与 mount。两者都是接口生态，不代表所有集群使用同一实现。
+CNI（Container Network Interface）插件通常建立 Pod 网络、分配 Pod IP，并可能实现 NetworkPolicy。存储走另一条边界：kubelet 的 volume manager 调用 CSI（Container Storage Interface）node plugin 执行 `NodeStageVolume`、`NodePublishVolume` 等节点侧操作，CSI controller plugin 则可参与供应和 attach。CNI 与 CSI 都是接口生态，但不是 kubelet 合并调用的一组插件，也不代表所有集群使用同一实现。
 
 `kube-proxy` 是常见的 Service data plane agent：它根据 Service 与 EndpointSlice 信息配置节点转发规则，但实现可使用 iptables、IPVS 或其他机制。有些集群以 eBPF 或其他数据面替代 kube-proxy，所以“Service 流量一定经过 kube-proxy 进程”并不成立。
 
@@ -35,12 +35,15 @@ flowchart TB
   SCH -->|writes Pod binding 写入 Pod 绑定| API
   API -.->|publishes assigned Pods 发布已分配 Pod| KL["kubelet on Node"]
   KL -->|invokes CRI 调用 CRI| CR["Container runtime"]
+  CR -->|invokes CNI for Pod networking 调用 CNI 配置 Pod 网络| CNI["CNI plugin"]
+  CNI -->|creates Pod network interface 创建 Pod 网络接口| NET["Pod network"]
   CR -->|creates sandbox and containers 创建沙箱与容器| CON["Running containers"]
-  KL -->|invokes CNI and CSI 调用网络与存储插件| PLUG["CNI and CSI node plugins"]
+  KL -->|requests node-stage and node-publish 请求节点暂存与发布卷| CSI["CSI node plugin"]
+  CSI -->|stages and publishes volume 暂存并发布卷| VOL["Pod volume mount"]
   KL -->|reports Pod and Node status 汇报状态| API
 ```
 
-图中的 Pod、Node 等是 API objects；Controller Manager、Scheduler、kubelet、runtime 与插件是运行中的 actors。Controller 创建 Pod API 对象，kubelet/runtime 才创建 containers，二者不能合并成一句“Deployment 启动容器”。
+图中的 Pod、Node 等是 API objects；Controller Manager、Scheduler、kubelet、runtime 与插件是运行中的 actors。图采用常见的 `kubelet -> CRI runtime -> CNI` 网络调用链；runtime 可以在内部委派或封装具体网络实现，但这不同于 kubelet 直接调用 CSI node plugin 的 volume 操作。Controller 创建 Pod API 对象，kubelet/runtime 才创建 containers，二者不能合并成一句“Deployment 启动容器”。
 
 ## 故障域怎么读
 

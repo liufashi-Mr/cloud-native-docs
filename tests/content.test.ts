@@ -106,6 +106,26 @@ describe('content contract', () => {
     expect(markdown).toMatch(/\[[^\]]+\]\([^)]*\)/)
   })
 
+  it('separates Pod networking from CSI node volume operations', () => {
+    const chapter = readFileSync(
+      resolve(root, 'docs/concepts/cluster-nodes.md'),
+      'utf8',
+    )
+
+    for (const relation of [
+      'KL -->|invokes CRI 调用 CRI| CR["Container runtime"]',
+      'CR -->|invokes CNI for Pod networking 调用 CNI 配置 Pod 网络| CNI["CNI plugin"]',
+      'KL -->|requests node-stage and node-publish 请求节点暂存与发布卷| CSI["CSI node plugin"]',
+    ]) {
+      expect(chapter, `cluster and nodes chapter is missing ${relation}`).toContain(
+        relation,
+      )
+    }
+
+    expect(chapter).not.toContain('invokes CNI and CSI')
+    expect(chapter).not.toContain('CNI and CSI node plugins')
+  })
+
   it('lists the seven core concept chapters in learning order', () => {
     const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
     const group = config.match(/text: '核心概念',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
