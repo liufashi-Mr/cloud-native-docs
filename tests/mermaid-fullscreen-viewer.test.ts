@@ -514,7 +514,7 @@ describe('MermaidFullscreenViewer', () => {
   ])(
     'maximizes a $diagramWidth x $diagramHeight fit around desktop and mobile toolbars',
     async ({ diagramWidth, diagramHeight, minimumScale }) => {
-      toolbarBounds = rect(894, 62, 194, 52)
+      toolbarBounds = rect(953, 62, 135, 36)
       const wrapper = mount(MermaidFullscreenViewer, {
         attachTo: document.body,
         props: {
@@ -542,7 +542,7 @@ describe('MermaidFullscreenViewer', () => {
           fittedDiagramBounds.top >= desktopToolbar.bottom,
       ).toBe(true)
 
-      toolbarBounds = rect(503, 686, 194, 52)
+      toolbarBounds = rect(532.5, 702, 135, 36)
       window.dispatchEvent(new Event('resize'))
       flushAnimationFrame()
       await nextTick()
@@ -891,7 +891,7 @@ describe('MermaidFullscreenViewer', () => {
     expect(Number.isFinite(transform().y)).toBe(true)
   })
 
-  it('keeps interaction and responsive style contracts explicit', () => {
+  it('keeps interaction and compact segmented toolbar styles explicit', () => {
     const componentSource = readFileSync(
       resolve(
         process.cwd(),
@@ -927,19 +927,45 @@ describe('MermaidFullscreenViewer', () => {
     expect(lightRule).toMatch(/\bcolor-scheme:\s*light\s*;/)
     expect(darkRule).toMatch(/\bcolor-scheme:\s*dark\s*;/)
 
+    const toolbarRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar',
+    )
+    expect(toolbarRule).toMatch(/\bgap:\s*2px\s*;/)
+    expect(toolbarRule).toMatch(/\bpadding:\s*3px\s*;/)
+    expect(toolbarRule).toMatch(/\bbackground:\s*#ffffff\s*;/)
+    expect(toolbarRule).toMatch(/\bborder:\s*1px solid #cbd3dc\s*;/)
+    expect(toolbarRule).toMatch(/\bborder-radius:\s*7px\s*;/)
+    expect(toolbarRule).toMatch(
+      /\bbox-shadow:\s*0 2px 8px rgba\(15, 23, 42, 0\.12\)\s*;/,
+    )
+
     const darkToolbarRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar',
     )
+    expect(darkToolbarRule).toMatch(/\bbackground:\s*#252b32\s*;/)
+    expect(darkToolbarRule).toMatch(/\bborder-color:\s*#606a75\s*;/)
+    expect(darkToolbarRule).toMatch(
+      /\bbox-shadow:\s*0 2px 8px rgba\(0, 0, 0, 0\.32\)\s*;/,
+    )
+
+    const toolbarHoverRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar button:hover',
+    )
+    expect(toolbarHoverRule).toMatch(/\bbackground:\s*#f1f4f7\s*;/)
     const darkToolbarHoverRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover',
     )
+    expect(darkToolbarHoverRule).toMatch(/\bbackground:\s*#343b43\s*;/)
     const darkFocusRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:focus-visible',
     )
     const darkFocusColor = cssHexColor(darkFocusRule, 'outline-color')
+    expect(darkFocusColor).toBe('#80c7ff')
     expect(
       contrastRatio(
         darkFocusColor,
@@ -957,8 +983,43 @@ describe('MermaidFullscreenViewer', () => {
       styles,
       '.mermaid-fullscreen-viewer__toolbar button',
     )
-    expect(toolbarButtonRule).toMatch(/\bwidth:\s*40px\s*;/)
-    expect(toolbarButtonRule).toMatch(/\bheight:\s*40px\s*;/)
+    expect(toolbarButtonRule).toMatch(/\bflex:\s*0 0 30px\s*;/)
+    expect(toolbarButtonRule).toMatch(/\bwidth:\s*30px\s*;/)
+    expect(toolbarButtonRule).toMatch(/\bheight:\s*30px\s*;/)
+    expect(toolbarButtonRule).toMatch(/\bborder-radius:\s*5px\s*;/)
+    expect(toolbarButtonRule).toMatch(
+      /\btransition:\s*background-color 120ms ease, color 120ms ease\s*;/,
+    )
+
+    const toolbarIconRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar button :deep(svg)',
+    )
+    expect(toolbarIconRule).toMatch(/\bwidth:\s*16px\s*;/)
+    expect(toolbarIconRule).toMatch(/\bheight:\s*16px\s*;/)
+
+    const closeButtonRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar button:last-child',
+    )
+    expect(closeButtonRule).toMatch(/\bposition:\s*relative\s*;/)
+    expect(closeButtonRule).toMatch(/\bmargin-left:\s*3px\s*;/)
+    expect(closeButtonRule).not.toMatch(/\bcolor:\s*(?:red|#[\da-f]{6})\s*;/i)
+
+    const separatorRule = cssDeclarations(
+      styles,
+      '.mermaid-fullscreen-viewer__toolbar button:last-child::before',
+    )
+    expect(separatorRule).toMatch(/\bposition:\s*absolute\s*;/)
+    expect(separatorRule).toMatch(/\bleft:\s*-3px\s*;/)
+    expect(separatorRule).toMatch(/\bwidth:\s*1px\s*;/)
+    expect(separatorRule).toMatch(/\bbackground:\s*#cbd3dc\s*;/)
+
+    const darkSeparatorRule = cssDeclarations(
+      styles,
+      ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:last-child::before',
+    )
+    expect(darkSeparatorRule).toMatch(/\bbackground:\s*#606a75\s*;/)
 
     const mobileStart = styles.indexOf('@media (max-width: 480px)')
     const reducedMotionStart = styles.indexOf(
@@ -978,5 +1039,10 @@ describe('MermaidFullscreenViewer', () => {
       '.mermaid-fullscreen-viewer__surface',
     )
     expect(reducedMotionSurfaceRule).toMatch(/\btransition:\s*none\s*;/)
+    const reducedMotionButtonRule = cssDeclarations(
+      reducedMotionStyles,
+      '.mermaid-fullscreen-viewer__toolbar button',
+    )
+    expect(reducedMotionButtonRule).toMatch(/\btransition:\s*none\s*;/)
   })
 })

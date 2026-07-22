@@ -572,42 +572,41 @@ onUnmounted(() => {
   top: calc(12px + env(safe-area-inset-top));
   right: calc(12px + env(safe-area-inset-right));
   display: flex;
-  gap: 4px;
-  padding: 4px;
+  gap: 2px;
+  padding: 3px;
   background: #ffffff;
-  border: 1px solid #5c6570;
-  border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.2);
+  border: 1px solid #cbd3dc;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 
 :global(.dark) .mermaid-fullscreen-viewer__toolbar {
-  background: #20252b;
-  border-color: #a7b0ba;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+  background: #252b32;
+  border-color: #606a75;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
 }
 
 .mermaid-fullscreen-viewer__toolbar button {
   display: inline-grid;
-  flex: 0 0 40px;
+  flex: 0 0 30px;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   color: inherit;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .mermaid-fullscreen-viewer__toolbar button:hover {
-  background: #e4e9ef;
-  border-color: #8b95a1;
+  background: #f1f4f7;
 }
 
 :global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover {
-  background: #3a424b;
-  border-color: #c2c8cf;
+  background: #343b43;
 }
 
 .mermaid-fullscreen-viewer__toolbar button:focus-visible {
@@ -620,9 +619,29 @@ onUnmounted(() => {
 }
 
 .mermaid-fullscreen-viewer__toolbar button :deep(svg) {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2.25;
+}
+
+.mermaid-fullscreen-viewer__toolbar button:last-child {
+  position: relative;
+  margin-left: 3px;
+}
+
+.mermaid-fullscreen-viewer__toolbar button:last-child::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: -3px;
+  width: 1px;
+  content: '';
+  background: #cbd3dc;
+  pointer-events: none;
+}
+
+:global(.dark) .mermaid-fullscreen-viewer__toolbar button:last-child::before {
+  background: #606a75;
 }
 
 @media (max-width: 480px) {
@@ -638,6 +657,10 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .mermaid-fullscreen-viewer__surface {
+    transition: none;
+  }
+
+  .mermaid-fullscreen-viewer__toolbar button {
     transition: none;
   }
 }
