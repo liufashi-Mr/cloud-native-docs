@@ -411,58 +411,66 @@ describe('MermaidFullscreenViewer', () => {
     expect(transform().y).toBeCloseTo(74)
   })
 
-  it('fits the diagram clear of a toolbar obstructing viewport edges', async () => {
-    toolbarBounds = rect(900, 62, 188, 50)
-    const wrapper = mount(MermaidFullscreenViewer, {
-      attachTo: document.body,
-      props: {
-        svg: '<svg viewBox="0 0 1200 1000"><text>diagram</text></svg>',
-      },
-    })
-    await nextTick()
+  it.each([
+    { diagramWidth: 1200, diagramHeight: 600, minimumScale: 0.74 },
+    { diagramWidth: 1200, diagramHeight: 1000, minimumScale: 0.57 },
+  ])(
+    'maximizes a $diagramWidth x $diagramHeight fit around desktop and mobile toolbars',
+    async ({ diagramWidth, diagramHeight, minimumScale }) => {
+      toolbarBounds = rect(894, 62, 194, 52)
+      const wrapper = mount(MermaidFullscreenViewer, {
+        attachTo: document.body,
+        props: {
+          svg: `<svg viewBox="0 0 ${diagramWidth} ${diagramHeight}"><text>diagram</text></svg>`,
+        },
+      })
+      await nextTick()
 
-    const fitted = transform()
-    const viewportBounds = viewport().getBoundingClientRect()
-    const diagramBounds = rect(
-      viewportBounds.left + fitted.x,
-      viewportBounds.top + fitted.y,
-      1200 * fitted.scale,
-      1000 * fitted.scale,
-    )
-    const toolbar = toolbarBounds
-    if (!toolbar) throw new Error('toolbar bounds not configured')
+      const viewportBounds = viewport().getBoundingClientRect()
+      const fitted = transform()
+      const fittedDiagramBounds = rect(
+        viewportBounds.left + fitted.x,
+        viewportBounds.top + fitted.y,
+        diagramWidth * fitted.scale,
+        diagramHeight * fitted.scale,
+      )
+      const desktopToolbar = toolbarBounds
+      if (!desktopToolbar) throw new Error('toolbar bounds not configured')
 
-    expect(
-      diagramBounds.right <= toolbar.left ||
-        diagramBounds.left >= toolbar.right ||
-        diagramBounds.bottom <= toolbar.top ||
-        diagramBounds.top >= toolbar.bottom,
-    ).toBe(true)
+      expect(fitted.scale).toBeGreaterThanOrEqual(minimumScale)
+      expect(
+        fittedDiagramBounds.right <= desktopToolbar.left ||
+          fittedDiagramBounds.left >= desktopToolbar.right ||
+          fittedDiagramBounds.bottom <= desktopToolbar.top ||
+          fittedDiagramBounds.top >= desktopToolbar.bottom,
+      ).toBe(true)
 
-    toolbarBounds = rect(506, 688, 188, 50)
-    window.dispatchEvent(new Event('resize'))
-    flushAnimationFrame()
-    await nextTick()
-    const resized = transform()
-    const resizedDiagramBounds = rect(
-      viewportBounds.left + resized.x,
-      viewportBounds.top + resized.y,
-      1200 * resized.scale,
-      1000 * resized.scale,
-    )
-    expect(
-      resizedDiagramBounds.right <= toolbarBounds.left ||
-        resizedDiagramBounds.left >= toolbarBounds.right ||
-        resizedDiagramBounds.bottom <= toolbarBounds.top ||
-        resizedDiagramBounds.top >= toolbarBounds.bottom,
-    ).toBe(true)
+      toolbarBounds = rect(503, 686, 194, 52)
+      window.dispatchEvent(new Event('resize'))
+      flushAnimationFrame()
+      await nextTick()
+      const resized = transform()
+      const resizedDiagramBounds = rect(
+        viewportBounds.left + resized.x,
+        viewportBounds.top + resized.y,
+        diagramWidth * resized.scale,
+        diagramHeight * resized.scale,
+      )
+      expect(resized.scale).toBeGreaterThanOrEqual(minimumScale)
+      expect(
+        resizedDiagramBounds.right <= toolbarBounds.left ||
+          resizedDiagramBounds.left >= toolbarBounds.right ||
+          resizedDiagramBounds.bottom <= toolbarBounds.top ||
+          resizedDiagramBounds.top >= toolbarBounds.bottom,
+      ).toBe(true)
 
-    button('放大图表').click()
-    button('重置图表视图').click()
-    await nextTick()
-    expect(transform()).toEqual(resized)
-    wrapper.unmount()
-  })
+      button('放大图表').click()
+      button('重置图表视图').click()
+      await nextTick()
+      expect(transform()).toEqual(resized)
+      wrapper.unmount()
+    },
+  )
 
   it('zooms with controls and scales wheel input continuously around its pointer', async () => {
     await mountViewer()

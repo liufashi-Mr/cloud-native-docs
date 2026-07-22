@@ -117,46 +117,160 @@ function parseDiagramSize(svg: string): { width: number; height: number } {
   return fallback
 }
 
+interface FitRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function fitInRegion(
+  region: FitRegion,
+  diagramWidth: number,
+  diagramHeight: number,
+): DiagramTransform | undefined {
+  if (
+    !Number.isFinite(region.x) ||
+    !Number.isFinite(region.y) ||
+    !Number.isFinite(region.width) ||
+    !Number.isFinite(region.height) ||
+    region.width <= 0 ||
+    region.height <= 0
+  ) {
+    return undefined
+  }
+
+  const fitted = fitDiagram(
+    region.width,
+    region.height,
+    diagramWidth,
+    diagramHeight,
+    0,
+  )
+  const transform = {
+    scale: fitted.scale,
+    x: fitted.x + region.x,
+    y: fitted.y + region.y,
+  }
+  return Number.isFinite(transform.scale) &&
+    Number.isFinite(transform.x) &&
+    Number.isFinite(transform.y)
+    ? transform
+    : undefined
+}
+
+function fitAroundToolbar(
+  viewportWidth: number,
+  viewportHeight: number,
+  viewportBounds: DOMRect,
+  toolbarBounds: DOMRect | undefined,
+  diagramWidth: number,
+  diagramHeight: number,
+): DiagramTransform {
+  const basePadding = 48
+  const baseFit = fitDiagram(
+    viewportWidth,
+    viewportHeight,
+    diagramWidth,
+    diagramHeight,
+    basePadding,
+  )
+  if (
+    !toolbarBounds ||
+    !Number.isFinite(toolbarBounds.width) ||
+    !Number.isFinite(toolbarBounds.height) ||
+    toolbarBounds.width <= 0 ||
+    toolbarBounds.height <= 0
+  ) {
+    return baseFit
+  }
+
+  const content = {
+    left: basePadding,
+    top: basePadding,
+    right: viewportWidth - basePadding,
+    bottom: viewportHeight - basePadding,
+  }
+  if (content.right <= content.left || content.bottom <= content.top) {
+    return baseFit
+  }
+
+  const toolbarGap = 12
+  const toolbar = {
+    left: toolbarBounds.left - viewportBounds.left - toolbarGap,
+    top: toolbarBounds.top - viewportBounds.top - toolbarGap,
+    right: toolbarBounds.right - viewportBounds.left + toolbarGap,
+    bottom: toolbarBounds.bottom - viewportBounds.top + toolbarGap,
+  }
+  if (
+    !Number.isFinite(toolbar.left) ||
+    !Number.isFinite(toolbar.top) ||
+    !Number.isFinite(toolbar.right) ||
+    !Number.isFinite(toolbar.bottom) ||
+    toolbar.right <= content.left ||
+    toolbar.left >= content.right ||
+    toolbar.bottom <= content.top ||
+    toolbar.top >= content.bottom
+  ) {
+    return baseFit
+  }
+
+  const obstruction = {
+    left: Math.max(content.left, toolbar.left),
+    top: Math.max(content.top, toolbar.top),
+    right: Math.min(content.right, toolbar.right),
+    bottom: Math.min(content.bottom, toolbar.bottom),
+  }
+  const regions: FitRegion[] = [
+    {
+      x: content.left,
+      y: content.top,
+      width: content.right - content.left,
+      height: obstruction.top - content.top,
+    },
+    {
+      x: content.left,
+      y: obstruction.bottom,
+      width: content.right - content.left,
+      height: content.bottom - obstruction.bottom,
+    },
+    {
+      x: content.left,
+      y: content.top,
+      width: obstruction.left - content.left,
+      height: content.bottom - content.top,
+    },
+    {
+      x: obstruction.right,
+      y: content.top,
+      width: content.right - obstruction.right,
+      height: content.bottom - content.top,
+    },
+  ]
+  const candidates = regions
+    .map((region) => fitInRegion(region, diagramWidth, diagramHeight))
+    .filter((candidate): candidate is DiagramTransform => Boolean(candidate))
+
+  return candidates.reduce<DiagramTransform | undefined>(
+    (best, candidate) =>
+      !best || candidate.scale > best.scale ? candidate : best,
+    undefined,
+  ) ?? baseFit
+}
+
 function fitToView(): void {
   const element = viewport.value
   if (!element) return
 
   const viewportBounds = element.getBoundingClientRect()
   const toolbarBounds = toolbar.value?.getBoundingClientRect()
-  const basePadding = 48
-  let padding = basePadding
-  if (
-    toolbarBounds &&
-    toolbarBounds.width > 0 &&
-    toolbarBounds.height > 0 &&
-    toolbarBounds.right > viewportBounds.left &&
-    toolbarBounds.left < viewportBounds.right &&
-    toolbarBounds.bottom > viewportBounds.top &&
-    toolbarBounds.top < viewportBounds.bottom
-  ) {
-    const edgeObstructions = [
-      toolbarBounds.left - viewportBounds.left < basePadding
-        ? toolbarBounds.right - viewportBounds.left
-        : 0,
-      viewportBounds.right - toolbarBounds.right < basePadding
-        ? viewportBounds.right - toolbarBounds.left
-        : 0,
-      toolbarBounds.top - viewportBounds.top < basePadding
-        ? toolbarBounds.bottom - viewportBounds.top
-        : 0,
-      viewportBounds.bottom - toolbarBounds.bottom < basePadding
-        ? viewportBounds.bottom - toolbarBounds.top
-        : 0,
-    ]
-    padding = Math.max(basePadding, ...edgeObstructions)
-  }
-
-  const nextTransform = fitDiagram(
+  const nextTransform = fitAroundToolbar(
     element.clientWidth,
     element.clientHeight,
+    viewportBounds,
+    toolbarBounds,
     diagramSize.value.width,
     diagramSize.value.height,
-    padding,
   )
   transform.value = nextTransform
   fittedScale.value = nextTransform.scale
