@@ -575,14 +575,14 @@ onUnmounted(() => {
   gap: 2px;
   padding: 3px;
   background: #ffffff;
-  border: 1px solid #cbd3dc;
+  border: 1px solid #667085;
   border-radius: 7px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 
 :global(.dark) .mermaid-fullscreen-viewer__toolbar {
   background: #252b32;
-  border-color: #606a75;
+  border-color: #98a2b3;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
 }
 
@@ -598,15 +598,17 @@ onUnmounted(() => {
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .mermaid-fullscreen-viewer__toolbar button:hover {
   background: #f1f4f7;
+  border-color: #667085;
 }
 
 :global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover {
   background: #343b43;
+  border-color: #98a2b3;
 }
 
 .mermaid-fullscreen-viewer__toolbar button:focus-visible {
@@ -626,22 +628,22 @@ onUnmounted(() => {
 
 .mermaid-fullscreen-viewer__toolbar button:last-child {
   position: relative;
-  margin-left: 3px;
+  margin-left: 4px;
 }
 
 .mermaid-fullscreen-viewer__toolbar button:last-child::before {
   position: absolute;
-  top: 5px;
-  bottom: 5px;
-  left: -3px;
+  top: 4px;
+  bottom: 4px;
+  left: -4px;
   width: 1px;
   content: '';
-  background: #cbd3dc;
+  background: #667085;
   pointer-events: none;
 }
 
 :global(.dark) .mermaid-fullscreen-viewer__toolbar button:last-child::before {
-  background: #606a75;
+  background: #98a2b3;
 }
 
 @media (max-width: 480px) {

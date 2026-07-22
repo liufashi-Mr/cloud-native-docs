@@ -24,6 +24,9 @@ let toolbarBounds: DOMRect | null = null
 let animationFrameSequence = 0
 let animationFrameCallbacks = new Map<number, FrameRequestCallback>()
 
+const TOOLBAR_BORDER_BOX_WIDTH = 138
+const TOOLBAR_BORDER_BOX_HEIGHT = 38
+
 function rect(left: number, top: number, width: number, height: number): DOMRect {
   return {
     x: left,
@@ -119,7 +122,7 @@ function cssDeclarations(source: string, selector: string): string {
 
 function cssHexColor(declarations: string, property: string): string {
   const color = declarations.match(
-    new RegExp(`\\b${property}:\\s*(#[\\da-f]{6})\\s*;`, 'i'),
+    new RegExp(`\\b${property}:\\s*[^;#]*(#[\\da-f]{6})\\s*;`, 'i'),
   )?.[1]
   if (!color) throw new Error(`hex color not found for ${property}`)
   return color
@@ -514,7 +517,12 @@ describe('MermaidFullscreenViewer', () => {
   ])(
     'maximizes a $diagramWidth x $diagramHeight fit around desktop and mobile toolbars',
     async ({ diagramWidth, diagramHeight, minimumScale }) => {
-      toolbarBounds = rect(953, 62, 135, 36)
+      toolbarBounds = rect(
+        950,
+        62,
+        TOOLBAR_BORDER_BOX_WIDTH,
+        TOOLBAR_BORDER_BOX_HEIGHT,
+      )
       const wrapper = mount(MermaidFullscreenViewer, {
         attachTo: document.body,
         props: {
@@ -542,7 +550,12 @@ describe('MermaidFullscreenViewer', () => {
           fittedDiagramBounds.top >= desktopToolbar.bottom,
       ).toBe(true)
 
-      toolbarBounds = rect(532.5, 702, 135, 36)
+      toolbarBounds = rect(
+        531,
+        700,
+        TOOLBAR_BORDER_BOX_WIDTH,
+        TOOLBAR_BORDER_BOX_HEIGHT,
+      )
       window.dispatchEvent(new Event('resize'))
       flushAnimationFrame()
       await nextTick()
@@ -891,6 +904,31 @@ describe('MermaidFullscreenViewer', () => {
     expect(Number.isFinite(transform().y)).toBe(true)
   })
 
+  it('inherits border-box toolbar geometry from the VitePress base cascade', () => {
+    const baseStyles = readFileSync(
+      resolve(
+        process.cwd(),
+        'node_modules/vitepress/dist/client/theme-default/styles/base.css',
+      ),
+      'utf8',
+    )
+    expect(baseStyles).toMatch(
+      /\*,\s*::before,\s*::after\s*\{[^}]*box-sizing:\s*border-box\s*;/s,
+    )
+
+    const themeEntry = readFileSync(
+      resolve(process.cwd(), 'docs/.vitepress/theme/index.ts'),
+      'utf8',
+    )
+    expect(themeEntry).toMatch(/import DefaultTheme from 'vitepress\/theme'/)
+    expect(themeEntry).toMatch(/extends:\s*DefaultTheme/)
+
+    expect(TOOLBAR_BORDER_BOX_WIDTH).toBe(
+      4 * 30 + 3 * 2 + 4 + 2 * 3 + 2 * 1,
+    )
+    expect(TOOLBAR_BORDER_BOX_HEIGHT).toBe(30 + 2 * 3 + 2 * 1)
+  })
+
   it('keeps interaction and compact segmented toolbar styles explicit', () => {
     const componentSource = readFileSync(
       resolve(
@@ -934,7 +972,7 @@ describe('MermaidFullscreenViewer', () => {
     expect(toolbarRule).toMatch(/\bgap:\s*2px\s*;/)
     expect(toolbarRule).toMatch(/\bpadding:\s*3px\s*;/)
     expect(toolbarRule).toMatch(/\bbackground:\s*#ffffff\s*;/)
-    expect(toolbarRule).toMatch(/\bborder:\s*1px solid #cbd3dc\s*;/)
+    expect(toolbarRule).toMatch(/\bborder:\s*1px solid #667085\s*;/)
     expect(toolbarRule).toMatch(/\bborder-radius:\s*7px\s*;/)
     expect(toolbarRule).toMatch(
       /\bbox-shadow:\s*0 2px 8px rgba\(15, 23, 42, 0\.12\)\s*;/,
@@ -945,7 +983,7 @@ describe('MermaidFullscreenViewer', () => {
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar',
     )
     expect(darkToolbarRule).toMatch(/\bbackground:\s*#252b32\s*;/)
-    expect(darkToolbarRule).toMatch(/\bborder-color:\s*#606a75\s*;/)
+    expect(darkToolbarRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
     expect(darkToolbarRule).toMatch(
       /\bbox-shadow:\s*0 2px 8px rgba\(0, 0, 0, 0\.32\)\s*;/,
     )
@@ -955,11 +993,13 @@ describe('MermaidFullscreenViewer', () => {
       '.mermaid-fullscreen-viewer__toolbar button:hover',
     )
     expect(toolbarHoverRule).toMatch(/\bbackground:\s*#f1f4f7\s*;/)
+    expect(toolbarHoverRule).toMatch(/\bborder-color:\s*#667085\s*;/)
     const darkToolbarHoverRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:hover',
     )
     expect(darkToolbarHoverRule).toMatch(/\bbackground:\s*#343b43\s*;/)
+    expect(darkToolbarHoverRule).toMatch(/\bborder-color:\s*#98a2b3\s*;/)
     const darkFocusRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:focus-visible',
@@ -972,6 +1012,29 @@ describe('MermaidFullscreenViewer', () => {
         cssHexColor(darkToolbarRule, 'background'),
       ),
     ).toBeGreaterThanOrEqual(3)
+
+    const lightToolbarBorder = cssHexColor(toolbarRule, 'border')
+    const lightToolbarBackground = cssHexColor(toolbarRule, 'background')
+    const darkToolbarBorder = cssHexColor(darkToolbarRule, 'border-color')
+    const darkToolbarBackground = cssHexColor(darkToolbarRule, 'background')
+    const lightHoverBorder = cssHexColor(toolbarHoverRule, 'border-color')
+    const lightHoverBackground = cssHexColor(toolbarHoverRule, 'background')
+    const darkHoverBorder = cssHexColor(
+      darkToolbarHoverRule,
+      'border-color',
+    )
+    const darkHoverBackground = cssHexColor(
+      darkToolbarHoverRule,
+      'background',
+    )
+    for (const [boundary, surface] of [
+      [lightToolbarBorder, lightToolbarBackground],
+      [darkToolbarBorder, darkToolbarBackground],
+      [lightHoverBorder, lightHoverBackground],
+      [darkHoverBorder, darkHoverBackground],
+    ]) {
+      expect(contrastRatio(boundary, surface)).toBeGreaterThanOrEqual(3)
+    }
     expect(
       contrastRatio(
         darkFocusColor,
@@ -988,7 +1051,7 @@ describe('MermaidFullscreenViewer', () => {
     expect(toolbarButtonRule).toMatch(/\bheight:\s*30px\s*;/)
     expect(toolbarButtonRule).toMatch(/\bborder-radius:\s*5px\s*;/)
     expect(toolbarButtonRule).toMatch(
-      /\btransition:\s*background-color 120ms ease, color 120ms ease\s*;/,
+      /\btransition:\s*background-color 120ms ease, border-color 120ms ease, color 120ms ease\s*;/,
     )
 
     const toolbarIconRule = cssDeclarations(
@@ -1003,7 +1066,7 @@ describe('MermaidFullscreenViewer', () => {
       '.mermaid-fullscreen-viewer__toolbar button:last-child',
     )
     expect(closeButtonRule).toMatch(/\bposition:\s*relative\s*;/)
-    expect(closeButtonRule).toMatch(/\bmargin-left:\s*3px\s*;/)
+    expect(closeButtonRule).toMatch(/\bmargin-left:\s*4px\s*;/)
     expect(closeButtonRule).not.toMatch(/\bcolor:\s*(?:red|#[\da-f]{6})\s*;/i)
 
     const separatorRule = cssDeclarations(
@@ -1011,15 +1074,23 @@ describe('MermaidFullscreenViewer', () => {
       '.mermaid-fullscreen-viewer__toolbar button:last-child::before',
     )
     expect(separatorRule).toMatch(/\bposition:\s*absolute\s*;/)
-    expect(separatorRule).toMatch(/\bleft:\s*-3px\s*;/)
+    expect(separatorRule).toMatch(/\btop:\s*4px\s*;/)
+    expect(separatorRule).toMatch(/\bbottom:\s*4px\s*;/)
+    expect(separatorRule).toMatch(/\bleft:\s*-4px\s*;/)
     expect(separatorRule).toMatch(/\bwidth:\s*1px\s*;/)
-    expect(separatorRule).toMatch(/\bbackground:\s*#cbd3dc\s*;/)
+    expect(separatorRule).toMatch(/\bbackground:\s*#667085\s*;/)
 
     const darkSeparatorRule = cssDeclarations(
       styles,
       ':global(.dark) .mermaid-fullscreen-viewer__toolbar button:last-child::before',
     )
-    expect(darkSeparatorRule).toMatch(/\bbackground:\s*#606a75\s*;/)
+    expect(darkSeparatorRule).toMatch(/\bbackground:\s*#98a2b3\s*;/)
+    for (const [divider, surface] of [
+      [cssHexColor(separatorRule, 'background'), lightToolbarBackground],
+      [cssHexColor(darkSeparatorRule, 'background'), darkToolbarBackground],
+    ]) {
+      expect(contrastRatio(divider, surface)).toBeGreaterThanOrEqual(3)
+    }
 
     const mobileStart = styles.indexOf('@media (max-width: 480px)')
     const reducedMotionStart = styles.indexOf(
