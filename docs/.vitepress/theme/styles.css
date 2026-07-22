@@ -365,7 +365,7 @@ body {
   }
 
   .VPNavBar.has-sidebar .container > .title {
-    box-sizing: content-box;
+    box-sizing: border-box;
     width: var(--k8s-sidebar-width);
     min-width: 0;
     padding: 0;
@@ -377,7 +377,7 @@ body {
   }
 
   .VPNavBar.has-sidebar .VPNavBarTitle .title {
-    box-sizing: content-box;
+    box-sizing: border-box;
     width: 100%;
     min-width: 0;
     padding: 0 32px;
