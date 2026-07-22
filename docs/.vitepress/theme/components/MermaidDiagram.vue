@@ -5,9 +5,17 @@ let diagramSequence = 0
 <script setup lang="ts">
 import { Maximize2 } from '@lucide/vue'
 import { useData } from 'vitepress'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue'
 
-import MermaidFullscreenViewer from './MermaidFullscreenViewer.vue'
+const MermaidFullscreenViewer = defineAsyncComponent(() => import('./MermaidFullscreenViewer.vue'))
 
 const props = defineProps<{
   encodedSource: string
@@ -108,7 +116,9 @@ async function renderDiagram(): Promise<void> {
 
 onMounted(() => {
   active = true
-  stopWatching = watch(isDark, () => void renderDiagram(), { immediate: true })
+  stopWatching = watch([isDark, source], () => void renderDiagram(), {
+    immediate: true,
+  })
 })
 
 onUnmounted(() => {

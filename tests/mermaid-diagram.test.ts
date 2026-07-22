@@ -60,6 +60,23 @@ describe('MermaidDiagram', () => {
     expect(labelParagraphRule).toMatch(/\bline-height:\s*inherit\s*;/)
   })
 
+  it('loads the full-screen viewer asynchronously', () => {
+    const componentSource = readFileSync(
+      resolve(
+        process.cwd(),
+        'docs/.vitepress/theme/components/MermaidDiagram.vue',
+      ),
+      'utf8',
+    )
+
+    expect(componentSource).not.toMatch(
+      /import\s+MermaidFullscreenViewer\s+from\s+['"]\.\/MermaidFullscreenViewer\.vue['"]/,
+    )
+    expect(componentSource).toMatch(
+      /defineAsyncComponent\(\(\)\s*=>\s*import\(['"]\.\/MermaidFullscreenViewer\.vue['"]\)\)/,
+    )
+  })
+
   it('rerenders the SVG when VitePress changes color mode', async () => {
     mermaid.render
       .mockResolvedValueOnce({ svg: '<svg data-theme="light"></svg>' })
@@ -115,6 +132,53 @@ describe('MermaidDiagram', () => {
     expect(wrapper.find('svg').attributes('data-theme')).toBe('dark')
   })
 
+  it('rerenders the SVG with the decoded source when encodedSource changes', async () => {
+    const initialSource = 'flowchart LR\nA --> B'
+    const updatedSource = 'flowchart TD\nC --> D'
+    mermaid.render
+      .mockResolvedValueOnce({ svg: '<svg data-source="initial"></svg>' })
+      .mockResolvedValueOnce({ svg: '<svg data-source="updated"></svg>' })
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent(initialSource) },
+    })
+    await flushPromises()
+
+    await wrapper.setProps({ encodedSource: encodeURIComponent(updatedSource) })
+    await flushPromises()
+
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
+    expect(mermaid.render.mock.calls[1]?.[1]).toBe(updatedSource)
+    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+  })
+
+  it('ignores stale render results after a source change', async () => {
+    const initialRender = deferred<{ svg: string }>()
+    const updatedRender = deferred<{ svg: string }>()
+    mermaid.render
+      .mockImplementationOnce(() => initialRender.promise)
+      .mockImplementationOnce(() => updatedRender.promise)
+
+    const wrapper = mount(MermaidDiagram, {
+      props: { encodedSource: encodeURIComponent('flowchart LR\nA --> B') },
+    })
+    await flushPromises()
+
+    await wrapper.setProps({
+      encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
+    })
+    await flushPromises()
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
+
+    updatedRender.resolve({ svg: '<svg data-source="updated"></svg>' })
+    await flushPromises()
+    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+
+    initialRender.resolve({ svg: '<svg data-source="initial"></svg>' })
+    await flushPromises()
+    expect(wrapper.find('svg').attributes('data-source')).toBe('updated')
+  })
+
   it('preserves a readable intrinsic width for wide rendered diagrams', async () => {
     mermaid.render.mockResolvedValue({
       svg: '<svg width="100%" viewBox="0 0 2371 1868"></svg>',
@@ -161,7 +225,7 @@ describe('MermaidDiagram', () => {
     const trigger = wrapper.get('button[aria-label="全屏查看图表"]')
     expect(trigger.attributes('title')).toBe('全屏查看图表')
     await trigger.trigger('click')
-    await nextTick()
+    await flushPromises()
 
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog).not.toBeNull()
@@ -187,7 +251,7 @@ describe('MermaidDiagram', () => {
     )
     trigger.element.focus()
     await trigger.trigger('click')
-    await nextTick()
+    await flushPromises()
     await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
     await nextTick()
 
@@ -195,7 +259,7 @@ describe('MermaidDiagram', () => {
     expect(document.activeElement).toBe(trigger.element)
 
     await trigger.trigger('click')
-    await nextTick()
+    await flushPromises()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
     await wrapper.getComponent(MermaidFullscreenViewer).vm.$emit('close')
     await nextTick()
@@ -274,7 +338,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await nextTick()
+    await flushPromises()
 
     expect(
       document.body.querySelector('.mermaid-fullscreen-viewer__surface')?.innerHTML,
@@ -292,6 +356,39 @@ describe('MermaidDiagram', () => {
     expect(mermaid.render).toHaveBeenCalledTimes(2)
   })
 
+  it('updates an open viewer when encodedSource changes without an extra render', async () => {
+    const initialSvg = '<svg data-source="initial"><text>initial</text></svg>'
+    const updatedSvg = '<svg data-source="updated"><text>updated</text></svg>'
+    mermaid.render
+      .mockResolvedValueOnce({ svg: initialSvg })
+      .mockResolvedValueOnce({ svg: updatedSvg })
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: {
+        encodedSource: encodeURIComponent('flowchart LR\nA --> B'),
+      },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.setProps({
+      encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
+    })
+    await flushPromises()
+
+    expect(wrapper.getComponent(MermaidFullscreenViewer).props('svg')).toBe(
+      updatedSvg,
+    )
+    expect(
+      document.body.querySelector('.mermaid-fullscreen-viewer__surface svg')
+        ?.getAttribute('data-source'),
+    ).toBe('updated')
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
+  })
+
   it('closes an open viewer when the latest theme render fails', async () => {
     mermaid.render
       .mockResolvedValueOnce({ svg: '<svg data-theme="light"></svg>' })
@@ -303,7 +400,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await nextTick()
+    await flushPromises()
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
 
     vitepressData.isDark!.value = true
@@ -315,6 +412,35 @@ describe('MermaidDiagram', () => {
     expect(wrapper.get('.mermaid-diagram__error').text()).toContain(
       'dark render failed',
     )
+  })
+
+  it('closes an open viewer when a source-change render fails', async () => {
+    mermaid.render
+      .mockResolvedValueOnce({ svg: '<svg data-source="initial"></svg>' })
+      .mockRejectedValueOnce(new Error('updated source failed'))
+
+    const wrapper = mount(MermaidDiagram, {
+      attachTo: document.body,
+      props: {
+        encodedSource: encodeURIComponent('flowchart LR\nA --> B'),
+      },
+    })
+    await flushPromises()
+    await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
+    await flushPromises()
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+
+    await wrapper.setProps({
+      encodedSource: encodeURIComponent('flowchart TD\nC --> D'),
+    })
+    await flushPromises()
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(wrapper.find('button[aria-label="全屏查看图表"]').exists()).toBe(false)
+    expect(wrapper.get('.mermaid-diagram__error').text()).toContain(
+      'updated source failed',
+    )
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
   })
 
   it('closes the viewer and restores body scrolling when unmounted', async () => {
@@ -329,7 +455,7 @@ describe('MermaidDiagram', () => {
     })
     await flushPromises()
     await wrapper.get('button[aria-label="全屏查看图表"]').trigger('click')
-    await nextTick()
+    await flushPromises()
     expect(document.body.style.overflow).toBe('hidden')
 
     wrapper.unmount()
