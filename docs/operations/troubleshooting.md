@@ -161,9 +161,12 @@ selectorless Service 是例外：controller 不会凭空发现外部后端，需
 
 **常见原因：** DNS 配置或 CoreDNS 故障、Service port/targetPort 错、EndpointSlice 无 usable endpoint、kube-proxy/eBPF/CNI 数据面异常、NetworkPolicy 拒绝源 Pod 或目标 Pod。DNS 成功只证明名称解析，不证明 TCP/HTTP 可达。
 
+下面只检查名为 `http` 的 Service port；若应用使用其他名称，通过 `SERVICE_PORT_NAME` 覆盖。Service port 用于 ClusterIP/DNS 请求，direct endpoint URL 则使用**同一个 EndpointSlice** 中同名的 endpoint port，二者可能分别是 80 和 8080，不能混用。
+
 ```bash
 NS=${NS:-demo}
 SERVICE=${SERVICE:-web}
+SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-http}
 DEBUG_POD=${DEBUG_POD:-netcheck-$$}
 (
   set -e
@@ -176,38 +179,55 @@ DEBUG_POD=${DEBUG_POD:-netcheck-$$}
   kubectl -n "$NS" wait --for=condition=Ready pod/"$DEBUG_POD" --timeout=90s
   kubectl -n "$NS" exec "$DEBUG_POD" -- cat /etc/resolv.conf
   kubectl -n "$NS" exec "$DEBUG_POD" -- nslookup "$SERVICE.$NS.svc.cluster.local"
-  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$SERVICE:80/"
-
-  if ! ENDPOINT_ROWS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{"|"}{.conditions.ready}{"|"}{.conditions.terminating}{"\n"}{end}'); then
+  if ! SERVICE_PORT=$(kubectl -n "$NS" get service "$SERVICE" -o jsonpath="{.spec.ports[?(@.name==\"$SERVICE_PORT_NAME\")].port}"); then
     exit 1
   fi
-  ENDPOINT_IP=
-  while IFS='|' read -r CANDIDATE_IP CANDIDATE_READY CANDIDATE_TERMINATING; do
-    if [ -n "$CANDIDATE_IP" ] && [ "$CANDIDATE_TERMINATING" != "true" ] && { [ "$CANDIDATE_READY" = "true" ] || [ -z "$CANDIDATE_READY" ]; }; then
-      ENDPOINT_IP=$CANDIDATE_IP
+  if [ -z "$SERVICE_PORT" ]; then
+    echo "service $SERVICE has no port named $SERVICE_PORT_NAME" >&2
+    exit 1
+  fi
+  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$SERVICE:$SERVICE_PORT/"
+
+  if ! SLICE_REFS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o name); then
+    exit 1
+  fi
+  ENDPOINT_URL=
+  for SLICE_REF in $SLICE_REFS; do
+    if ! SLICE_HTTP_PORT=$(kubectl -n "$NS" get "$SLICE_REF" -o jsonpath="{.ports[?(@.name==\"$SERVICE_PORT_NAME\")].port}"); then
+      exit 1
+    fi
+    if [ -z "$SLICE_HTTP_PORT" ]; then
+      continue
+    fi
+    if ! SLICE_ENDPOINT_ROWS=$(kubectl -n "$NS" get "$SLICE_REF" -o jsonpath='{range .endpoints[*]}{.addresses[0]}{"|"}{.conditions.ready}{"|"}{.conditions.terminating}{"\n"}{end}'); then
+      exit 1
+    fi
+    while IFS='|' read -r CANDIDATE_IP CANDIDATE_READY CANDIDATE_TERMINATING; do
+      if [ -z "$CANDIDATE_IP" ] || [ "$CANDIDATE_TERMINATING" = "true" ]; then
+        continue
+      fi
+      if [ "$CANDIDATE_READY" != "true" ] && [ -n "$CANDIDATE_READY" ]; then
+        continue
+      fi
+      case "$CANDIDATE_IP" in
+        *:*) ENDPOINT_HOST="[$CANDIDATE_IP]" ;;
+        *) ENDPOINT_HOST=$CANDIDATE_IP ;;
+      esac
+      ENDPOINT_URL="http://$ENDPOINT_HOST:$SLICE_HTTP_PORT/"
+      break
+    done <<EOF
+$SLICE_ENDPOINT_ROWS
+EOF
+    if [ -n "$ENDPOINT_URL" ]; then
       break
     fi
-  done <<EOF
-$ENDPOINT_ROWS
-EOF
-  if ! ENDPOINT_PORTS=$(kubectl -n "$NS" get endpointslice -l "kubernetes.io/service-name=$SERVICE" -o jsonpath='{range .items[*].ports[*]}{.port}{"\n"}{end}'); then
-    exit 1
-  fi
-  ENDPOINT_PORT=
-  for CANDIDATE_PORT in $ENDPOINT_PORTS; do
-    ENDPOINT_PORT=$CANDIDATE_PORT
-    break
   done
-  if [ -z "$ENDPOINT_IP" ] || [ -z "$ENDPOINT_PORT" ]; then
-    echo "no usable direct endpoint found for $SERVICE in $NS" >&2
+  if [ -z "$ENDPOINT_URL" ]; then
+    echo "no usable direct endpoint with port $SERVICE_PORT_NAME found for $SERVICE in $NS" >&2
     exit 1
   fi
-  case "$ENDPOINT_IP" in
-    *:*) ENDPOINT_HOST="[$ENDPOINT_IP]" ;;
-    *) ENDPOINT_HOST=$ENDPOINT_IP ;;
-  esac
-  echo "checking direct endpoint $ENDPOINT_HOST:$ENDPOINT_PORT"
-  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "http://$ENDPOINT_HOST:$ENDPOINT_PORT/"
+  echo "checking direct endpoint $ENDPOINT_URL"
+  kubectl -n "$NS" exec "$DEBUG_POD" -- curl --fail --show-error --max-time 5 "$ENDPOINT_URL"
   kubectl -n "$NS" get networkpolicy -o wide
   kubectl -n "$NS" describe networkpolicy
 )
@@ -263,7 +283,8 @@ Ingress/Gateway resource、controller 和 proxy/data plane 是三层：resource 
 | container 已启动 | Ready conditions 与 probe events | 扩 Node |
 | Pod 已就绪 | Service selector 与 EndpointSlice conditions | 重启入口 controller |
 | EndpointSlice 有 usable endpoint | Pod 内 DNS、Service port、NetworkPolicy | 改公网 DNS |
-| Service 可达 | Ingress/Gateway conditions 与 proxy logs | 改应用镜像 |
+| Service 可达，入口为 Ingress | Ingress `status.loadBalancer`、events、controller logs | 改应用镜像 |
+| Service 可达，入口为 Gateway API | Gateway/HTTPRoute conditions | 改应用镜像 |
 
 ::: warning 保存证据
 重建 Pod 会清除部分现场。先保存 `get -o yaml`、`describe`、events、current/previous logs 和相关 controller conditions，再做最小变更并从失败阶段重新验证。

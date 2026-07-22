@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
+import { parseAllDocuments } from 'yaml'
 
 import { markdownFences } from './support/markdown'
 
@@ -393,6 +394,45 @@ describe('content contract', () => {
     expect(yaml).not.toContain('example/web')
   })
 
+  it('parses the probe manifest and locks each probe handler to the running container', () => {
+    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    if (chapter === null) return
+
+    const yaml = markdownFences(
+      chapter,
+      'docs/operations/health-lifecycle.md',
+    ).find((fence) => fence.language === 'yaml')?.content
+    expect(yaml).toBeDefined()
+    const documents = parseAllDocuments(yaml ?? '', {
+      prettyErrors: true,
+      uniqueKeys: true,
+    })
+    expect(documents).toHaveLength(1)
+    expect(documents[0].errors).toEqual([])
+
+    const manifest = documents[0].toJS() as {
+      spec: { template: { spec: { containers: Array<Record<string, unknown>> } } }
+    }
+    const container = manifest.spec.template.spec.containers[0]
+    expect(container.image).toBe('busybox:1.36.1')
+    expect(container.command).toEqual([
+      '/bin/sh',
+      '-c',
+      expect.stringContaining('httpd -f -p 8080'),
+    ])
+    for (const probeName of ['startupProbe', 'readinessProbe', 'livenessProbe']) {
+      const probe = container[probeName] as { httpGet: { path: string; port: string } }
+      expect(probe.httpGet).toEqual({ path: '/healthz', port: 'http' })
+    }
+    expect(container.lifecycle).toEqual({
+      preStop: {
+        exec: {
+          command: ['/bin/sh', '-c', 'rm -f /www/healthz; sleep 5'],
+        },
+      },
+    })
+  })
+
   it('connects rollout and autoscaling controllers without overstating PDB', () => {
     const chapter = readRequiredContent('docs/operations/release-scaling.md')
     if (chapter === null) return
@@ -511,6 +551,25 @@ describe('content contract', () => {
     expect(commandSource).not.toContain('.items[0]')
     expect(commandSource).not.toContain('2>/dev/null')
     expect(commandSource).not.toMatch(/--show-labels[^\n]*-o custom-columns/)
+    expect(commandSource).not.toContain('ENDPOINT_PORTS=')
+    expect(commandSource).not.toContain('for CANDIDATE_PORT in $ENDPOINT_PORTS')
+    expect(commandSource).not.toContain('"http://$SERVICE:80/"')
+    expect(commandSource).toContain('SERVICE_PORT_NAME=${SERVICE_PORT_NAME:-http}')
+    expect(commandSource).toContain('SERVICE_PORT=')
+    expect(commandSource).toContain('SLICE_REFS=')
+    expect(commandSource).toContain('for SLICE_REF in $SLICE_REFS')
+    expect(commandSource).toContain('SLICE_HTTP_PORT=')
+    expect(commandSource).toContain('ENDPOINT_URL=')
+    const directCheck = commands.find((fence) =>
+      fence.content.includes('for SLICE_REF in $SLICE_REFS'),
+    )?.content ?? ''
+    const sliceLoop = directCheck.match(
+      /for SLICE_REF in \$SLICE_REFS; do[\s\S]*?^  done\n/m,
+    )?.[0]
+    expect(sliceLoop, 'direct check must keep port and address in one slice loop').toContain(
+      'SLICE_HTTP_PORT=',
+    )
+    expect(sliceLoop).toContain('ENDPOINT_URL=')
     expect(commandSource).toContain('direct endpoint')
     expect(commandSource).toContain('trap cleanup EXIT')
 
@@ -533,6 +592,9 @@ describe('content contract', () => {
     expect(chapter).toContain('只验证 HTTP Host routing，不验证 TLS 或 SNI')
     expect(chapter).toContain('kubectl -n "$NS" describe ingress "$INGRESS"')
     expect(chapter).toContain('kubectl -n "$NS" get gateway,httproute -o yaml')
+    expect(chapter).toContain('| Service 可达，入口为 Ingress | Ingress `status.loadBalancer`、events、controller logs |')
+    expect(chapter).toContain('| Service 可达，入口为 Gateway API | Gateway/HTTPRoute conditions |')
+    expect(chapter).not.toContain('Ingress/Gateway conditions 与 proxy logs')
   })
 
   it('maps object scope, ownership, references, lifetime, and primary commands', () => {
