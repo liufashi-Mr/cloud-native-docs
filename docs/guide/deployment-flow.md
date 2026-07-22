@@ -10,7 +10,7 @@ sequenceDiagram
   participant AD as auth / admission
   participant E as etcd
   participant DC as Deployment controller
-  participant RC as ReplicaSet
+  participant RC as ReplicaSet controller
   participant P as Pod
   participant S as Scheduler
   participant N as Node
@@ -18,7 +18,7 @@ sequenceDiagram
   participant CR as Container runtime
   participant EP as EndpointSlice controller
   participant I as Ingress / Gateway
-  participant SV as Service
+  participant DP as Service data plane (kube-proxy / eBPF)
 
   D->>K: kubectl apply
   K->>A: submit desired object
@@ -27,21 +27,22 @@ sequenceDiagram
   A->>E: persist spec
   E-->>A: stored
   A-->>K: accepted
-  DC->>A: watch Deployment
-  DC->>RC: create or update ReplicaSet
-  RC->>P: create Pod
-  P->>A: persist Pod object
-  S->>A: watch unscheduled Pod
-  S->>N: bind Pod to Node
-  KL->>A: watch bound Pod
+  A-->>DC: Deployment watch event
+  DC->>A: create or update ReplicaSet
+  A-->>RC: ReplicaSet watch event
+  RC->>A: create Pod
+  A-->>P: Pod object stored
+  A-->>S: unscheduled Pod watch event
+  S->>A: bind Pod to Node
+  Note over N,KL: Node hosts the kubelet
+  A-->>KL: assigned Pod watch event
   KL->>CR: start container
   CR-->>KL: report running
   KL->>A: update Pod readiness/status
-  A-->>EP: Pod readiness observed
-  EP->>A: update EndpointSlice
-  I->>SV: route request
-  SV->>EP: select endpoint
-  EP->>N: forward to ready Pod
+  A-->>EP: Pod and Service watch event
+  EP->>A: update EndpointSlice endpoint conditions
+  I->>DP: route to Service
+  DP->>P: forward to ready Pod
 ```
 
 ## 阶段一：提交对象
@@ -85,7 +86,7 @@ kubectl -n "$NS" describe pod -l app=web
 
 ## 阶段五：就绪后接入流量
 
-容器进程运行不代表可以接收请求。readinessProbe 成功后，kubelet 将 Pod 标为 Ready，EndpointSlice controller 才会发布对应 endpoint；Service 根据选择器使用这些 endpoint，Ingress 或 Gateway 再把外部请求路由进来。
+容器进程运行不代表可以接收请求。readinessProbe 成功后，kubelet 将 Pod 的 Ready 条件写回 API Server；EndpointSlice controller 通过 API Server 发布 endpoint 记录及其 ready 条件。readiness 决定 endpoint 是否具备接收流量的资格，而不是简单决定记录何时生成。Ingress 或 Gateway 把请求交给 Service 数据面（例如 kube-proxy 或 eBPF），数据面再转发到符合条件的 Ready Pod。
 
 ```bash
 kubectl -n "$NS" get pod,endpointslice,service

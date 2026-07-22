@@ -58,6 +58,87 @@ describe('content contract', () => {
     }
   })
 
+  it('keeps configuration and storage arrows consumer-first', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+
+    for (const relation of [
+      'P -->|references 引用| CM["ConfigMap"]',
+      'P -->|references 引用| SEC["Secret"]',
+      'P -->|mounts 挂载| PVC["PersistentVolumeClaim"]',
+      '| Pod | references | ConfigMap / Secret |',
+      '| Pod | mounts | PVC |',
+    ]) {
+      expect(home, `home page is missing ${relation}`).toContain(relation)
+    }
+
+    expect(home).not.toContain('| PVC | mounts | Pod |')
+  })
+
+  it('mediates control-plane actions through the API Server', () => {
+    const flow = readFileSync(
+      resolve(root, 'docs/guide/deployment-flow.md'),
+      'utf8',
+    )
+
+    for (const interaction of [
+      'A-->>DC: Deployment watch event',
+      'DC->>A: create or update ReplicaSet',
+      'A-->>RC: ReplicaSet watch event',
+      'RC->>A: create Pod',
+      'A-->>S: unscheduled Pod watch event',
+      'S->>A: bind Pod to Node',
+      'A-->>KL: assigned Pod watch event',
+      'EP->>A: update EndpointSlice endpoint conditions',
+      'I->>DP: route to Service',
+      'DP->>P: forward to ready Pod',
+    ]) {
+      expect(flow, `deployment flow is missing ${interaction}`).toContain(
+        interaction,
+      )
+    }
+
+    for (const directCall of [
+      'DC->>RC:',
+      'RC->>P:',
+      'S->>N:',
+      'EP->>N:',
+    ]) {
+      expect(flow).not.toContain(directCall)
+    }
+  })
+
+  it('describes control-loop watches and updates in their real direction', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+
+    for (const interaction of [
+      'A -.->|is watched by 被观察| CO["Controller (reconciles desired state)"]',
+      'A -.->|is watched by 被观察| SC["Scheduler (assigns Pods)"]',
+      'A -.->|is watched by 被观察| KL["kubelet (reconciles assigned Pods)"]',
+      'CO -->|updates objects 更新对象| A',
+      'SC -->|writes Pod binding 写入 Pod 绑定| A',
+      'KL -->|reports Pod status 汇报 Pod 状态| A',
+    ]) {
+      expect(home, `home page is missing ${interaction}`).toContain(
+        interaction,
+      )
+    }
+  })
+
+  it('keeps EndpointSlice metadata separate from request forwarding', () => {
+    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+
+    for (const relation of [
+      'DP["Service dataplane (kube-proxy / eBPF)"]',
+      'E -.->|provides ready endpoint metadata 提供就绪 endpoint 元数据| DP',
+      'DP -->|forwards 转发| P["Ready Pod"]',
+      'EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求',
+    ]) {
+      expect(home, `home page is missing ${relation}`).toContain(relation)
+    }
+
+    expect(home).not.toContain('E -->|targets 指向| P')
+  })
+
   it('keeps relative Markdown links valid', () => {
     const markdownLink = /\[[^\]]*\]\(([^)]+)\)/g
 

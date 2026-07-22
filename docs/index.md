@@ -57,17 +57,23 @@ flowchart LR
 flowchart LR
   X["外部请求"] -->|routes 路由| I["Ingress / Gateway"]
   I -->|routes 路由| S["Service"]
-  S -->|resolves via 经由解析| E["EndpointSlice"]
-  E -->|targets 指向| P["Ready Pod"]
+  S -->|uses data plane 使用数据面| DP["Service dataplane (kube-proxy / eBPF)"]
+  E["EndpointSlice metadata"]
+  E -.->|provides ready endpoint metadata 提供就绪 endpoint 元数据| DP
+  S -.->|has endpoint metadata in 端点元数据位于| E
+  DP -->|forwards 转发| P["Ready Pod"]
 ```
+
+EndpointSlice 是控制平面 endpoint 元数据，不负责转发请求；EndpointSlice controller 通过 API Server 发布记录和就绪条件，Service 数据面再根据这些条件选择可用后端。
 
 ### 配置与存储关系
 
 ```mermaid
 flowchart LR
-  CM["ConfigMap"] -->|references 引用| P["Pod"]
-  SEC["Secret"] -->|references 引用| P
-  PVC["PersistentVolumeClaim"] -->|mounts 挂载| P
+  P["Pod"]
+  P -->|references 引用| CM["ConfigMap"]
+  P -->|references 引用| SEC["Secret"]
+  P -->|mounts 挂载| PVC["PersistentVolumeClaim"]
 ```
 
 ### 控制平面关系
@@ -76,12 +82,12 @@ flowchart LR
 flowchart LR
   K["kubectl / client"] -->|submits 提交| A["API Server"]
   A -->|persists 持久化| E["etcd"]
-  A -.->|observes 观察| CO["Controller"]
-  A -.->|assigns 分配| SC["Scheduler"]
-  A -.->|reconciles 调谐| KL["kubelet"]
-  CO -->|updates 更新| A
-  SC -->|updates 更新| A
-  KL -->|reports 汇报| A
+  A -.->|is watched by 被观察| CO["Controller (reconciles desired state)"]
+  A -.->|is watched by 被观察| SC["Scheduler (assigns Pods)"]
+  A -.->|is watched by 被观察| KL["kubelet (reconciles assigned Pods)"]
+  CO -->|updates objects 更新对象| A
+  SC -->|writes Pod binding 写入 Pod 绑定| A
+  KL -->|reports Pod status 汇报 Pod 状态| A
 ```
 
 这些关系可以压缩成一张动词表：
@@ -92,8 +98,8 @@ flowchart LR
 | ReplicaSet | creates | Pod | 创建并维持指定数量的 Pod |
 | Service | selects | Pod | 以标签选择可达后端，由 EndpointSlice 记录 endpoint |
 | Ingress / Gateway | routes | Service | 按主机名或路径转发请求 |
-| ConfigMap / Secret | references | Pod | 提供环境变量或文件配置 |
-| PVC | mounts | Pod | 把声明的存储挂载到容器 |
+| Pod | references | ConfigMap / Secret | 通过环境变量或文件引用配置 |
+| Pod | mounts | PVC | 把声明的存储挂载到 Pod |
 | API Server | authorizes | client | 认证、鉴权并接受对象写入 |
 
 ## 一个可运行的最小例子
