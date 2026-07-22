@@ -6,6 +6,19 @@ import { describe, expect, it } from 'vitest'
 const themeDirectory = resolve(process.cwd(), 'docs/.vitepress/theme')
 
 describe('appearance theme integration', () => {
+  it('uses the Kubernetes brand and links the local logo to the site home', async () => {
+    const config = await readFile(
+      resolve(process.cwd(), 'docs/.vitepress/config.mts'),
+      'utf8',
+    )
+
+    expect(config).toContain("title: 'Kubernetes'")
+    expect(config).toContain("siteTitle: 'Kubernetes'")
+    expect(config).toContain("logo: '/kubernetes-logo.svg'")
+    expect(config).toContain("logoLink: '/'")
+    expect(config).not.toContain("title: 'K8s 概念手册'")
+  })
+
   it('mounts the appearance control in desktop and mobile-safe layout slots', async () => {
     const layout = await readFile(resolve(themeDirectory, 'Layout.vue'), 'utf8')
 

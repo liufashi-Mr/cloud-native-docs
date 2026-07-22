@@ -369,8 +369,6 @@ body {
 
   .VPNavBar.has-sidebar .title {
     width: var(--k8s-sidebar-width);
-    padding-right: clamp(20px, 2vw, 32px);
-    padding-left: clamp(20px, 2vw, 32px);
   }
 
   .VPNavBar.has-sidebar .content {

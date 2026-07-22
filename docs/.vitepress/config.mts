@@ -4,7 +4,7 @@ import { mermaidFencePlugin } from './markdown/mermaid-fence'
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'K8s 概念手册',
+  title: 'Kubernetes',
   description: '用关系与场景串联 Kubernetes 核心概念。',
   appearance: false,
   srcExclude: ['superpowers/**'],
@@ -111,6 +111,9 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    logo: '/kubernetes-logo.svg',
+    logoLink: '/',
+    siteTitle: 'Kubernetes',
     nav: [
       { text: '概念', link: '/concepts/resource-model' },
       { text: '运行实践', link: '/operations/health-lifecycle' },
