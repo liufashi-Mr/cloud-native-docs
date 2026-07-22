@@ -2,6 +2,8 @@
 import DefaultTheme from 'vitepress/theme'
 
 import AppearanceControl from './components/AppearanceControl.vue'
+import BackToTop from './components/BackToTop.vue'
+import SidebarResizeHandle from './components/SidebarResizeHandle.vue'
 </script>
 
 <template>
@@ -17,4 +19,6 @@ import AppearanceControl from './components/AppearanceControl.vue'
       </div>
     </template>
   </DefaultTheme.Layout>
+  <BackToTop />
+  <SidebarResizeHandle />
 </template>

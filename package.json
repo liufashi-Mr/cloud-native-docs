@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.25.0",
+    "css-tree": "^3.2.1",
     "mermaid": "^11.16.0",
     "vitepress": "^1.6.4",
     "vue": "^3.5.40"
   },
   "devDependencies": {
+    "@types/css-tree": "^2.3.11",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^26.1.1",
     "@vitejs/plugin-vue": "^6.0.8",

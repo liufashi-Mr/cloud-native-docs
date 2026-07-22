@@ -10,6 +10,14 @@ export default defineConfig({
   srcExclude: ['superpowers/**'],
   head: [
     [
+      'link',
+      {
+        rel: 'icon',
+        type: 'image/svg+xml',
+        href: '/kubernetes-logo.svg',
+      },
+    ],
+    [
       'script',
       {},
       `;(function () {
@@ -22,6 +30,10 @@ export default defineConfig({
           if (/^#[0-9a-f]{6}$/i.test(savedColor || '')) color = savedColor.toUpperCase()
           var savedMode = localStorage.getItem('k8s-theme-mode')
           if (savedMode === 'auto' || savedMode === 'light' || savedMode === 'dark') mode = savedMode
+          var savedSidebarWidth = Number(localStorage.getItem('k8s-sidebar-width'))
+          if (Number.isFinite(savedSidebarWidth) && savedSidebarWidth >= 220 && savedSidebarWidth <= 380) {
+            root.style.setProperty('--k8s-sidebar-width', savedSidebarWidth + 'px')
+          }
         } catch (_) {}
 
         var red = parseInt(color.slice(1, 3), 16) / 255
@@ -160,6 +172,8 @@ export default defineConfig({
     outline: {
       level: [2, 3],
     },
+    outlineTitle: '本页目录',
+    returnToTopLabel: '返回顶部',
     docFooter: {
       prev: '上一篇',
       next: '下一篇',

@@ -98,6 +98,10 @@ body {
   background: var(--k8s-page);
 }
 
+.VPDoc .VPDocAsideOutline .content {
+  padding-left: 28px;
+}
+
 .vp-doc {
   color: var(--k8s-text);
   line-height: 1.7;
@@ -367,8 +371,24 @@ body {
     padding-left: clamp(20px, 2vw, 32px);
   }
 
-  .VPNavBar.has-sidebar .title {
+  .VPNavBar.has-sidebar .container > .title {
+    box-sizing: content-box;
     width: var(--k8s-sidebar-width);
+    min-width: 0;
+    padding: 0;
+  }
+
+  .VPNavBar.has-sidebar .VPNavBarTitle {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .VPNavBar.has-sidebar .VPNavBarTitle .title {
+    box-sizing: content-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0 32px;
+    overflow: hidden;
   }
 
   .VPNavBar.has-sidebar .content {

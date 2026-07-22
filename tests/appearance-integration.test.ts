@@ -19,6 +19,19 @@ describe('appearance theme integration', () => {
     expect(config).not.toContain("title: 'K8s 概念手册'")
   })
 
+  it('localizes the page outline and uses the Kubernetes logo as favicon', async () => {
+    const config = await readFile(
+      resolve(process.cwd(), 'docs/.vitepress/config.mts'),
+      'utf8',
+    )
+
+    expect(config).toContain("outlineTitle: '本页目录'")
+    expect(config).toContain("returnToTopLabel: '返回顶部'")
+    expect(config).toMatch(
+      /rel:\s*'icon'[\s\S]*type:\s*'image\/svg\+xml'[\s\S]*href:\s*'\/kubernetes-logo\.svg'/,
+    )
+  })
+
   it('mounts the appearance control in desktop and mobile-safe layout slots', async () => {
     const layout = await readFile(resolve(themeDirectory, 'Layout.vue'), 'utf8')
 
@@ -26,6 +39,38 @@ describe('appearance theme integration', () => {
     expect(layout).toContain('#nav-bar-content-after')
     expect(layout).toContain('#nav-screen-content-after')
     expect(layout.match(/<AppearanceControl/g)).toHaveLength(2)
+    expect(layout).toContain('<BackToTop />')
+    expect(layout).toContain('<SidebarResizeHandle />')
+  })
+
+  it('keeps the outline text spaced from its divider at every desktop width', async () => {
+    const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
+    const outlineContentRule = styles.match(
+      /\.VPDoc\s+\.VPDocAsideOutline\s+\.content\s*\{([^}]*)\}/,
+    )?.[1]
+
+    expect(outlineContentRule).toMatch(/padding-left:\s*28px/)
+    expect(styles).not.toMatch(
+      /\.VPDocAsideOutline\s+\.outline-title\s*\{[^}]*margin-bottom/,
+    )
+  })
+
+  it('keeps the desktop nav title border inside the resizable sidebar', async () => {
+    const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
+    const desktopStyles = styles.match(
+      /@media\s*\(min-width:\s*1100px\)\s*\{([\s\S]*?)\n\}/,
+    )?.[1]
+
+    expect(desktopStyles).toBeDefined()
+    expect(desktopStyles).not.toMatch(
+      /\.VPNavBar\.has-sidebar\s+\.title\s*\{/,
+    )
+    expect(desktopStyles).toMatch(
+      /\.VPNavBar\.has-sidebar\s+\.container\s*>\s*\.title\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*var\(--k8s-sidebar-width\);/,
+    )
+    expect(desktopStyles).toMatch(
+      /\.VPNavBar\.has-sidebar\s+\.VPNavBarTitle\s+\.title\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;/,
+    )
   })
 
   it('uses the custom layout without dropping Mermaid registration', async () => {
@@ -44,6 +89,7 @@ describe('appearance theme integration', () => {
     expect(config).toMatch(/appearance:\s*false/)
     expect(config).toContain('k8s-theme-color')
     expect(config).toContain('k8s-theme-mode')
+    expect(config).toContain('k8s-sidebar-width')
     expect(config).toContain('--k8s-accent')
     expect(config).toContain('--k8s-accent-dark')
     expect(config).toContain('--k8s-accent-text')

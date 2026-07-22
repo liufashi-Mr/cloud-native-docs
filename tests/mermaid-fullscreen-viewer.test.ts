@@ -299,6 +299,45 @@ describe('MermaidFullscreenViewer', () => {
     }
   })
 
+  it('refreshes namespaced SVG references, ids, and dimensions when props change', async () => {
+    const firstSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600">
+        <defs><marker id="first-arrow" /></defs>
+        <g id="first-node" marker-end="url(#first-arrow)" />
+      </svg>
+    `
+    const secondSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="800" height="400">
+        <defs><marker id="second-arrow" /></defs>
+        <g id="second-node" marker-end="url(#second-arrow)" />
+      </svg>
+    `
+    const wrapper = mount(MermaidFullscreenViewer, {
+      attachTo: document.body,
+      props: { svg: firstSvg },
+    })
+    await nextTick()
+
+    const firstMarkerId = surface().querySelector('marker')?.id
+    expect(firstMarkerId).toBeTruthy()
+    expect(surface().querySelector('g')?.getAttribute('marker-end')).toBe(
+      `url(#${firstMarkerId})`,
+    )
+
+    await wrapper.setProps({ svg: secondSvg })
+    await nextTick()
+
+    expect(surface().style.width).toBe('800px')
+    expect(surface().style.height).toBe('400px')
+    expect(document.getElementById(firstMarkerId ?? '')).toBeNull()
+    const secondMarkerId = surface().querySelector('marker')?.id
+    expect(secondMarkerId).toBeTruthy()
+    expect(secondMarkerId).not.toBe(firstMarkerId)
+    expect(surface().querySelector('g')?.getAttribute('marker-end')).toBe(
+      `url(#${secondMarkerId})`,
+    )
+  })
+
   it('locks body scrolling, restores the previous value, and requests close once', async () => {
     document.body.style.overflow = 'scroll'
     const wrapper = await mountViewer()

@@ -100,6 +100,58 @@ describe('namespaceSvgIds', () => {
       .toBe('svg-node')
   })
 
+  it('rewrites CSS AST references without changing strings or hash colors', () => {
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <style>
+          #node { fill: #fff; content: "#node"; marker-end: url(#arrow); }
+          [fill="#fff"] { color: #123456; }
+          @supports selector(#node) { #node { clip-path: url( '#clip' ); } }
+          @scope (#node) { #node { stroke: #node; } }
+        </style>
+        <defs><marker id="arrow" /><clipPath id="clip" /></defs>
+        <g id="node" />
+        <path id="fff" />
+      </svg>
+    `
+
+    const style = parseSvg(namespaceSvgIds(source, 'viewer'))
+      .querySelector('style')?.textContent ?? ''
+    expect(style).toContain('#viewer-node { fill: #fff; content: "#node";')
+    expect(style).toContain('[fill="#fff"] { color: #123456; }')
+    expect(style).toContain('@supports selector(#viewer-node)')
+    expect(style).toContain('#viewer-node { clip-path: url(\'#viewer-clip\'); }')
+    expect(style).toContain('@scope (#viewer-node)')
+    expect(style).toContain('stroke: #node;')
+  })
+
+  it('gives duplicate source ids unique targets while references keep the first target', () => {
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <g id="node" /><g id="node" /><use href="#node" />
+      </svg>
+    `
+
+    const root = parseSvg(namespaceSvgIds(source, 'viewer'))
+    expect(Array.from(root.querySelectorAll('[id]'), (element) => element.id)).toEqual([
+      'viewer-node',
+      'viewer-node-2',
+    ])
+    expect(root.querySelector('use')?.getAttribute('href')).toBe('#viewer-node')
+  })
+
+  it('rewrites namespaced XLink href attributes by namespace URI', () => {
+    const source = `
+      <svg xmlns="http://www.w3.org/2000/svg"
+        xmlns:l="http://www.w3.org/1999/xlink">
+        <g id="node" /><use l:href="#node" />
+      </svg>
+    `
+
+    const root = parseSvg(namespaceSvgIds(source, 'viewer'))
+    expect(root.querySelector('use')?.getAttribute('l:href')).toBe('#viewer-node')
+  })
+
   it.each([
     '<div id="node"></div>',
     '<svg><g id="node"></svg>',
