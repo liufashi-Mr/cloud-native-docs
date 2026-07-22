@@ -21,6 +21,21 @@ describe('responsive theme styles', () => {
     expect(mobileStyles).toMatch(/width:\s*100%/)
   })
 
+  it('contains mobile code group tabs while preserving local scrolling', () => {
+    const mobileStyles = styles.slice(
+      styles.indexOf('@media (max-width: 767px)'),
+      styles.indexOf('@media (prefers-reduced-motion: reduce)'),
+    )
+    const tabsRule = mobileStyles.match(/\.vp-code-group \.tabs\s*{([^}]*)}/)
+
+    expect(mobileStyles).toContain('.vp-code-group .tabs')
+    expect(tabsRule?.[1]).toMatch(/margin-left:\s*0/)
+    expect(tabsRule?.[1]).toMatch(/margin-right:\s*0/)
+    expect(tabsRule?.[1]).toMatch(/width:\s*100%/)
+    expect(tabsRule?.[1]).toMatch(/max-width:\s*100%/)
+    expect(tabsRule?.[1]).toMatch(/overflow-x:\s*auto/)
+  })
+
   it('globally minimizes motion and disables smooth scrolling on request', () => {
     const reducedMotionStyles = styles.slice(
       styles.indexOf('@media (prefers-reduced-motion: reduce)'),

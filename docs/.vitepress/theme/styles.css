@@ -411,6 +411,15 @@ body {
     max-width: 100%;
   }
 
+  .vp-code-group .tabs {
+    box-sizing: border-box;
+    margin-right: 0;
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   .vp-doc h1 {
     font-size: 28px;
   }
