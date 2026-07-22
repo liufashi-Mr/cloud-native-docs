@@ -10,14 +10,6 @@ export default defineConfig({
   srcExclude: ['superpowers/**'],
   head: [
     [
-      'link',
-      {
-        rel: 'icon',
-        type: 'image/svg+xml',
-        href: '/kubernetes-logo.svg',
-      },
-    ],
-    [
       'script',
       {},
       `;(function () {
@@ -117,6 +109,18 @@ export default defineConfig({
       })()`,
     ],
   ],
+  transformHead({ siteData }) {
+    return [
+      [
+        'link',
+        {
+          rel: 'icon',
+          type: 'image/svg+xml',
+          href: `${siteData.base}kubernetes-logo.svg`,
+        },
+      ],
+    ]
+  },
   markdown: {
     config(markdown) {
       markdown.use(mermaidFencePlugin)

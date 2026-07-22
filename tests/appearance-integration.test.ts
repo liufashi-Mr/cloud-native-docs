@@ -27,9 +27,11 @@ describe('appearance theme integration', () => {
 
     expect(config).toContain("outlineTitle: '本页目录'")
     expect(config).toContain("returnToTopLabel: '返回顶部'")
+    expect(config).toContain('transformHead({ siteData })')
     expect(config).toMatch(
-      /rel:\s*'icon'[\s\S]*type:\s*'image\/svg\+xml'[\s\S]*href:\s*'\/kubernetes-logo\.svg'/,
+      /rel:\s*'icon'[\s\S]*type:\s*'image\/svg\+xml'[\s\S]*href:\s*`\$\{siteData\.base\}kubernetes-logo\.svg`/,
     )
+    expect(config).not.toContain("href: '/kubernetes-logo.svg'")
   })
 
   it('mounts the appearance control in desktop and mobile-safe layout slots', async () => {
