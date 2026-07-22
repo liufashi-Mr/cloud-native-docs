@@ -83,11 +83,17 @@ export default defineConfig({
         }
 
         var lightTextLightness = findTextLightness(36, -1, [1, 1, 1])
-        var darkTextLightness = findTextLightness(68, 1, [26 / 255, 34 / 255, 36 / 255])
+        var darkTextLightness = findTextLightness(68, 1, [34 / 255, 40 / 255, 46 / 255])
+        var buttonLightness = lightTextLightness
+        var buttonHoverLightness = Math.max(0, buttonLightness - 4)
+        var buttonActiveLightness = Math.max(0, buttonLightness - 8)
         root.style.setProperty('--k8s-accent', 'hsl(' + hueDegrees + ' ' + saturation + '% 36%)')
         root.style.setProperty('--k8s-accent-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% 68%)')
         root.style.setProperty('--k8s-accent-text', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + lightTextLightness + '%)')
         root.style.setProperty('--k8s-accent-text-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + darkTextLightness + '%)')
+        root.style.setProperty('--k8s-accent-button', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonLightness + '%)')
+        root.style.setProperty('--k8s-accent-button-hover', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonHoverLightness + '%)')
+        root.style.setProperty('--k8s-accent-button-active', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonActiveLightness + '%)')
 
         var systemDark = false
         if (mode === 'auto') {

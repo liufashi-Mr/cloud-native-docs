@@ -10,6 +10,9 @@
   --k8s-accent-dark: #69bea0;
   --k8s-accent-text: hsl(161 49% 34%);
   --k8s-accent-text-dark: hsl(161 49% 68%);
+  --k8s-accent-button: hsl(161 49% 34%);
+  --k8s-accent-button-hover: hsl(161 49% 30%);
+  --k8s-accent-button-active: hsl(161 49% 26%);
   --k8s-accent-active: var(--k8s-accent);
   --k8s-accent-soft: color-mix(in srgb, var(--k8s-accent) 12%, transparent);
   --k8s-sidebar-width: clamp(232px, 19vw, 296px);
@@ -33,6 +36,12 @@
   --vp-c-tip-2: color-mix(in srgb, var(--k8s-accent-text) 84%, black);
   --vp-c-tip-3: var(--k8s-accent);
   --vp-c-tip-soft: var(--k8s-accent-soft);
+  --vp-button-brand-text: #FFFFFF;
+  --vp-button-brand-bg: var(--k8s-accent-button);
+  --vp-button-brand-hover-text: #FFFFFF;
+  --vp-button-brand-hover-bg: var(--k8s-accent-button-hover);
+  --vp-button-brand-active-text: #FFFFFF;
+  --vp-button-brand-active-bg: var(--k8s-accent-button-active);
   --vp-code-tab-active-bar-color: var(--k8s-accent-active);
   --vp-code-bg: var(--k8s-code);
   --vp-sidebar-bg-color: var(--k8s-surface);

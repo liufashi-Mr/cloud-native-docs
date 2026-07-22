@@ -21,6 +21,16 @@ describe('responsive theme styles', () => {
     expect(styles).toMatch(
       /\.dark\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--k8s-accent-text-dark\)/,
     )
+    for (const [property, token] of [
+      ['--vp-button-brand-bg', '--k8s-accent-button'],
+      ['--vp-button-brand-hover-bg', '--k8s-accent-button-hover'],
+      ['--vp-button-brand-active-bg', '--k8s-accent-button-active'],
+    ]) {
+      expect(styles).toContain(`${property}: var(${token})`)
+    }
+    expect(styles).toContain('--vp-button-brand-text: #FFFFFF')
+    expect(styles).toContain('--vp-button-brand-hover-text: #FFFFFF')
+    expect(styles).toContain('--vp-button-brand-active-text: #FFFFFF')
   })
 
   it('contains mobile code overflow inside the document gutter', () => {

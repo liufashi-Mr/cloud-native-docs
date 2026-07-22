@@ -5,6 +5,7 @@ import {
   PRESET_COLORS,
   applyAppearance,
   deriveAccent,
+  deriveButtonAccent,
   deriveTextAccent,
   loadAppearance,
   normalizeHex,
@@ -23,9 +24,10 @@ type ApplyAppearanceReturnsVoid = Assert<
 >
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
-const DARK_SURFACE = '#1A2224'
+const DARK_SURFACES = ['#22282E', '#1D2328', '#1A2224'] as const
 const CONTRAST_COLORS = [
   ...PRESET_COLORS,
+  '#3B30CF',
   '#FFD400',
   '#00FFFF',
   '#0066FF',
@@ -151,7 +153,9 @@ describe('appearance utilities', () => {
       const decorativeAccent = deriveAccent(color)
 
       expect(contrastRatio(textAccent.light, '#FFFFFF')).toBeGreaterThanOrEqual(4.5)
-      expect(contrastRatio(textAccent.dark, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5)
+      for (const surface of DARK_SURFACES) {
+        expect(contrastRatio(textAccent.dark, surface)).toBeGreaterThanOrEqual(4.5)
+      }
       expect(textAccent.light.split(' ').slice(0, 2)).toEqual(
         decorativeAccent.light.split(' ').slice(0, 2),
       )
@@ -159,7 +163,18 @@ describe('appearance utilities', () => {
         decorativeAccent.dark.split(' ').slice(0, 2),
       )
       expect(contrastRatio(decorativeAccent.light, '#FFFFFF')).toBeGreaterThanOrEqual(3)
-      expect(contrastRatio(decorativeAccent.dark, DARK_SURFACE)).toBeGreaterThanOrEqual(3)
+      expect(contrastRatio(decorativeAccent.dark, DARK_SURFACES[2])).toBeGreaterThanOrEqual(3)
+    },
+  )
+
+  it.each(CONTRAST_COLORS)(
+    'derives white-text-safe button accents for %s',
+    (color) => {
+      const buttons = deriveButtonAccent(color)
+
+      for (const background of [buttons.base, buttons.hover, buttons.active]) {
+        expect(contrastRatio(background, '#FFFFFF')).toBeGreaterThanOrEqual(4.5)
+      }
     },
   )
 
@@ -188,6 +203,21 @@ describe('appearance utilities', () => {
     expect(
       document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
     ).toBe(textAccent.dark)
+    for (const name of [
+      '--k8s-accent-button',
+      '--k8s-accent-button-hover',
+      '--k8s-accent-button-active',
+    ]) {
+      expect(
+        document.documentElement.style.getPropertyValue(name),
+      ).toMatch(/^hsl\(/)
+      expect(
+        contrastRatio(
+          document.documentElement.style.getPropertyValue(name),
+          '#FFFFFF',
+        ),
+      ).toBeGreaterThanOrEqual(4.5)
+    }
     expect(
       contrastRatio(
         document.documentElement.style.getPropertyValue('--k8s-accent-text'),
@@ -197,7 +227,7 @@ describe('appearance utilities', () => {
     expect(
       contrastRatio(
         document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
-        DARK_SURFACE,
+        DARK_SURFACES[0],
       ),
     ).toBeGreaterThanOrEqual(4.5)
     expect(document.documentElement.classList.contains('dark')).toBe(true)

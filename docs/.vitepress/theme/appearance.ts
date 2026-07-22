@@ -28,6 +28,12 @@ export interface AccentColors {
   dark: string
 }
 
+export interface ButtonAccentColors {
+  base: string
+  hover: string
+  active: string
+}
+
 interface AccentChannels {
   hue: number
   saturation: number
@@ -36,7 +42,7 @@ interface AccentChannels {
 type RgbColor = readonly [number, number, number]
 
 const LIGHT_TEXT_BACKGROUND: RgbColor = [1, 1, 1]
-const DARK_TEXT_BACKGROUND: RgbColor = [26 / 255, 34 / 255, 36 / 255]
+const DARK_TEXT_BACKGROUND: RgbColor = [34 / 255, 40 / 255, 46 / 255]
 const MINIMUM_TEXT_CONTRAST = 4.5
 
 export function normalizeHex(value: string): string | null {
@@ -73,6 +79,23 @@ export function deriveTextAccent(value: string): AccentColors {
   return {
     light: formatHsl(hue, saturation, light),
     dark: formatHsl(hue, saturation, dark),
+  }
+}
+
+export function deriveButtonAccent(value: string): ButtonAccentColors {
+  const { hue, saturation } = deriveAccentChannels(value)
+  const base = findContrastLightness(
+    hue,
+    saturation,
+    36,
+    -1,
+    LIGHT_TEXT_BACKGROUND,
+  )
+
+  return {
+    base: formatHsl(hue, saturation, base),
+    hover: formatHsl(hue, saturation, Math.max(0, base - 4)),
+    active: formatHsl(hue, saturation, Math.max(0, base - 8)),
   }
 }
 
@@ -198,10 +221,14 @@ export function applyAppearance(
 
   const accent = deriveAccent(color)
   const textAccent = deriveTextAccent(color)
+  const buttonAccent = deriveButtonAccent(color)
   root.style.setProperty('--k8s-accent', accent.light)
   root.style.setProperty('--k8s-accent-dark', accent.dark)
   root.style.setProperty('--k8s-accent-text', textAccent.light)
   root.style.setProperty('--k8s-accent-text-dark', textAccent.dark)
+  root.style.setProperty('--k8s-accent-button', buttonAccent.base)
+  root.style.setProperty('--k8s-accent-button-hover', buttonAccent.hover)
+  root.style.setProperty('--k8s-accent-button-active', buttonAccent.active)
   root.classList.toggle('dark', dark)
 }
 
