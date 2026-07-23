@@ -3,7 +3,6 @@ import {
   Activity,
   ArrowRight,
   Boxes,
-  Check,
   GitBranch,
   Package,
   Shield,
@@ -100,10 +99,6 @@ const domainIcons = {
               >
                 <img v-if="topic.logo" :src="withBase(topic.logo)" alt="" aria-hidden="true" />
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
-                <span class="cloud-native-home__completion">
-                  <Check :size="14" aria-hidden="true" />
-                  已完成
-                </span>
                 <ArrowRight :size="16" aria-hidden="true" />
               </a>
               <div
@@ -356,30 +351,20 @@ const domainIcons = {
 }
 
 .cloud-native-home__topic--available {
-  grid-template-columns: 20px minmax(0, 1fr) auto 16px;
+  grid-template-columns: 20px minmax(0, 1fr) 16px;
   color: var(--vp-c-text-1);
-  background: color-mix(in srgb, var(--vp-c-brand-1) 7%, var(--vp-c-bg));
-}
-
-.cloud-native-home__completion {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 3px;
-  color: var(--vp-c-brand-1);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.cloud-native-home__completion svg {
-  flex: 0 0 auto;
 }
 
 .cloud-native-home__topic--available:hover {
   color: var(--vp-c-brand-1);
-  background: color-mix(in srgb, var(--vp-c-brand-1) 12%, var(--vp-c-bg));
+}
+
+.cloud-native-home__topic--available > svg {
+  transition: transform 160ms ease;
+}
+
+.cloud-native-home__topic--available:hover > svg {
+  transform: translateX(3px);
 }
 
 .cloud-native-home__topic img {
@@ -457,6 +442,12 @@ const domainIcons = {
 
   .cloud-native-home__domain:nth-child(n + 3) {
     border-top: 1px solid var(--catalog-divider);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud-native-home__topic--available > svg {
+    transition: none;
   }
 }
 
