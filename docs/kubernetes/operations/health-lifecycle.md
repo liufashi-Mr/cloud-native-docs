@@ -152,4 +152,4 @@ Ready、Running 与“用户请求成功”是三个层次。probe 只能从 kub
 
 ## 继续阅读
 
-前置：[调度与资源](/concepts/scheduling-resources)。下一篇：[发布与扩缩容](/operations/release-scaling)，把单个 Pod 的健康信号放进副本更新与容量控制循环。
+前置：[调度与资源](/kubernetes/concepts/scheduling-resources)。下一篇：[发布与扩缩容](/kubernetes/operations/release-scaling)，把单个 Pod 的健康信号放进副本更新与容量控制循环。

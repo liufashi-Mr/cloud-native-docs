@@ -123,4 +123,4 @@ kubectl -n demo get pdb worker
 
 ## 继续阅读
 
-前置：[身份与安全](/concepts/security)。下一篇：[健康检查与生命周期](/operations/health-lifecycle)，把调度成功继续推进到应用就绪与安全终止。
+前置：[身份与安全](/kubernetes/concepts/security)。下一篇：[健康检查与生命周期](/kubernetes/operations/health-lifecycle)，把调度成功继续推进到应用就绪与安全终止。

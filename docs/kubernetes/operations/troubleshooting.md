@@ -292,4 +292,4 @@ Ingress/Gateway resource、controller 和 proxy/data plane 是三层：resource 
 
 ## 继续阅读
 
-前置：[发布与扩缩容](/operations/release-scaling)。下一篇：[概念关系速查](/reference/concept-map)，按对象的 scope、owner、reference 和 lifetime 快速定位责任边界。
+前置：[发布与扩缩容](/kubernetes/operations/release-scaling)。下一篇：[概念关系速查](/kubernetes/reference/concept-map)，按对象的 scope、owner、reference 和 lifetime 快速定位责任边界。

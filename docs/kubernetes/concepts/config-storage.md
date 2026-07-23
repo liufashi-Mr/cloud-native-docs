@@ -119,4 +119,4 @@ PVC 长时间 Pending 不一定是错误：可能在等待 first consumer；也�
 
 ## 继续阅读
 
-前置：[网络与流量](/concepts/networking)。下一篇：[身份与安全](/concepts/security)，为 API、Pod runtime 和网络访问建立分层边界。
+前置：[网络与流量](/kubernetes/concepts/networking)。下一篇：[身份与安全](/kubernetes/concepts/security)，为 API、Pod runtime 和网络访问建立分层边界。

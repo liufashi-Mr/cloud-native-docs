@@ -118,4 +118,4 @@ sequenceDiagram
 
 ## 继续阅读
 
-前置：[概念总览](/) 与 [发布与调谐之旅](/guide/deployment-flow)。下一篇：[集群与节点](/concepts/cluster-nodes)，了解哪些运行中 actor 会观察并修改这些 API 对象。
+前置：[概念总览](/kubernetes/) 与 [发布与调谐之旅](/kubernetes/guide/deployment-flow)。下一篇：[集群与节点](/kubernetes/concepts/cluster-nodes)，了解哪些运行中 actor 会观察并修改这些 API 对象。

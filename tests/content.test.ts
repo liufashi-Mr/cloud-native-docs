@@ -10,60 +10,60 @@ import { markdownFences } from './support/markdown'
 const root = resolve(import.meta.dirname, '..')
 const markdownParser = new MarkdownIt()
 const contentFiles = [
-  'docs/index.md',
-  'docs/guide/deployment-flow.md',
-  'docs/concepts/resource-model.md',
-  'docs/concepts/cluster-nodes.md',
-  'docs/concepts/workloads.md',
-  'docs/concepts/networking.md',
-  'docs/concepts/config-storage.md',
-  'docs/concepts/security.md',
-  'docs/concepts/scheduling-resources.md',
-  'docs/operations/health-lifecycle.md',
-  'docs/operations/release-scaling.md',
-  'docs/operations/troubleshooting.md',
-  'docs/reference/concept-map.md',
+  'docs/kubernetes/index.md',
+  'docs/kubernetes/guide/deployment-flow.md',
+  'docs/kubernetes/concepts/resource-model.md',
+  'docs/kubernetes/concepts/cluster-nodes.md',
+  'docs/kubernetes/concepts/workloads.md',
+  'docs/kubernetes/concepts/networking.md',
+  'docs/kubernetes/concepts/config-storage.md',
+  'docs/kubernetes/concepts/security.md',
+  'docs/kubernetes/concepts/scheduling-resources.md',
+  'docs/kubernetes/operations/health-lifecycle.md',
+  'docs/kubernetes/operations/release-scaling.md',
+  'docs/kubernetes/operations/troubleshooting.md',
+  'docs/kubernetes/reference/concept-map.md',
 ]
 
 const docsRoot = resolve(root, 'docs')
 const coreConceptFiles = [
-  'docs/concepts/resource-model.md',
-  'docs/concepts/cluster-nodes.md',
-  'docs/concepts/workloads.md',
-  'docs/concepts/networking.md',
-  'docs/concepts/config-storage.md',
-  'docs/concepts/security.md',
-  'docs/concepts/scheduling-resources.md',
+  'docs/kubernetes/concepts/resource-model.md',
+  'docs/kubernetes/concepts/cluster-nodes.md',
+  'docs/kubernetes/concepts/workloads.md',
+  'docs/kubernetes/concepts/networking.md',
+  'docs/kubernetes/concepts/config-storage.md',
+  'docs/kubernetes/concepts/security.md',
+  'docs/kubernetes/concepts/scheduling-resources.md',
 ]
 
 const coreConceptContracts: Record<string, string[]> = {
-  'docs/concepts/resource-model.md': [
+  'docs/kubernetes/concepts/resource-model.md': [
     'apiVersion', 'kind', 'metadata', 'spec', 'status', 'UID', 'Namespace',
     'labels', 'selectors', 'annotations', 'OwnerReference', 'Finalizer',
     'deletionTimestamp', 'generation', 'observedGeneration', 'resourceVersion',
   ],
-  'docs/concepts/cluster-nodes.md': [
+  'docs/kubernetes/concepts/cluster-nodes.md': [
     'API Server', 'etcd', 'Controller Manager', 'Scheduler', 'Node', 'kubelet',
     'kube-proxy', 'CRI', 'CNI', 'CSI', 'failure domain',
   ],
-  'docs/concepts/workloads.md': [
+  'docs/kubernetes/concepts/workloads.md': [
     'Pod', 'ReplicaSet', 'Deployment', 'StatefulSet', 'DaemonSet', 'Job',
     'CronJob', 'kubelet', 'container runtime',
   ],
-  'docs/concepts/networking.md': [
+  'docs/kubernetes/concepts/networking.md': [
     'Pod IP', 'CNI', 'Service', 'EndpointSlice', 'CoreDNS', 'Ingress',
     'Gateway API', 'NetworkPolicy', 'selector', 'readiness',
   ],
-  'docs/concepts/config-storage.md': [
+  'docs/kubernetes/concepts/config-storage.md': [
     'ConfigMap', 'Secret', 'base64', 'Volume', 'PV', 'PVC', 'StorageClass',
     'access mode', 'reclaim policy', 'CSI', 'persistentVolumeClaim',
   ],
-  'docs/concepts/security.md': [
+  'docs/kubernetes/concepts/security.md': [
     'Subject', 'ServiceAccount', 'Role', 'ClusterRole', 'RoleBinding',
     'ClusterRoleBinding', 'RBAC', 'SecurityContext', 'Pod Security Standards',
     'NetworkPolicy',
   ],
-  'docs/concepts/scheduling-resources.md': [
+  'docs/kubernetes/concepts/scheduling-resources.md': [
     'requests', 'limits', 'QoS', 'filtering', 'scoring', 'nodeSelector',
     'affinity', 'anti-affinity', 'taints', 'tolerations', 'PriorityClass',
     'preemption', 'topology spread', 'PDB', 'voluntary',
@@ -172,7 +172,7 @@ describe('content contract', () => {
 
   it('separates Pod networking from CSI node volume operations', () => {
     const chapter = readFileSync(
-      resolve(root, 'docs/concepts/cluster-nodes.md'),
+      resolve(root, 'docs/kubernetes/concepts/cluster-nodes.md'),
       'utf8',
     )
 
@@ -192,11 +192,11 @@ describe('content contract', () => {
 
   it('describes API persistence and storage actors without making resources active', () => {
     const resourceModel = readFileSync(
-      resolve(root, 'docs/concepts/resource-model.md'),
+      resolve(root, 'docs/kubernetes/concepts/resource-model.md'),
       'utf8',
     )
     const storage = readFileSync(
-      resolve(root, 'docs/concepts/config-storage.md'),
+      resolve(root, 'docs/kubernetes/concepts/config-storage.md'),
       'utf8',
     )
 
@@ -246,19 +246,19 @@ describe('content contract', () => {
 
   it('documents volume source, endpoint readiness, and shell variable caveats', () => {
     const storage = readFileSync(
-      resolve(root, 'docs/concepts/config-storage.md'),
+      resolve(root, 'docs/kubernetes/concepts/config-storage.md'),
       'utf8',
     )
     const networking = readFileSync(
-      resolve(root, 'docs/concepts/networking.md'),
+      resolve(root, 'docs/kubernetes/concepts/networking.md'),
       'utf8',
     )
     const clusterNodes = readFileSync(
-      resolve(root, 'docs/concepts/cluster-nodes.md'),
+      resolve(root, 'docs/kubernetes/concepts/cluster-nodes.md'),
       'utf8',
     )
     const scheduling = readFileSync(
-      resolve(root, 'docs/concepts/scheduling-resources.md'),
+      resolve(root, 'docs/kubernetes/concepts/scheduling-resources.md'),
       'utf8',
     )
 
@@ -291,7 +291,7 @@ describe('content contract', () => {
 
     const pendingPodFence = markdownFences(
       scheduling,
-      'docs/concepts/scheduling-resources.md',
+      'docs/kubernetes/concepts/scheduling-resources.md',
     ).find(
       (fence) =>
         fence.language === 'bash' && fence.content.includes('PENDING_POD='),
@@ -315,18 +315,18 @@ describe('content contract', () => {
       (match) => match[1],
     )
     expect(links).toEqual([
-      '/concepts/resource-model',
-      '/concepts/cluster-nodes',
-      '/concepts/workloads',
-      '/concepts/networking',
-      '/concepts/config-storage',
-      '/concepts/security',
-      '/concepts/scheduling-resources',
+      '/kubernetes/concepts/resource-model',
+      '/kubernetes/concepts/cluster-nodes',
+      '/kubernetes/concepts/workloads',
+      '/kubernetes/concepts/networking',
+      '/kubernetes/concepts/config-storage',
+      '/kubernetes/concepts/security',
+      '/kubernetes/concepts/scheduling-resources',
     ])
   })
 
   it('teaches probe responsibilities and lifecycle termination boundaries', () => {
-    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/health-lifecycle.md')
     if (chapter === null) return
 
     for (const term of [
@@ -354,7 +354,7 @@ describe('content contract', () => {
 
     const yaml = markdownFences(
       chapter,
-      'docs/operations/health-lifecycle.md',
+      'docs/kubernetes/operations/health-lifecycle.md',
     ).find((fence) => fence.language === 'yaml')?.content
     expect(yaml).toContain('startupProbe:')
     expect(yaml).toContain('readinessProbe:')
@@ -364,7 +364,7 @@ describe('content contract', () => {
   })
 
   it('treats endpoint withdrawal and node termination as concurrent processes', () => {
-    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/health-lifecycle.md')
     if (chapter === null) return
 
     for (const phrase of [
@@ -380,12 +380,12 @@ describe('content contract', () => {
   })
 
   it('uses a fixed public image with self-contained probe behavior', () => {
-    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/health-lifecycle.md')
     if (chapter === null) return
 
     const yaml = markdownFences(
       chapter,
-      'docs/operations/health-lifecycle.md',
+      'docs/kubernetes/operations/health-lifecycle.md',
     ).find((fence) => fence.language === 'yaml')?.content ?? ''
 
     expect(yaml).toContain('image: busybox:1.36.1')
@@ -395,7 +395,7 @@ describe('content contract', () => {
   })
 
   it('prepares the demo Namespace before the standalone probe Deployment', () => {
-    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/health-lifecycle.md')
     if (chapter === null) return
 
     const namespaceCommand =
@@ -409,12 +409,12 @@ describe('content contract', () => {
   })
 
   it('parses the probe manifest and locks each probe handler to the running container', () => {
-    const chapter = readRequiredContent('docs/operations/health-lifecycle.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/health-lifecycle.md')
     if (chapter === null) return
 
     const yaml = markdownFences(
       chapter,
-      'docs/operations/health-lifecycle.md',
+      'docs/kubernetes/operations/health-lifecycle.md',
     ).find((fence) => fence.language === 'yaml')?.content
     expect(yaml).toBeDefined()
     const documents = parseAllDocuments(yaml ?? '', {
@@ -448,7 +448,7 @@ describe('content contract', () => {
   })
 
   it('connects rollout and autoscaling controllers without overstating PDB', () => {
-    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/release-scaling.md')
     if (chapter === null) return
 
     for (const term of [
@@ -484,7 +484,7 @@ describe('content contract', () => {
   })
 
   it('accounts for terminating Pods outside the rolling update replica budget', () => {
-    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/release-scaling.md')
     if (chapter === null) return
 
     expect(chapter).toContain('非 terminating Pods')
@@ -494,12 +494,12 @@ describe('content contract', () => {
   })
 
   it('directs metrics through HPA and workload controllers before Pods', () => {
-    const chapter = readRequiredContent('docs/operations/release-scaling.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/release-scaling.md')
     if (chapter === null) return
 
     const diagram = markdownFences(
       chapter,
-      'docs/operations/release-scaling.md',
+      'docs/kubernetes/operations/release-scaling.md',
     ).find(
       (fence) =>
         fence.language === 'mermaid' && fence.content.includes('HPA controller'),
@@ -517,7 +517,7 @@ describe('content contract', () => {
   })
 
   it('provides the ordered observable troubleshooting path and copyable commands', () => {
-    const chapter = readRequiredContent('docs/operations/troubleshooting.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/troubleshooting.md')
     if (chapter === null) return
 
     const orderedStages = [
@@ -548,7 +548,7 @@ describe('content contract', () => {
 
     const commands = markdownFences(
       chapter,
-      'docs/operations/troubleshooting.md',
+      'docs/kubernetes/operations/troubleshooting.md',
     ).filter((fence) => fence.language === 'bash')
     expect(commands.length).toBeGreaterThanOrEqual(8)
     expect(commands.map((fence) => fence.content).join('\n')).not.toMatch(/<[^\n>]+>/)
@@ -598,7 +598,7 @@ describe('content contract', () => {
   })
 
   it('separates Ingress evidence from Gateway API route conditions', () => {
-    const chapter = readRequiredContent('docs/operations/troubleshooting.md')
+    const chapter = readRequiredContent('docs/kubernetes/operations/troubleshooting.md')
     if (chapter === null) return
 
     expect(chapter).toContain('Ingress 没有 Gateway API 的标准 Accepted/ResolvedRefs conditions')
@@ -612,7 +612,7 @@ describe('content contract', () => {
   })
 
   it('maps object scope, ownership, references, lifetime, and primary commands', () => {
-    const chapter = readRequiredContent('docs/reference/concept-map.md')
+    const chapter = readRequiredContent('docs/kubernetes/reference/concept-map.md')
     if (chapter === null) return
 
     const relationshipTable = markdownTables(chapter).find((table) =>
@@ -643,12 +643,12 @@ describe('content contract', () => {
   })
 
   it('routes Service metadata through actors before traffic data planes', () => {
-    const chapter = readRequiredContent('docs/reference/concept-map.md')
+    const chapter = readRequiredContent('docs/kubernetes/reference/concept-map.md')
     if (chapter === null) return
 
     const diagram = markdownFences(
       chapter,
-      'docs/reference/concept-map.md',
+      'docs/kubernetes/reference/concept-map.md',
     ).find((fence) => fence.language === 'mermaid')
     expect(diagram).toBeDefined()
     const edges = mermaidEdges(diagram?.content ?? '')
@@ -680,12 +680,12 @@ describe('content contract', () => {
     expect(operations, 'sidebar is missing the operations group').not.toBeNull()
     expect(reference, 'sidebar is missing the reference group').not.toBeNull()
     expect(Array.from(operations?.[1].matchAll(/link: '([^']+)'/g) ?? [], (match) => match[1])).toEqual([
-      '/operations/health-lifecycle',
-      '/operations/release-scaling',
-      '/operations/troubleshooting',
+      '/kubernetes/operations/health-lifecycle',
+      '/kubernetes/operations/release-scaling',
+      '/kubernetes/operations/troubleshooting',
     ])
     expect(Array.from(reference?.[1].matchAll(/link: '([^']+)'/g) ?? [], (match) => match[1])).toEqual([
-      '/reference/concept-map',
+      '/kubernetes/reference/concept-map',
     ])
     expect(sidebar.indexOf("text: '运行实践'")).toBeGreaterThan(sidebar.indexOf("text: '核心概念'"))
     expect(sidebar.indexOf("text: '速查'")).toBeGreaterThan(sidebar.indexOf("text: '运行实践'"))
@@ -710,7 +710,7 @@ describe('content contract', () => {
   })
 
   it('introduces the core workload relationships on the home page', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
 
     for (const term of [
       'Deployment',
@@ -726,7 +726,7 @@ describe('content contract', () => {
   })
 
   it('distinguishes object envelopes from resource-specific state', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
 
     for (const phrase of [
       'apiVersion、kind 和 metadata 是顶层对象的必需信封字段。',
@@ -744,7 +744,7 @@ describe('content contract', () => {
 
   it('keeps workload creation, API persistence, and observed status distinct', () => {
     const flow = readFileSync(
-      resolve(root, 'docs/guide/deployment-flow.md'),
+      resolve(root, 'docs/kubernetes/guide/deployment-flow.md'),
       'utf8',
     )
 
@@ -760,7 +760,7 @@ describe('content contract', () => {
     expect(flow).not.toContain('每个组件更新自己的 `status`')
     expect(flow).not.toContain('participant P as Pod')
 
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
     expect(home).toContain(
       'RC -->|creates 创建| P["Pod API object"]',
     )
@@ -771,9 +771,9 @@ describe('content contract', () => {
   })
 
   it('separates ingress resources from their managed traffic dataplane', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
     const flow = readFileSync(
-      resolve(root, 'docs/guide/deployment-flow.md'),
+      resolve(root, 'docs/kubernetes/guide/deployment-flow.md'),
       'utf8',
     )
 
@@ -796,9 +796,9 @@ describe('content contract', () => {
   })
 
   it('keeps the runnable example self-contained and selects all replica logs', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
     const flow = readFileSync(
-      resolve(root, 'docs/guide/deployment-flow.md'),
+      resolve(root, 'docs/kubernetes/guide/deployment-flow.md'),
       'utf8',
     )
 
@@ -818,7 +818,7 @@ describe('content contract', () => {
   })
 
   it('distinguishes claim references from container volume mounts', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
 
     for (const relation of [
       'P -->|references 引用| CM["ConfigMap"]',
@@ -838,7 +838,7 @@ describe('content contract', () => {
 
   it('mediates control-plane actions through the API Server', () => {
     const flow = readFileSync(
-      resolve(root, 'docs/guide/deployment-flow.md'),
+      resolve(root, 'docs/kubernetes/guide/deployment-flow.md'),
       'utf8',
     )
 
@@ -871,7 +871,7 @@ describe('content contract', () => {
   })
 
   it('describes control-loop watches and updates in their real direction', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
 
     for (const interaction of [
       'A -.->|is watched by 被观察| CO["Controller (reconciles desired state)"]',
@@ -888,7 +888,7 @@ describe('content contract', () => {
   })
 
   it('keeps EndpointSlice metadata separate from request forwarding', () => {
-    const home = readFileSync(resolve(root, 'docs/index.md'), 'utf8')
+    const home = readFileSync(resolve(root, 'docs/kubernetes/index.md'), 'utf8')
 
     for (const relation of [
       'SD["optional Service data plane (ClusterIP / kube-proxy / eBPF)"]',
@@ -944,8 +944,8 @@ describe('content contract', () => {
 
   it('contains root-absolute links within docs and ignores protocol-relative URLs', () => {
     expect(resolveRootAbsoluteHref('//cdn.example.com/asset.css')).toBeNull()
-    expect(resolveRootAbsoluteHref('/concepts/workloads')?.target).toBe(
-      resolve(docsRoot, 'concepts/workloads'),
+    expect(resolveRootAbsoluteHref('/kubernetes/concepts/workloads')?.target).toBe(
+      resolve(docsRoot, 'kubernetes/concepts/workloads'),
     )
     expect(() => resolveRootAbsoluteHref('/../package.json')).toThrow(
       'escapes docs',

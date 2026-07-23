@@ -16,6 +16,38 @@ beforeAll(() => {
 }, 30_000)
 
 describe('production build', () => {
+  it('publishes the root workbench and every Kubernetes topic page without legacy routes', () => {
+    for (const page of [
+      'index.html',
+      'kubernetes/index.html',
+      'kubernetes/guide/deployment-flow.html',
+      'kubernetes/concepts/resource-model.html',
+      'kubernetes/concepts/cluster-nodes.html',
+      'kubernetes/concepts/workloads.html',
+      'kubernetes/concepts/networking.html',
+      'kubernetes/concepts/config-storage.html',
+      'kubernetes/concepts/security.html',
+      'kubernetes/concepts/scheduling-resources.html',
+      'kubernetes/operations/health-lifecycle.html',
+      'kubernetes/operations/release-scaling.html',
+      'kubernetes/operations/troubleshooting.html',
+      'kubernetes/reference/concept-map.html',
+    ]) {
+      expect(existsSync(resolve(dist, page)), `${page} must be published`).toBe(true)
+    }
+
+    for (const directory of ['guide', 'concepts', 'operations', 'reference']) {
+      expect(existsSync(resolve(dist, directory))).toBe(false)
+    }
+
+    const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
+    const kubernetesHome = readFileSync(resolve(dist, 'kubernetes/index.html'), 'utf8')
+    expect(home).toContain('应用开发者的云原生技术工作台')
+    expect(home).toContain('href="/kubernetes/"')
+    expect(home).toContain('Kubernetes')
+    expect(kubernetesHome).toContain('Kubernetes 概念总览')
+  })
+
   it('does not publish internal superpowers pages', () => {
     expect(existsSync(resolve(dist, 'superpowers'))).toBe(false)
   })

@@ -124,4 +124,4 @@ spec:
 
 ## 继续阅读
 
-前置：[工作负载](/concepts/workloads)。下一篇：[配置与存储](/concepts/config-storage)，理解 Pod 如何读取配置并引用持久数据。
+前置：[工作负载](/kubernetes/concepts/workloads)。下一篇：[配置与存储](/kubernetes/concepts/config-storage)，理解 Pod 如何读取配置并引用持久数据。

@@ -148,4 +148,4 @@ kubectl -n "$NS" get deployment web -o yaml
 - Pod 不 Ready：检查 readinessProbe 路径、端口和依赖服务。
 - Service 没有 endpoint：核对 selector 与 Pod labels，并检查 EndpointSlice 的 ready 条件。
 
-需要按症状逐层定位时，继续阅读[故障排查](/operations/troubleshooting)。该页面会补充事件、条件和回滚的系统化检查清单。
+需要按症状逐层定位时，继续阅读[故障排查](/kubernetes/operations/troubleshooting)。该页面会补充事件、条件和回滚的系统化检查清单。

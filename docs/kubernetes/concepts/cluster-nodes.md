@@ -71,4 +71,4 @@ Node 的 `Ready=True` 表示 kubelet 报告的节点健康条件满足，并不�
 
 ## 继续阅读
 
-前置：[资源对象与元数据](/concepts/resource-model)。下一篇：[工作负载](/concepts/workloads)，比较各类 controller 如何创建和维护 Pod。
+前置：[资源对象与元数据](/kubernetes/concepts/resource-model)。下一篇：[工作负载](/kubernetes/concepts/workloads)，比较各类 controller 如何创建和维护 Pod。

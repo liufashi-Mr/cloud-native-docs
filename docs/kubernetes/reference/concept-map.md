@@ -124,4 +124,4 @@ kubectl -n "$NS" auth can-i --list
 
 ## 继续阅读
 
-前置：[系统化排障](/operations/troubleshooting)。回到[概念总览](/)，或按表中的主要命令从具体对象重新进入对应章节。
+前置：[系统化排障](/kubernetes/operations/troubleshooting)。回到[概念总览](/kubernetes/)，或按表中的主要命令从具体对象重新进入对应章节。

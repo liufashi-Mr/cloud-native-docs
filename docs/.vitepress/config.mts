@@ -137,41 +137,43 @@ export default defineConfig({
       { text: '运行实践', link: '/operations/health-lifecycle' },
       { text: '速查', link: '/reference/concept-map' },
     ],
-    sidebar: [
-      {
-        text: '开始',
-        items: [
-          { text: '概念总览', link: '/' },
-          { text: '发布与调谐之旅', link: '/guide/deployment-flow' },
-        ],
-      },
-      {
-        text: '核心概念',
-        items: [
-          { text: '资源对象与元数据', link: '/concepts/resource-model' },
-          { text: '集群与节点', link: '/concepts/cluster-nodes' },
-          { text: '工作负载', link: '/concepts/workloads' },
-          { text: '网络与流量', link: '/concepts/networking' },
-          { text: '配置与存储', link: '/concepts/config-storage' },
-          { text: '身份与安全', link: '/concepts/security' },
-          { text: '调度与资源', link: '/concepts/scheduling-resources' },
-        ],
-      },
-      {
-        text: '运行实践',
-        items: [
-          { text: '健康检查与生命周期', link: '/operations/health-lifecycle' },
-          { text: '发布与扩缩容', link: '/operations/release-scaling' },
-          { text: '系统化排障', link: '/operations/troubleshooting' },
-        ],
-      },
-      {
-        text: '速查',
-        items: [
-          { text: '概念关系速查', link: '/reference/concept-map' },
-        ],
-      },
-    ],
+    sidebar: {
+      '/kubernetes/': [
+        {
+          text: '开始',
+          items: [
+            { text: '概念总览', link: '/kubernetes/' },
+            { text: '发布与调谐之旅', link: '/kubernetes/guide/deployment-flow' },
+          ],
+        },
+        {
+          text: '核心概念',
+          items: [
+            { text: '资源对象与元数据', link: '/kubernetes/concepts/resource-model' },
+            { text: '集群与节点', link: '/kubernetes/concepts/cluster-nodes' },
+            { text: '工作负载', link: '/kubernetes/concepts/workloads' },
+            { text: '网络与流量', link: '/kubernetes/concepts/networking' },
+            { text: '配置与存储', link: '/kubernetes/concepts/config-storage' },
+            { text: '身份与安全', link: '/kubernetes/concepts/security' },
+            { text: '调度与资源', link: '/kubernetes/concepts/scheduling-resources' },
+          ],
+        },
+        {
+          text: '运行实践',
+          items: [
+            { text: '健康检查与生命周期', link: '/kubernetes/operations/health-lifecycle' },
+            { text: '发布与扩缩容', link: '/kubernetes/operations/release-scaling' },
+            { text: '系统化排障', link: '/kubernetes/operations/troubleshooting' },
+          ],
+        },
+        {
+          text: '速查',
+          items: [
+            { text: '概念关系速查', link: '/kubernetes/reference/concept-map' },
+          ],
+        },
+      ],
+    },
     search: {
       provider: 'local',
     },

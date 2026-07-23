@@ -105,4 +105,4 @@ kubectl -n demo get pdb web -o jsonpath='{.status.currentHealthy}{" healthy / "}
 
 ## 继续阅读
 
-前置：[健康检查与生命周期](/operations/health-lifecycle)。下一篇：[系统化排障](/operations/troubleshooting)，沿对象生成与真实流量路径定位发布失败。
+前置：[健康检查与生命周期](/kubernetes/operations/health-lifecycle)。下一篇：[系统化排障](/kubernetes/operations/troubleshooting)，沿对象生成与真实流量路径定位发布失败。
