@@ -3,6 +3,7 @@ import {
   Activity,
   ArrowRight,
   Boxes,
+  Check,
   GitBranch,
   Package,
   Shield,
@@ -99,7 +100,10 @@ const domainIcons = {
               >
                 <img v-if="topic.logo" :src="withBase(topic.logo)" alt="" aria-hidden="true" />
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
-                <span class="cloud-native-home__status cloud-native-home__status--available">已完成</span>
+                <span class="cloud-native-home__completion">
+                  <Check :size="14" aria-hidden="true" />
+                  已完成
+                </span>
                 <ArrowRight :size="16" aria-hidden="true" />
               </a>
               <div
@@ -291,19 +295,15 @@ const domainIcons = {
 .cloud-native-home__domains {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
+  gap: 0;
+  align-items: stretch;
   margin-top: 20px;
+  --catalog-divider: color-mix(in srgb, var(--vp-c-divider) 44%, transparent);
 }
 
 .cloud-native-home__domain {
   min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--vp-c-divider);
-  border-top: 3px solid var(--domain-accent);
-  border-radius: 6px;
-  background: var(--vp-c-bg);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  padding: 24px 22px;
 }
 
 .cloud-native-home__domain-heading {
@@ -361,6 +361,22 @@ const domainIcons = {
   background: color-mix(in srgb, var(--vp-c-brand-1) 7%, var(--vp-c-bg));
 }
 
+.cloud-native-home__completion {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  color: var(--vp-c-brand-1);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cloud-native-home__completion svg {
+  flex: 0 0 auto;
+}
+
 .cloud-native-home__topic--available:hover {
   color: var(--vp-c-brand-1);
   background: color-mix(in srgb, var(--vp-c-brand-1) 12%, var(--vp-c-bg));
@@ -413,6 +429,17 @@ const domainIcons = {
   text-underline-offset: 3px;
 }
 
+@media (min-width: 1101px) {
+  .cloud-native-home__domain:nth-child(3n + 2),
+  .cloud-native-home__domain:nth-child(3n + 3) {
+    border-left: 1px solid var(--catalog-divider);
+  }
+
+  .cloud-native-home__domain:nth-child(n + 4) {
+    border-top: 1px solid var(--catalog-divider);
+  }
+}
+
 @media (max-width: 1100px) {
   .cloud-native-home__paths {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -420,6 +447,16 @@ const domainIcons = {
 
   .cloud-native-home__domains {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 681px) and (max-width: 1100px) {
+  .cloud-native-home__domain:nth-child(even) {
+    border-left: 1px solid var(--catalog-divider);
+  }
+
+  .cloud-native-home__domain:nth-child(n + 3) {
+    border-top: 1px solid var(--catalog-divider);
   }
 }
 
@@ -449,6 +486,14 @@ const domainIcons = {
 
   .cloud-native-home__path {
     min-height: 0;
+  }
+
+  .cloud-native-home__domain {
+    padding: 20px 0;
+  }
+
+  .cloud-native-home__domain + .cloud-native-home__domain {
+    border-top: 1px solid var(--catalog-divider);
   }
 
   .cloud-native-home__recommended {

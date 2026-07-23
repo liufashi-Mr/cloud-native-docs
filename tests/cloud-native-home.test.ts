@@ -80,6 +80,9 @@ describe('CloudNativeHome', () => {
     expect(kubernetes.attributes('href')).toBe('/project/kubernetes/')
     expect(kubernetes.text()).toContain('Kubernetes')
     expect(kubernetes.text()).toContain('已完成')
+    expect(kubernetes.find('.cloud-native-home__completion').exists()).toBe(true)
+    expect(kubernetes.find('.cloud-native-home__completion svg[aria-hidden="true"]').exists()).toBe(true)
+    expect(kubernetes.find('.cloud-native-home__status--available').exists()).toBe(false)
 
     const planned = wrapper.findAll('[data-topic][data-status="planned"]')
     expect(planned).toHaveLength(23)
@@ -98,15 +101,21 @@ describe('CloudNativeHome', () => {
     expect(wrapper.find('button[aria-label="搜索文档"]').exists()).toBe(false)
   })
 
-  it('uses accented domain modules with separator topic rows and a soft Kubernetes treatment', () => {
+  it('uses a divided domain catalog with separator topic rows and a soft Kubernetes treatment', () => {
+    const domains = styleRule('.cloud-native-home__domains')
     const domain = styleRule('.cloud-native-home__domain')
     const topics = styleRule('.cloud-native-home__topics')
     const topic = styleRule('.cloud-native-home__topic')
     const availableTopic = styleRule('.cloud-native-home__topic--available')
 
-    expect(domain).toContain('border: 1px solid var(--vp-c-divider);')
-    expect(domain).toContain('border-top: 3px solid var(--domain-accent);')
-    expect(domain).toContain('background: var(--vp-c-bg);')
+    expect(domains).toContain('gap: 0;')
+    expect(domain).not.toMatch(/\b(border|border-radius|box-shadow|background)\s*:/)
+    expect(componentSource).toContain('@media (min-width: 1101px)')
+    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(3n + 2)')
+    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(n + 4)')
+    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(even)')
+    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(n + 3)')
+    expect(componentSource).toContain('.cloud-native-home__domain + .cloud-native-home__domain')
     expect(topics).toContain('gap: 0;')
     expect(componentSource).toContain('.cloud-native-home__topic + .cloud-native-home__topic')
     expect(componentSource).toContain(
