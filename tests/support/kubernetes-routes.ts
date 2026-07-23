@@ -1,0 +1,15 @@
+export const kubernetesRouteManifest = [
+  'index',
+  'guide/deployment-flow',
+  'concepts/resource-model',
+  'concepts/cluster-nodes',
+  'concepts/workloads',
+  'concepts/networking',
+  'concepts/config-storage',
+  'concepts/security',
+  'concepts/scheduling-resources',
+  'operations/health-lifecycle',
+  'operations/release-scaling',
+  'operations/troubleshooting',
+  'reference/concept-map',
+] as const

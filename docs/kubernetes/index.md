@@ -187,4 +187,4 @@ spec:
 
 ## 阅读路径
 
-先看[发布与调谐之旅](./guide/deployment-flow)，再按问题进入后续章节：[资源模型](/kubernetes/concepts/resource-model)、[节点与集群](/kubernetes/concepts/cluster-nodes)、[工作负载](/kubernetes/concepts/workloads)、[网络](/kubernetes/concepts/networking)、[配置与存储](/kubernetes/concepts/config-storage)、[安全](/kubernetes/concepts/security)、[调度与资源](/kubernetes/concepts/scheduling-resources)、[健康与生命周期](/kubernetes/operations/health-lifecycle)、[发布与伸缩](/kubernetes/operations/release-scaling)、[故障排查](/kubernetes/operations/troubleshooting)，以及最后的[概念关系速查](/kubernetes/reference/concept-map)。
+先看[发布与调谐之旅](/kubernetes/guide/deployment-flow)，再按问题进入后续章节：[资源模型](/kubernetes/concepts/resource-model)、[节点与集群](/kubernetes/concepts/cluster-nodes)、[工作负载](/kubernetes/concepts/workloads)、[网络](/kubernetes/concepts/networking)、[配置与存储](/kubernetes/concepts/config-storage)、[安全](/kubernetes/concepts/security)、[调度与资源](/kubernetes/concepts/scheduling-resources)、[健康与生命周期](/kubernetes/operations/health-lifecycle)、[发布与伸缩](/kubernetes/operations/release-scaling)、[故障排查](/kubernetes/operations/troubleshooting)，以及最后的[概念关系速查](/kubernetes/reference/concept-map)。

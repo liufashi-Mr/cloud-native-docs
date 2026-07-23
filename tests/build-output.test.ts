@@ -3,8 +3,20 @@ import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { kubernetesRouteManifest } from './support/kubernetes-routes'
+
 const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'docs/.vitepress/dist')
+
+function builtKubernetesRoutes(): string[] {
+  return readdirSync(resolve(dist, 'kubernetes'), {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .filter((file) => file.endsWith('.html'))
+    .map((file) => file.replace(/\.html$/, ''))
+    .sort()
+}
 
 beforeAll(() => {
   rmSync(dist, { force: true, recursive: true })
@@ -17,22 +29,9 @@ beforeAll(() => {
 
 describe('production build', () => {
   it('publishes the root workbench and every Kubernetes topic page without legacy routes', () => {
-    for (const page of [
-      'index.html',
-      'kubernetes/index.html',
-      'kubernetes/guide/deployment-flow.html',
-      'kubernetes/concepts/resource-model.html',
-      'kubernetes/concepts/cluster-nodes.html',
-      'kubernetes/concepts/workloads.html',
-      'kubernetes/concepts/networking.html',
-      'kubernetes/concepts/config-storage.html',
-      'kubernetes/concepts/security.html',
-      'kubernetes/concepts/scheduling-resources.html',
-      'kubernetes/operations/health-lifecycle.html',
-      'kubernetes/operations/release-scaling.html',
-      'kubernetes/operations/troubleshooting.html',
-      'kubernetes/reference/concept-map.html',
-    ]) {
+    expect(existsSync(resolve(dist, 'index.html'))).toBe(true)
+    for (const route of kubernetesRouteManifest) {
+      const page = `kubernetes/${route}.html`
       expect(existsSync(resolve(dist, page)), `${page} must be published`).toBe(true)
     }
 
@@ -46,6 +45,10 @@ describe('production build', () => {
     expect(home).toContain('href="/kubernetes/"')
     expect(home).toContain('Kubernetes')
     expect(kubernetesHome).toContain('Kubernetes 概念总览')
+  })
+
+  it('publishes exactly the Kubernetes HTML route inventory', () => {
+    expect(builtKubernetesRoutes()).toEqual([...kubernetesRouteManifest].sort())
   })
 
   it('does not publish internal superpowers pages', () => {

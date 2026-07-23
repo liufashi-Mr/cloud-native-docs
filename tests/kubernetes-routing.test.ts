@@ -1,28 +1,32 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { kubernetesRouteManifest } from './support/kubernetes-routes'
+
 const root = resolve(import.meta.dirname, '..')
 const docsRoot = resolve(root, 'docs')
-const kubernetesFiles = [
-  'docs/kubernetes/index.md',
-  'docs/kubernetes/guide/deployment-flow.md',
-  'docs/kubernetes/concepts/resource-model.md',
-  'docs/kubernetes/concepts/cluster-nodes.md',
-  'docs/kubernetes/concepts/workloads.md',
-  'docs/kubernetes/concepts/networking.md',
-  'docs/kubernetes/concepts/config-storage.md',
-  'docs/kubernetes/concepts/security.md',
-  'docs/kubernetes/concepts/scheduling-resources.md',
-  'docs/kubernetes/operations/health-lifecycle.md',
-  'docs/kubernetes/operations/release-scaling.md',
-  'docs/kubernetes/operations/troubleshooting.md',
-  'docs/kubernetes/reference/concept-map.md',
-]
+const kubernetesFiles = kubernetesRouteManifest.map(
+  (route) => `docs/kubernetes/${route}.md`,
+)
+
+function sourceMarkdownRoutes(): string[] {
+  return readdirSync(resolve(docsRoot, 'kubernetes'), {
+    encoding: 'utf8',
+    recursive: true,
+  })
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => file.replace(/\.md$/, ''))
+    .sort()
+}
 
 describe('Kubernetes topic routing', () => {
   it.each(kubernetesFiles)('%s exists under the Kubernetes topic', (file) => {
     expect(existsSync(resolve(root, file))).toBe(true)
+  })
+
+  it('contains exactly the Kubernetes Markdown route inventory', () => {
+    expect(sourceMarkdownRoutes()).toEqual([...kubernetesRouteManifest].sort())
   })
 
   it.each(['guide', 'concepts', 'operations', 'reference'])(
@@ -37,6 +41,12 @@ describe('Kubernetes topic routing', () => {
 
     expect(source).not.toMatch(/\]\(\/(?:concepts|guide|operations|reference)(?:\/|\))/)
     expect(source).not.toMatch(/\]\(\/\)/)
+  })
+
+  it('links the Kubernetes reading path with an absolute topic route', () => {
+    const source = readFileSync(resolve(docsRoot, 'kubernetes/index.md'), 'utf8')
+
+    expect(source).toContain('[发布与调谐之旅](/kubernetes/guide/deployment-flow)')
   })
 
   it('scopes the sidebar and all representative links to Kubernetes', () => {
