@@ -299,9 +299,10 @@ const domainIcons = {
 .cloud-native-home__domain {
   min-width: 0;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--domain-accent) 24%, var(--vp-c-divider));
+  border: 1px solid var(--vp-c-divider);
+  border-top: 3px solid var(--domain-accent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--domain-accent) 3%, var(--vp-c-bg));
+  background: var(--vp-c-bg);
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
@@ -330,7 +331,7 @@ const domainIcons = {
 
 .cloud-native-home__topics {
   display: grid;
-  gap: 7px;
+  gap: 0;
   margin-top: 13px;
 }
 
@@ -340,28 +341,29 @@ const domainIcons = {
   gap: 8px;
   align-items: center;
   min-height: 38px;
-  padding: 7px 9px;
-  border: 1px solid color-mix(in srgb, var(--vp-c-divider) 72%, transparent);
-  border-radius: 4px;
+  padding: 9px 0;
   font-size: 13px;
   line-height: 1.25;
   text-decoration: none;
 }
 
+.cloud-native-home__topic + .cloud-native-home__topic {
+  border-top: 1px solid color-mix(in srgb, var(--vp-c-divider) 58%, transparent);
+}
+
 .cloud-native-home__topic--planned {
   color: var(--vp-c-text-2);
-  background: color-mix(in srgb, var(--vp-c-bg-soft) 50%, transparent);
 }
 
 .cloud-native-home__topic--available {
   grid-template-columns: 20px minmax(0, 1fr) auto 16px;
   color: var(--vp-c-text-1);
-  border-color: color-mix(in srgb, var(--vp-c-brand-1) 50%, var(--vp-c-divider));
+  background: color-mix(in srgb, var(--vp-c-brand-1) 7%, var(--vp-c-bg));
 }
 
 .cloud-native-home__topic--available:hover {
   color: var(--vp-c-brand-1);
-  background: var(--vp-c-brand-soft);
+  background: color-mix(in srgb, var(--vp-c-brand-1) 12%, var(--vp-c-bg));
 }
 
 .cloud-native-home__topic img {

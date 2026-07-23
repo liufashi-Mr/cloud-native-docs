@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -16,6 +19,22 @@ import {
 const invalidAvailableTopic: TechnologyTopic = {
   title: 'Broken topic',
   status: 'available',
+}
+
+const componentSource = readFileSync(
+  resolve(process.cwd(), 'docs/.vitepress/theme/components/CloudNativeHome.vue'),
+  'utf8',
+)
+
+function styleRule(selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = componentSource.match(new RegExp(`${escapedSelector}\\s*{([\\s\\S]*?)\\n}`))
+
+  if (!match) {
+    throw new Error(`Missing ${selector} style rule`)
+  }
+
+  return match[1]
 }
 
 describe('CloudNativeHome', () => {
@@ -77,5 +96,24 @@ describe('CloudNativeHome', () => {
     expect(start.text()).toBe('进入 Kubernetes 专题')
     expect(start.attributes('href')).toBe('/project/kubernetes/')
     expect(wrapper.find('button[aria-label="搜索文档"]').exists()).toBe(false)
+  })
+
+  it('uses accented domain modules with separator topic rows and a soft Kubernetes treatment', () => {
+    const domain = styleRule('.cloud-native-home__domain')
+    const topics = styleRule('.cloud-native-home__topics')
+    const topic = styleRule('.cloud-native-home__topic')
+    const availableTopic = styleRule('.cloud-native-home__topic--available')
+
+    expect(domain).toContain('border: 1px solid var(--vp-c-divider);')
+    expect(domain).toContain('border-top: 3px solid var(--domain-accent);')
+    expect(domain).toContain('background: var(--vp-c-bg);')
+    expect(topics).toContain('gap: 0;')
+    expect(componentSource).toContain('.cloud-native-home__topic + .cloud-native-home__topic')
+    expect(componentSource).toContain(
+      'border-top: 1px solid color-mix(in srgb, var(--vp-c-divider) 58%, transparent);',
+    )
+    expect(topic).not.toMatch(/\b(border|background|border-radius)\s*:/)
+    expect(availableTopic).not.toMatch(/\bborder(?:-color)?\s*:/)
+    expect(availableTopic).toMatch(/\bbackground\s*:/)
   })
 })
