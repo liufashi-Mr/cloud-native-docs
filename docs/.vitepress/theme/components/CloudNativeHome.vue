@@ -207,7 +207,7 @@ const domainIcons = {
 
 .cloud-native-home__summary span + span {
   padding-left: 20px;
-  border-left: 1px solid var(--vp-c-divider);
+  border-inline-start: 1px solid var(--vp-c-divider);
 }
 
 .cloud-native-home a:focus-visible {
@@ -225,7 +225,7 @@ const domainIcons = {
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--vp-c-divider);
+  border-block-end: 1px solid var(--vp-c-divider);
 }
 
 .cloud-native-home__paths {
@@ -240,7 +240,7 @@ const domainIcons = {
   min-height: 164px;
   padding: 14px;
   border: 1px solid var(--vp-c-divider);
-  border-top: 3px solid var(--domain-accent);
+  border-block-start: 3px solid var(--domain-accent);
   border-radius: 5px;
   background: var(--vp-c-bg);
 }
@@ -343,7 +343,7 @@ const domainIcons = {
 }
 
 .cloud-native-home__topic + .cloud-native-home__topic {
-  border-top: 1px solid color-mix(in srgb, var(--vp-c-divider) 58%, transparent);
+  border-block-start: 1px solid color-mix(in srgb, var(--vp-c-divider) 58%, transparent);
 }
 
 .cloud-native-home__topic--planned {
@@ -367,6 +367,14 @@ const domainIcons = {
   transform: translateX(3px);
 }
 
+[dir='rtl'] .cloud-native-home__topic--available > svg {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .cloud-native-home__topic--available:hover > svg {
+  transform: translateX(-3px) scaleX(-1);
+}
+
 .cloud-native-home__topic img {
   width: 20px;
   height: 20px;
@@ -385,8 +393,8 @@ const domainIcons = {
   gap: 24px;
   margin-top: 56px;
   padding: 24px 0;
-  border-top: 1px solid var(--vp-c-divider);
-  border-bottom: 1px solid var(--vp-c-divider);
+  border-block-start: 1px solid var(--vp-c-divider);
+  border-block-end: 1px solid var(--vp-c-divider);
 }
 
 .cloud-native-home__recommended p:not(.cloud-native-home__eyebrow) {
@@ -414,15 +422,13 @@ const domainIcons = {
   text-underline-offset: 3px;
 }
 
-@media (min-width: 1101px) {
-  .cloud-native-home__domain:nth-child(3n + 2),
-  .cloud-native-home__domain:nth-child(3n + 3) {
-    border-left: 1px solid var(--catalog-divider);
-  }
+.cloud-native-home__domain:nth-child(3n + 2),
+.cloud-native-home__domain:nth-child(3n + 3) {
+  border-inline-start: 1px solid var(--catalog-divider);
+}
 
-  .cloud-native-home__domain:nth-child(n + 4) {
-    border-top: 1px solid var(--catalog-divider);
-  }
+.cloud-native-home__domain:nth-child(n + 4) {
+  border-block-start: 1px solid var(--catalog-divider);
 }
 
 @media (max-width: 1100px) {
@@ -433,15 +439,22 @@ const domainIcons = {
   .cloud-native-home__domains {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (min-width: 681px) and (max-width: 1100px) {
+  .cloud-native-home__domain:nth-child(3n + 2),
+  .cloud-native-home__domain:nth-child(3n + 3) {
+    border-inline-start: 0;
+  }
+
+  .cloud-native-home__domain:nth-child(n + 4) {
+    border-block-start: 0;
+  }
+
   .cloud-native-home__domain:nth-child(even) {
-    border-left: 1px solid var(--catalog-divider);
+    border-inline-start: 1px solid var(--catalog-divider);
   }
 
   .cloud-native-home__domain:nth-child(n + 3) {
-    border-top: 1px solid var(--catalog-divider);
+    border-block-start: 1px solid var(--catalog-divider);
   }
 }
 
@@ -467,7 +480,7 @@ const domainIcons = {
 
   .cloud-native-home__summary span + span {
     padding-left: 0;
-    border-left: 0;
+    border-inline-start: 0;
   }
 
   .cloud-native-home__paths,
@@ -483,8 +496,16 @@ const domainIcons = {
     padding: 20px 0;
   }
 
+  .cloud-native-home__domain:nth-child(even) {
+    border-inline-start: 0;
+  }
+
+  .cloud-native-home__domain:nth-child(n + 3) {
+    border-block-start: 0;
+  }
+
   .cloud-native-home__domain + .cloud-native-home__domain {
-    border-top: 1px solid var(--catalog-divider);
+    border-block-start: 1px solid var(--catalog-divider);
   }
 
   .cloud-native-home__recommended {

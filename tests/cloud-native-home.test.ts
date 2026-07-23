@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { generate, parse as parseCss, walk } from 'css-tree'
+import type { CssNode } from 'css-tree'
+import { compileStyle, parse as parseSfc } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -21,46 +24,85 @@ const invalidAvailableTopic: TechnologyTopic = {
   status: 'available',
 }
 
-const componentSource = readFileSync(
-  resolve(process.cwd(), 'docs/.vitepress/theme/components/CloudNativeHome.vue'),
-  'utf8',
+const HOME_COMPONENT_PATH = resolve(
+  process.cwd(),
+  'docs/.vitepress/theme/components/CloudNativeHome.vue',
 )
-const styleMatch = componentSource.match(/<style scoped>([\s\S]*?)<\/style>/)
 
-if (!styleMatch) {
-  throw new Error('Missing CloudNativeHome scoped style block')
+interface CssRule {
+  declarations: Map<string, string>
+  media: string | null
+  order: number
+  selector: string
 }
 
-const styleSource = styleMatch[1]
-
-function styleRule(selector: string): string {
-  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = styleSource.match(new RegExp(`${escapedSelector}\\s*{([\\s\\S]*?)\\n}`))
-
-  if (!match) {
-    throw new Error(`Missing ${selector} style rule`)
-  }
-
-  return match[1]
+function normalizeCss(value: string): string {
+  return value.replace(/\s+/g, '')
 }
 
-function mediaBlock(query: string): string {
-  const start = styleSource.indexOf(query)
+function compiledHomeCssRules(): CssRule[] {
+  const source = readFileSync(HOME_COMPONENT_PATH, 'utf8')
+  const { descriptor, errors } = parseSfc(source, { filename: HOME_COMPONENT_PATH })
+  if (errors.length > 0) throw errors[0]
 
-  if (start === -1) {
-    throw new Error(`Missing ${query} media query`)
-  }
+  const style = descriptor.styles.find((block) => block.scoped)
+  if (!style) throw new Error('Missing CloudNativeHome scoped style block')
 
-  const openingBrace = styleSource.indexOf('{', start)
-  let depth = 0
+  const result = compileStyle({
+    filename: HOME_COMPONENT_PATH,
+    id: 'data-v-cloud-native-home-test',
+    source: style.content,
+    scoped: true,
+  })
+  if (result.errors.length > 0) throw result.errors[0]
 
-  for (let index = openingBrace; index < styleSource.length; index += 1) {
-    if (styleSource[index] === '{') depth += 1
-    if (styleSource[index] === '}') depth -= 1
-    if (depth === 0) return styleSource.slice(openingBrace + 1, index)
-  }
+  const mediaStack: string[] = []
+  const rules: CssRule[] = []
+  let order = 0
 
-  throw new Error(`Unclosed ${query} media query`)
+  walk(parseCss(result.code), {
+    enter(node: CssNode) {
+      if (node.type === 'Atrule' && node.name === 'media' && node.prelude) {
+        mediaStack.push(normalizeCss(generate(node.prelude)))
+      }
+
+      if (node.type === 'Rule' && node.prelude.type === 'SelectorList') {
+        const declarations = new Map<string, string>()
+        node.block.children.forEach((child: CssNode) => {
+          if (child.type === 'Declaration') {
+            declarations.set(child.property, normalizeCss(generate(child.value)))
+          }
+        })
+        rules.push({
+          declarations,
+          media: mediaStack.at(-1) ?? null,
+          order: order += 1,
+          selector: generate(node.prelude),
+        })
+      }
+    },
+    leave(node: CssNode) {
+      if (node.type === 'Atrule' && node.name === 'media') mediaStack.pop()
+    },
+  })
+
+  return rules
+}
+
+const cssRules = compiledHomeCssRules()
+
+function rule(selector: RegExp, media: string | null = null): CssRule {
+  const match = cssRules.find(
+    (candidate) => candidate.media === media && selector.test(candidate.selector),
+  )
+  if (!match) throw new Error(`Missing CSS rule matching ${selector}`)
+  return match
+}
+
+function declaration(cssRule: CssRule, property: string): string {
+  const value = cssRule.declarations.get(property)
+  if (!value) throw new Error(`Missing ${property} in ${cssRule.selector}`)
+  return value
 }
 
 describe('CloudNativeHome', () => {
@@ -128,78 +170,83 @@ describe('CloudNativeHome', () => {
     expect(wrapper.find('button[aria-label="搜索文档"]').exists()).toBe(false)
   })
 
-  it('uses a divided domain catalog with separator topic rows and a soft Kubernetes treatment', () => {
-    const domains = styleRule('.cloud-native-home__domains')
-    const domain = styleRule('.cloud-native-home__domain')
-    const topics = styleRule('.cloud-native-home__topics')
-    const topic = styleRule('.cloud-native-home__topic')
-    const availableTopic = styleRule('.cloud-native-home__topic--available')
-    const availableTopicHover = styleRule('.cloud-native-home__topic--available:hover')
+  it('keeps the Kubernetes row transparent and limited to its logo, title, and arrow action', () => {
+    const available = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?$/)
+    const availableHover = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?:hover$/)
 
-    expect(domains).toContain('gap: 0;')
-    expect(domain).not.toMatch(/\b(border|border-radius|box-shadow|background)\s*:/)
-    expect(componentSource).toContain('@media (min-width: 1101px)')
-    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(3n + 2)')
-    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(n + 4)')
-    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(even)')
-    expect(componentSource).toContain('.cloud-native-home__domain:nth-child(n + 3)')
-    expect(componentSource).toContain('.cloud-native-home__domain + .cloud-native-home__domain')
-    expect(topics).toContain('gap: 0;')
-    expect(componentSource).toContain('.cloud-native-home__topic + .cloud-native-home__topic')
-    expect(componentSource).toContain(
-      'border-top: 1px solid color-mix(in srgb, var(--vp-c-divider) 58%, transparent);',
-    )
-    expect(topic).not.toMatch(/\b(border|background|border-radius)\s*:/)
-    expect(availableTopic).not.toMatch(/\b(border|background|border-radius)\s*:/)
-    expect(availableTopicHover).toContain('color: var(--vp-c-brand-1);')
-    expect(availableTopicHover).not.toMatch(/\bbackground\s*:/)
+    expect(available.declarations.has('background')).toBe(false)
+    expect(available.declarations.has('border')).toBe(false)
+    expect(availableHover.declarations.has('background')).toBe(false)
+    expect(declaration(availableHover, 'color')).toBe('var(--vp-c-brand-1)')
   })
 
-  it('moves only the Kubernetes arrow on hover and disables that motion when requested', () => {
-    const arrow = styleRule('.cloud-native-home__topic--available > svg')
-    const arrowHover = styleRule('.cloud-native-home__topic--available:hover > svg')
-    const reducedMotion = mediaBlock('@media (prefers-reduced-motion: reduce)')
-
-    expect(arrow).toMatch(/transition\s*:\s*transform\s+\d+(?:\.\d+)?(?:ms|s)/)
-    expect(arrowHover).toMatch(/transform\s*:\s*translateX\(3px\)/)
-    expect(reducedMotion).toMatch(
-      /\.cloud-native-home__topic--available > svg\s*{[^}]*transition\s*:\s*none\s*;/,
+  it('uses logical catalog dividers with a continuous wide-to-mobile cascade', () => {
+    const wideDomains = rule(/\.cloud-native-home__domains(?:\[[^\]]+\])?$/)
+    const wideColumns = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(3n\+2\)/)
+    const wideRows = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(n\+4\)/)
+    const medium = '(max-width:1100px)'
+    const mobile = '(max-width:680px)'
+    const mediumDomains = rule(/\.cloud-native-home__domains(?:\[[^\]]+\])?/, medium)
+    const mediumColumnReset = rule(
+      /\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(3n\+2\)/,
+      medium,
     )
+    const mediumRowReset = rule(
+      /\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(n\+4\)/,
+      medium,
+    )
+    const mediumColumns = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(even\)/, medium)
+    const mediumRows = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(n\+3\)/, medium)
+    const mobileDomains = rule(/\.cloud-native-home__domains(?:\[[^\]]+\])?/, mobile)
+    const mobileColumnReset = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(even\)/, mobile)
+    const mobileRowReset = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(n\+3\)/, mobile)
+    const mobileRows = rule(
+      /\.cloud-native-home__domain(?:\[[^\]]+\])?\+\.cloud-native-home__domain/,
+      mobile,
+    )
+
+    expect(cssRules.filter((candidate) => candidate.media?.includes('min-width'))).toHaveLength(0)
+    expect(declaration(wideDomains, 'grid-template-columns')).toBe('repeat(3,minmax(0,1fr))')
+    expect(declaration(wideColumns, 'border-inline-start')).toContain('var(--catalog-divider)')
+    expect(declaration(wideRows, 'border-block-start')).toContain('var(--catalog-divider)')
+
+    expect(declaration(mediumDomains, 'grid-template-columns')).toBe('repeat(2,minmax(0,1fr))')
+    expect(declaration(mediumColumnReset, 'border-inline-start')).toBe('0')
+    expect(declaration(mediumRowReset, 'border-block-start')).toBe('0')
+    expect(declaration(mediumColumns, 'border-inline-start')).toContain('var(--catalog-divider)')
+    expect(declaration(mediumRows, 'border-block-start')).toContain('var(--catalog-divider)')
+    expect(mediumColumnReset.order).toBeGreaterThan(wideColumns.order)
+    expect(mediumRowReset.order).toBeGreaterThan(wideRows.order)
+
+    expect(declaration(mobileDomains, 'grid-template-columns')).toBe('minmax(0,1fr)')
+    expect(declaration(mobileColumnReset, 'border-inline-start')).toBe('0')
+    expect(declaration(mobileRowReset, 'border-block-start')).toBe('0')
+    expect(declaration(mobileRows, 'border-block-start')).toContain('var(--catalog-divider)')
+    expect(mobileColumnReset.order).toBeGreaterThan(mediumColumns.order)
+    expect(mobileRowReset.order).toBeGreaterThan(mediumRows.order)
+    expect(cssRules.some((candidate) => candidate.declarations.has('border-left'))).toBe(false)
+    expect(cssRules.some((candidate) => candidate.declarations.has('border-top'))).toBe(false)
   })
 
-  it('keeps catalog dividers scoped to their responsive grid boundaries', () => {
-    const domains = styleRule('.cloud-native-home__domains')
-    const wide = mediaBlock('@media (min-width: 1101px)')
-    const mediumLayout = mediaBlock('@media (max-width: 1100px)')
-    const medium = mediaBlock('@media (min-width: 681px) and (max-width: 1100px)')
-    const mobile = mediaBlock('@media (max-width: 680px)')
-
-    expect(domains).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));')
-    expect(wide).toMatch(
-      /\.cloud-native-home__domain:nth-child\(3n \+ 2\),[\s\S]*?\.cloud-native-home__domain:nth-child\(3n \+ 3\)\s*{[\s\S]*?border-(?:inline-start|left):/,
+  it('moves the Kubernetes arrow toward the logical forward direction and honors reduced motion', () => {
+    const arrow = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?>svg/)
+    const arrowHover = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?:hover>svg/)
+    const rtlArrow = rule(
+      /\[dir=(?:'rtl'|"rtl"|rtl)\]\s+\.cloud-native-home__topic--available.*>svg/,
     )
-    expect(wide).toMatch(
-      /\.cloud-native-home__domain:nth-child\(n \+ 4\)\s*{[\s\S]*?border-(?:block-start|top):/,
+    const rtlArrowHover = rule(
+      /\[dir=(?:'rtl'|"rtl"|rtl)\]\s+\.cloud-native-home__topic--available.*:hover>svg/,
     )
-
-    expect(mediumLayout).toMatch(
-      /\.cloud-native-home__domains\s*{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
-    )
-    expect(medium).toMatch(
-      /\.cloud-native-home__domain:nth-child\(even\)\s*{[\s\S]*?border-(?:inline-start|left):/,
-    )
-    expect(medium).toMatch(
-      /\.cloud-native-home__domain:nth-child\(n \+ 3\)\s*{[\s\S]*?border-(?:block-start|top):/,
+    const reducedMotion = rule(
+      /\.cloud-native-home__topic--available(?:\[[^\]]+\])?>svg/,
+      '(prefers-reduced-motion:reduce)',
     )
 
-    expect(mobile).toMatch(
-      /\.cloud-native-home__domains\s*{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
-    )
-    expect(mobile).not.toMatch(
-      /\.cloud-native-home__domain\s*{[^}]*border-(?:inline-start|left)\s*:/,
-    )
-    expect(mobile).toMatch(
-      /\.cloud-native-home__domain \+ \.cloud-native-home__domain\s*{[\s\S]*?border-(?:block-start|top):/,
-    )
+    expect(declaration(arrow, 'transition')).toMatch(/^transform\d+(?:\.\d+)?(?:ms|s)/)
+    expect(declaration(arrowHover, 'transform')).toBe('translateX(3px)')
+    expect(declaration(rtlArrow, 'transform')).toBe('scaleX(-1)')
+    expect(declaration(rtlArrowHover, 'transform')).toBe('translateX(-3px)scaleX(-1)')
+    expect(declaration(reducedMotion, 'transition')).toBe('none')
+    expect(reducedMotion.order).toBeGreaterThan(arrow.order)
   })
 })
