@@ -14,9 +14,9 @@ Make the homepage technology catalog visually independent by domain and remove t
 ## Visual Design
 
 - The domain grid has no shared outer border.
-- Each domain uses its own `1px` border, maximum `6px` radius, subtle theme-aware background tint, and restrained shadow.
-- Domain cards are separated by a stable `16px` grid gap and use `align-items: start`, so different topic counts produce intentional independent heights.
-- Topic rows remain compact and readable inside each domain, with lower-contrast borders so the domain boundary is the primary grouping signal.
+- Each domain is an independent module panel with a neutral hairline boundary, a clean theme surface, and a small `3px` top accent in its domain tone. Do not use saturated fills or a prominent colored outline.
+- Domain panels are separated by a stable `16px` grid gap and use `align-items: start`, so different topic counts produce intentional independent heights.
+- Topic rows form a compact list inside each module: use subtle separators and no nested mini-card treatment. The Kubernetes row may use a very light brand-tinted surface, but its border must remain lighter than the module boundary.
 - Wide layouts use three domain columns, medium layouts use two, and mobile layouts use one. The page must not overflow horizontally.
 - Light/dark modes continue to use existing VitePress variables; domain tones remain small-area accents rather than large color fields.
 
