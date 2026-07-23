@@ -141,20 +141,16 @@ describe('AppearanceControl', () => {
     installMatchMedia()
     const wrapper = mountControl()
     const trigger = wrapper.get('button[aria-label="外观设置"]')
-    const currentColor = trigger.get('.k8s-appearance__current-color')
+    const palette = trigger.get('svg')
 
-    expect(currentColor.attributes('style')).toContain(
-      `--current-color: ${PRESET_COLORS[0]}`,
-    )
+    expect(palette.attributes('stroke')).toBe(PRESET_COLORS[0])
 
     await trigger.trigger('click')
     await wrapper.get(`button[data-color="${PRESET_COLORS[3]}"]`).trigger('click')
-    expect(currentColor.attributes('style')).toContain(
-      `--current-color: ${PRESET_COLORS[3]}`,
-    )
+    expect(palette.attributes('stroke')).toBe(PRESET_COLORS[3])
 
     await wrapper.get('input[type="color"]').setValue('#8fd8bc')
-    expect(currentColor.attributes('style')).toContain('--current-color: #8FD8BC')
+    expect(palette.attributes('stroke')).toBe('#8FD8BC')
   })
 
   it('renders every preset and persists the selected color', async () => {

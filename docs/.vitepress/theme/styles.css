@@ -243,15 +243,6 @@ body {
   color: var(--vp-c-text-1);
 }
 
-.k8s-appearance__current-color {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-  border-radius: 50%;
-  background: var(--current-color);
-}
-
 .k8s-appearance__popover {
   position: absolute;
   z-index: 50;

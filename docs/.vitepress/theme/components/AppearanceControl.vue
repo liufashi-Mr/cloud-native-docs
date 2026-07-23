@@ -103,12 +103,7 @@ onBeforeUnmount(() => {
       :aria-expanded="open"
       @click="togglePopover"
     >
-      <Palette :size="18" aria-hidden="true" />
-      <span
-        class="k8s-appearance__current-color"
-        :style="{ '--current-color': displayColor }"
-        aria-hidden="true"
-      />
+      <Palette :size="18" aria-hidden="true" :color="displayColor" />
     </button>
 
     <div
