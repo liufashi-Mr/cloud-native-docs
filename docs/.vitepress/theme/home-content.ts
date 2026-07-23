@@ -14,6 +14,24 @@ export type DomainTone =
   | 'rose'
   | 'violet'
 
+export type TopicIcon =
+  | 'terminal'
+  | 'network'
+  | 'hard-drive'
+  | 'cloud'
+  | 'container'
+  | 'badge-check'
+  | 'layers'
+  | 'route'
+  | 'workflow'
+  | 'git-pull-request'
+  | 'logs'
+  | 'user-cog'
+  | 'scroll-text'
+  | 'key-round'
+  | 'database-backup'
+  | 'gauge'
+
 export interface DeveloperPath {
   readonly title: string
   readonly steps: readonly string[]
@@ -24,16 +42,18 @@ interface TechnologyTopicBase {
   readonly title: string
 }
 
-interface AvailableTechnologyTopic extends TechnologyTopicBase {
+export type TopicVisual =
+  | { readonly logo: string; readonly icon?: never }
+  | { readonly icon: TopicIcon; readonly logo?: never }
+
+type AvailableTechnologyTopic = TechnologyTopicBase & TopicVisual & {
   readonly status: 'available'
   readonly href: string
-  readonly logo?: string
 }
 
-interface PlannedTechnologyTopic extends TechnologyTopicBase {
+type PlannedTechnologyTopic = TechnologyTopicBase & TopicVisual & {
   readonly status: 'planned'
   readonly href?: never
-  readonly logo?: never
 }
 
 export type TechnologyTopic = AvailableTechnologyTopic | PlannedTechnologyTopic
@@ -81,10 +101,10 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'terminal',
     tone: 'neutral',
     topics: [
-      { title: 'Linux', status: 'planned' },
-      { title: '网络与 DNS', status: 'planned' },
-      { title: '存储', status: 'planned' },
-      { title: '云平台基础', status: 'planned' },
+      { title: 'Linux', status: 'planned', icon: 'terminal' },
+      { title: '网络与 DNS', status: 'planned', icon: 'network' },
+      { title: '存储', status: 'planned', icon: 'hard-drive' },
+      { title: '云平台基础', status: 'planned', icon: 'cloud' },
     ],
   },
   {
@@ -93,10 +113,10 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'package',
     tone: 'blue',
     topics: [
-      { title: 'Docker / OCI', status: 'planned' },
-      { title: 'Containerd', status: 'planned' },
-      { title: 'Registry / Harbor', status: 'planned' },
-      { title: 'SBOM 与签名', status: 'planned' },
+      { title: 'Docker / OCI', status: 'planned', icon: 'container' },
+      { title: 'Containerd', status: 'planned', logo: '/topic-icons/containerd.svg' },
+      { title: 'Registry / Harbor', status: 'planned', logo: '/topic-icons/harbor.svg' },
+      { title: 'SBOM 与签名', status: 'planned', icon: 'badge-check' },
     ],
   },
   {
@@ -111,9 +131,9 @@ export const technologyDomains: readonly TechnologyDomain[] = [
         href: '/kubernetes/',
         logo: '/kubernetes-logo.svg',
       },
-      { title: 'Helm', status: 'planned' },
-      { title: 'Kustomize', status: 'planned' },
-      { title: 'Gateway API', status: 'planned' },
+      { title: 'Helm', status: 'planned', logo: '/topic-icons/helm.svg' },
+      { title: 'Kustomize', status: 'planned', icon: 'layers' },
+      { title: 'Gateway API', status: 'planned', icon: 'route' },
     ],
   },
   {
@@ -122,9 +142,9 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'git-branch',
     tone: 'green',
     topics: [
-      { title: 'CI/CD', status: 'planned' },
-      { title: 'GitHub Actions', status: 'planned' },
-      { title: 'Argo CD / GitOps', status: 'planned' },
+      { title: 'CI/CD', status: 'planned', icon: 'workflow' },
+      { title: 'GitHub Actions', status: 'planned', icon: 'git-pull-request' },
+      { title: 'Argo CD / GitOps', status: 'planned', logo: '/topic-icons/argo-cd.svg' },
     ],
   },
   {
@@ -133,10 +153,10 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'activity',
     tone: 'amber',
     topics: [
-      { title: 'Prometheus', status: 'planned' },
-      { title: 'Grafana', status: 'planned' },
-      { title: 'Loki / Logging', status: 'planned' },
-      { title: 'OpenTelemetry', status: 'planned' },
+      { title: 'Prometheus', status: 'planned', logo: '/topic-icons/prometheus.svg' },
+      { title: 'Grafana', status: 'planned', logo: '/topic-icons/grafana.svg' },
+      { title: 'Loki / Logging', status: 'planned', icon: 'logs' },
+      { title: 'OpenTelemetry', status: 'planned', logo: '/topic-icons/opentelemetry.svg' },
     ],
   },
   {
@@ -145,11 +165,11 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'shield',
     tone: 'rose',
     topics: [
-      { title: 'Identity / RBAC', status: 'planned' },
-      { title: 'Policy', status: 'planned' },
-      { title: 'Secret 管理', status: 'planned' },
-      { title: '备份与灾备', status: 'planned' },
-      { title: '成本与弹性', status: 'planned' },
+      { title: 'Identity / RBAC', status: 'planned', icon: 'user-cog' },
+      { title: 'Policy', status: 'planned', icon: 'scroll-text' },
+      { title: 'Secret 管理', status: 'planned', icon: 'key-round' },
+      { title: '备份与灾备', status: 'planned', icon: 'database-backup' },
+      { title: '成本与弹性', status: 'planned', icon: 'gauge' },
     ],
   },
 ]

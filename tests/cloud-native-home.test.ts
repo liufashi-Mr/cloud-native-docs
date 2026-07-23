@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { generate, parse as parseCss, walk } from 'css-tree'
@@ -22,12 +22,53 @@ import {
 const invalidAvailableTopic: TechnologyTopic = {
   title: 'Broken topic',
   status: 'available',
+  icon: 'terminal',
 }
 
 const HOME_COMPONENT_PATH = resolve(
   process.cwd(),
   'docs/.vitepress/theme/components/CloudNativeHome.vue',
 )
+
+const TOPIC_ICON_ASSETS = [
+  'containerd.svg',
+  'harbor.svg',
+  'helm.svg',
+  'argo-cd.svg',
+  'prometheus.svg',
+  'opentelemetry.svg',
+  'grafana.svg',
+] as const
+
+const EXPECTED_TOPIC_LOGOS = new Map([
+  ['Containerd', '/topic-icons/containerd.svg'],
+  ['Registry / Harbor', '/topic-icons/harbor.svg'],
+  ['Kubernetes', '/kubernetes-logo.svg'],
+  ['Helm', '/topic-icons/helm.svg'],
+  ['Argo CD / GitOps', '/topic-icons/argo-cd.svg'],
+  ['Prometheus', '/topic-icons/prometheus.svg'],
+  ['Grafana', '/topic-icons/grafana.svg'],
+  ['OpenTelemetry', '/topic-icons/opentelemetry.svg'],
+])
+
+const EXPECTED_TOPIC_ICONS = new Map([
+  ['Linux', 'terminal'],
+  ['网络与 DNS', 'network'],
+  ['存储', 'hard-drive'],
+  ['云平台基础', 'cloud'],
+  ['Docker / OCI', 'container'],
+  ['SBOM 与签名', 'badge-check'],
+  ['Kustomize', 'layers'],
+  ['Gateway API', 'route'],
+  ['CI/CD', 'workflow'],
+  ['GitHub Actions', 'git-pull-request'],
+  ['Loki / Logging', 'logs'],
+  ['Identity / RBAC', 'user-cog'],
+  ['Policy', 'scroll-text'],
+  ['Secret 管理', 'key-round'],
+  ['备份与灾备', 'database-backup'],
+  ['成本与弹性', 'gauge'],
+])
 
 interface CssRule {
   declarations: Map<string, string>
@@ -122,6 +163,34 @@ describe('CloudNativeHome', () => {
     expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(23)
   })
 
+  it('assigns one exact visual to each topic and stores the seven official local logos safely', () => {
+    const topics = technologyDomains.flatMap((domain) => domain.topics)
+    const logoTopics = topics.filter((topic) => 'logo' in topic && Boolean(topic.logo))
+    const iconTopics = topics.filter((topic) => 'icon' in topic && Boolean(topic.icon))
+
+    expect(topics).toHaveLength(24)
+    expect(topics.every((topic) => {
+      const visualCount = Number('logo' in topic && Boolean(topic.logo))
+        + Number('icon' in topic && Boolean(topic.icon))
+      return visualCount === 1
+    })).toBe(true)
+    expect(logoTopics).toHaveLength(8)
+    expect(iconTopics).toHaveLength(16)
+    expect(new Map(logoTopics.map((topic) => [topic.title, topic.logo]))).toEqual(EXPECTED_TOPIC_LOGOS)
+    expect(new Map(iconTopics.map((topic) => [topic.title, topic.icon]))).toEqual(EXPECTED_TOPIC_ICONS)
+
+    for (const filename of TOPIC_ICON_ASSETS) {
+      const path = resolve(process.cwd(), 'docs/public/topic-icons', filename)
+      expect(existsSync(path)).toBe(true)
+      if (!existsSync(path)) continue
+
+      const svg = readFileSync(path, 'utf8')
+      expect(svg).toMatch(/<svg\b/i)
+      expect(svg).not.toMatch(/<script\b|<foreignObject\b/i)
+      expect(svg).not.toMatch(/(?:href|xlink:href)=["'][^"']*https?:\/\//i)
+    }
+  })
+
   it('renders the workbench counts and preserves available versus planned topic semantics', () => {
     const wrapper = mount(CloudNativeHome)
     const expectedPathSequences = [
@@ -152,6 +221,19 @@ describe('CloudNativeHome', () => {
     expect(kubernetes.find('.cloud-native-home__status').exists()).toBe(false)
     expect(kubernetes.find('img').exists()).toBe(true)
     expect(kubernetes.findAll('svg[aria-hidden="true"]')).toHaveLength(1)
+
+    const visuals = wrapper.findAll('[data-topic-visual]')
+    expect(visuals).toHaveLength(24)
+    for (const visual of visuals) {
+      expect(visual.attributes('aria-hidden')).toBe('true')
+      const children = visual.findAll('img, svg')
+      expect(children).toHaveLength(1)
+      expect(children[0].attributes('aria-hidden')).toBe('true')
+      if (children[0].element.tagName === 'IMG') {
+        expect(children[0].attributes('alt')).toBe('')
+        expect(children[0].attributes('src')).toMatch(/^\/project\/(?:topic-icons\/|kubernetes-logo\.svg)/)
+      }
+    }
 
     const planned = wrapper.findAll('[data-topic][data-status="planned"]')
     expect(planned).toHaveLength(23)

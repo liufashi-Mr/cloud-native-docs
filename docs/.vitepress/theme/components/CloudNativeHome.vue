@@ -2,11 +2,26 @@
 import {
   Activity,
   ArrowRight,
+  BadgeCheck,
   Boxes,
+  Cloud,
+  Container,
+  DatabaseBackup,
+  Gauge,
   GitBranch,
+  GitPullRequest,
+  HardDrive,
+  KeyRound,
+  Layers,
+  Logs,
   Package,
+  Network,
+  Route,
+  ScrollText,
   Shield,
   Terminal,
+  UserCog,
+  Workflow,
 } from '@lucide/vue'
 import { withBase } from 'vitepress'
 import type { Component } from 'vue'
@@ -15,6 +30,8 @@ import {
   developerPaths,
   technologyDomains,
   type DomainIcon,
+  type TopicIcon,
+  type TechnologyTopic,
 } from '../home-content'
 
 const domainIcons = {
@@ -25,6 +42,29 @@ const domainIcons = {
   shield: Shield,
   terminal: Terminal,
 } satisfies Record<DomainIcon, Component>
+
+const topicIcons = {
+  terminal: Terminal,
+  network: Network,
+  'hard-drive': HardDrive,
+  cloud: Cloud,
+  container: Container,
+  'badge-check': BadgeCheck,
+  layers: Layers,
+  route: Route,
+  workflow: Workflow,
+  'git-pull-request': GitPullRequest,
+  logs: Logs,
+  'user-cog': UserCog,
+  'scroll-text': ScrollText,
+  'key-round': KeyRound,
+  'database-backup': DatabaseBackup,
+  gauge: Gauge,
+} satisfies Record<TopicIcon, Component>
+
+function topicIconFor(topic: TechnologyTopic): Component | undefined {
+  return topic.icon ? topicIcons[topic.icon] : undefined
+}
 </script>
 
 <template>
@@ -97,7 +137,15 @@ const domainIcons = {
                 :data-status="topic.status"
                 data-topic
               >
-                <img v-if="topic.logo" :src="withBase(topic.logo)" alt="" aria-hidden="true" />
+                <span class="cloud-native-home__topic-visual" aria-hidden="true" data-topic-visual>
+                  <img
+                    v-if="topic.logo"
+                    :src="withBase(topic.logo)"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <component v-else :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
+                </span>
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
                 <ArrowRight :size="16" aria-hidden="true" />
               </a>
@@ -107,6 +155,15 @@ const domainIcons = {
                 :data-status="topic.status"
                 data-topic
               >
+                <span class="cloud-native-home__topic-visual" aria-hidden="true" data-topic-visual>
+                  <img
+                    v-if="topic.logo"
+                    :src="withBase(topic.logo)"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <component v-else :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
+                </span>
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
                 <span class="cloud-native-home__status cloud-native-home__status--planned">规划中</span>
               </div>
@@ -332,7 +389,7 @@ const domainIcons = {
 
 .cloud-native-home__topic {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 38px;
@@ -375,7 +432,15 @@ const domainIcons = {
   transform: translateX(-3px) scaleX(-1);
 }
 
-.cloud-native-home__topic img {
+.cloud-native-home__topic-visual {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--domain-accent);
+}
+
+.cloud-native-home__topic-visual > img {
   width: 20px;
   height: 20px;
   object-fit: contain;
