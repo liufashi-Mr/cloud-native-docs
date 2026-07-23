@@ -17,7 +17,7 @@
 - 专题采用任务导向模板：解决的问题、核心关系、使用边界、最小示例、常见故障和上下游链接。
 - 首页采用“技术工作台”视觉方向：紧凑、清晰、可扫描，使用克制的多色标识提升层次。
 - 首页采用“跨技术路径 + 单技术专题”的双层结构。
-- Kubernetes 最终迁入 `/kubernetes/` 目录；后续迁移其他 Kubernetes 章节时保留旧地址跳转。
+- Kubernetes 全部内容在首期迁入 `/kubernetes/` 目录；项目没有历史兼容负担，不保留旧地址或跳转页。
 
 ## 首期范围
 
@@ -26,8 +26,8 @@
 1. 新的站点名称、描述和全局导航。
 2. 新首页，展示跨技术路径和完整技术领域。
 3. Kubernetes 专题作为唯一可点击的专题。
-4. 将当前 Kubernetes 概念总览从根首页迁到 `/kubernetes/`。
-5. 继续使用现有 Kubernetes 概念、运行实践和速查页面。
+4. 将当前 Kubernetes 概念总览、指南、概念、运行实践和速查页面全部迁到 `/kubernetes/**`。
+5. 更新现有 Kubernetes 侧栏、正文链接和构建配置，使其只引用新路径。
 6. 保留主题色、深浅模式、响应式导航、搜索、Mermaid 和全屏图表能力。
 7. 桌面、平板和手机布局。
 
@@ -35,7 +35,7 @@
 
 - 编写 Kubernetes 以外的技术正文。
 - 让未完成专题或开发路径产生跳转。
-- 本阶段完整迁移 `/concepts/`、`/operations/` 和 `/reference/` 到 `/kubernetes/` 子目录。
+- 为旧 `/concepts/`、`/operations/`、`/reference/` 和 `/guide/` 路径提供兼容页或跳转。
 - 登录、进度记录、收藏、评论或后端服务。
 - 重新设计现有 Kubernetes 正文页面和图表交互。
 
@@ -98,7 +98,10 @@
 
 - `/`：新的云原生开发手册首页。
 - `/kubernetes/`：当前 Kubernetes 概念总览。
-- `/concepts/*`、`/operations/*`、`/reference/*`、`/guide/*`：首期继续保留现有路径和内容。
+- `/kubernetes/concepts/*`：Kubernetes 核心概念。
+- `/kubernetes/operations/*`：Kubernetes 运行实践。
+- `/kubernetes/reference/*`：Kubernetes 速查内容。
+- `/kubernetes/guide/*`：Kubernetes 开发者指南。
 
 全局导航调整为：
 
@@ -107,7 +110,7 @@
 - 学习路径：`/#paths`
 - Kubernetes：`/kubernetes/`
 
-Kubernetes 页面继续使用现有侧栏，侧栏中的“概念总览”改为 `/kubernetes/`。旧根路径无法继续作为 Kubernetes 总览，因为 `/` 已成为新首页；其他现有页面地址在首期保持不变。
+Kubernetes 页面继续使用现有侧栏，所有侧栏链接统一增加 `/kubernetes/` 前缀。旧根路径和旧章节路径不再生成，因为项目当前没有需要兼容的外部链接或收藏。
 
 ## 组件边界
 
@@ -127,7 +130,14 @@ Kubernetes 页面继续使用现有侧栏，侧栏中的“概念总览”改为
 
 ### Kubernetes 内容
 
-当前 `docs/index.md` 的 Kubernetes 正文迁到 `docs/kubernetes/index.md`。内部链接调整为稳定的绝对路径；其他正文文件首期不移动。
+当前 `docs/index.md` 的 Kubernetes 正文迁到 `docs/kubernetes/index.md`，并按原有层级迁移以下目录：
+
+- `docs/concepts/` → `docs/kubernetes/concepts/`
+- `docs/operations/` → `docs/kubernetes/operations/`
+- `docs/reference/` → `docs/kubernetes/reference/`
+- `docs/guide/` → `docs/kubernetes/guide/`
+
+所有内部链接改为 `/kubernetes/**` 绝对路径。旧文件不保留，构建产物不生成旧路由。
 
 ## 响应式行为
 
@@ -160,7 +170,9 @@ Kubernetes 页面继续使用现有侧栏，侧栏中的“概念总览”改为
 - 首页数据包含 5 条路径、6 个领域和 24 个专题。
 - Kubernetes 是唯一带链接且状态为已完成的专题。
 - 规划专题不会渲染为空链接或按钮。
-- `/kubernetes/` 包含迁移后的现有 Kubernetes 总览。
+- `/kubernetes/` 及其 `concepts`、`operations`、`reference`、`guide` 子路径包含全部迁移后的 Kubernetes 内容。
+- 所有侧栏、正文交叉链接和上一页/下一页导航只引用 `/kubernetes/**` 新路径。
+- 构建产物不包含旧 `/concepts/`、`/operations/`、`/reference/` 和 `/guide/` 页面。
 - 配置中的站点标题、导航和侧栏链接正确。
 - 现有外观、Mermaid、搜索和 GitHub Pages 测试继续通过。
 - 类型检查和默认、GitHub Pages 子路径构建通过。
