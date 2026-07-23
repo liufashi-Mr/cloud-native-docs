@@ -6,11 +6,22 @@ vi.mock('vitepress', () => ({
 }))
 
 import CloudNativeHome from '../docs/.vitepress/theme/components/CloudNativeHome.vue'
-import { developerPaths, technologyDomains } from '../docs/.vitepress/theme/home-content'
+import {
+  developerPaths,
+  technologyDomains,
+  type TechnologyTopic,
+} from '../docs/.vitepress/theme/home-content'
+
+// @ts-expect-error available topics require href
+const invalidAvailableTopic: TechnologyTopic = {
+  title: 'Broken topic',
+  status: 'available',
+}
 
 describe('CloudNativeHome', () => {
   beforeEach(() => {
-    document.body.innerHTML = '<button class="VPNavBarSearchButton" type="button">Search</button>'
+    document.body.innerHTML =
+      '<div id="local-search"><button class="DocSearch DocSearch-Button" type="button">Search</button></div>'
   })
 
   afterEach(() => {
@@ -71,7 +82,7 @@ describe('CloudNativeHome', () => {
 
   it('links the recommended start and proxies search to the VitePress search control', async () => {
     const searchButton = document.querySelector<HTMLButtonElement>(
-      '.VPNavBarSearchButton',
+      '#local-search button',
     )
     const search = vi.spyOn(searchButton!, 'click')
     const wrapper = mount(CloudNativeHome, { attachTo: document.body })

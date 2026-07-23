@@ -28,7 +28,7 @@ const domainIcons = {
 } satisfies Record<DomainIcon, Component>
 
 function openDocumentSearch(): void {
-  document.querySelector<HTMLButtonElement>('.VPNavBarSearchButton')?.click()
+  document.querySelector<HTMLButtonElement>('#local-search button')?.click()
 }
 </script>
 
@@ -104,29 +104,29 @@ function openDocumentSearch(): void {
             </div>
           </div>
           <div class="cloud-native-home__topics">
-            <a
-              v-for="topic in domain.topics.filter((item) => item.status === 'available')"
-              :key="topic.title"
-              class="cloud-native-home__topic cloud-native-home__topic--available"
-              :href="withBase(topic.href!)"
-              :data-status="topic.status"
-              data-topic
-            >
-              <img v-if="topic.logo" :src="withBase(topic.logo)" alt="" aria-hidden="true" />
-              <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
-              <span class="cloud-native-home__status cloud-native-home__status--available">已完成</span>
-              <ArrowRight :size="16" aria-hidden="true" />
-            </a>
-            <div
-              v-for="topic in domain.topics.filter((item) => item.status === 'planned')"
-              :key="topic.title"
-              class="cloud-native-home__topic cloud-native-home__topic--planned"
-              :data-status="topic.status"
-              data-topic
-            >
-              <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
-              <span class="cloud-native-home__status cloud-native-home__status--planned">规划中</span>
-            </div>
+            <template v-for="topic in domain.topics" :key="topic.title">
+              <a
+                v-if="topic.status === 'available'"
+                class="cloud-native-home__topic cloud-native-home__topic--available"
+                :href="withBase(topic.href)"
+                :data-status="topic.status"
+                data-topic
+              >
+                <img v-if="topic.logo" :src="withBase(topic.logo)" alt="" aria-hidden="true" />
+                <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
+                <span class="cloud-native-home__status cloud-native-home__status--available">已完成</span>
+                <ArrowRight :size="16" aria-hidden="true" />
+              </a>
+              <div
+                v-else
+                class="cloud-native-home__topic cloud-native-home__topic--planned"
+                :data-status="topic.status"
+                data-topic
+              >
+                <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
+                <span class="cloud-native-home__status cloud-native-home__status--planned">规划中</span>
+              </div>
+            </template>
           </div>
         </section>
       </div>

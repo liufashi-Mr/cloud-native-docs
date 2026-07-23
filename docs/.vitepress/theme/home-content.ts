@@ -20,12 +20,23 @@ export interface DeveloperPath {
   readonly tone: DomainTone
 }
 
-export interface TechnologyTopic {
+interface TechnologyTopicBase {
   readonly title: string
-  readonly status: 'available' | 'planned'
-  readonly href?: string
+}
+
+interface AvailableTechnologyTopic extends TechnologyTopicBase {
+  readonly status: 'available'
+  readonly href: string
   readonly logo?: string
 }
+
+interface PlannedTechnologyTopic extends TechnologyTopicBase {
+  readonly status: 'planned'
+  readonly href?: never
+  readonly logo?: never
+}
+
+export type TechnologyTopic = AvailableTechnologyTopic | PlannedTechnologyTopic
 
 export interface TechnologyDomain {
   readonly title: string
