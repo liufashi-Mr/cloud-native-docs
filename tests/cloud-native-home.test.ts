@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { generate, parse as parseCss, walk } from 'css-tree'
@@ -30,48 +30,32 @@ const HOME_COMPONENT_PATH = resolve(
   'docs/.vitepress/theme/components/CloudNativeHome.vue',
 )
 
-const TOPIC_ICON_ASSETS = [
-  'containerd.svg',
-  'harbor.svg',
-  'helm.svg',
-  'argo-cd.svg',
-  'prometheus.svg',
-  'opentelemetry.svg',
-  'grafana.svg',
-  'github.svg',
-] as const
-
-const EXPECTED_TOPIC_LOGOS = new Map([
-  ['Containerd', '/topic-icons/containerd.svg'],
-  ['Registry / Harbor', '/topic-icons/harbor.svg'],
-  ['Kubernetes', '/kubernetes-logo.svg'],
-  ['Helm', '/topic-icons/helm.svg'],
-  ['GitHub Actions', '/topic-icons/github.svg'],
-  ['Argo CD / GitOps', '/topic-icons/argo-cd.svg'],
-  ['Prometheus', '/topic-icons/prometheus.svg'],
-  ['Grafana', '/topic-icons/grafana.svg'],
-  ['OpenTelemetry', '/topic-icons/opentelemetry.svg'],
-])
-
 const EXPECTED_TOPIC_ICONS = new Map([
   ['Linux', 'terminal'],
   ['网络与 DNS', 'network'],
   ['存储', 'hard-drive'],
   ['云平台基础', 'cloud'],
   ['Docker / OCI', 'container'],
+  ['Containerd', 'boxes'],
+  ['Registry / Harbor', 'package-search'],
   ['SBOM 与签名', 'badge-check'],
+  ['Kubernetes', 'ship-wheel'],
+  ['Helm', 'package-open'],
   ['Kustomize', 'layers'],
   ['Gateway API', 'route'],
   ['CI/CD', 'workflow'],
+  ['GitHub Actions', 'git-pull-request-arrow'],
+  ['Argo CD / GitOps', 'git-merge'],
+  ['Prometheus', 'activity'],
+  ['Grafana', 'chart-spline'],
   ['Loki / Logging', 'logs'],
-  ['Identity / RBAC', 'user-cog'],
+  ['OpenTelemetry', 'radio-tower'],
+  ['Identity / RBAC', 'users-round'],
   ['Policy', 'scroll-text'],
   ['Secret 管理', 'key-round'],
   ['备份与灾备', 'database-backup'],
   ['成本与弹性', 'gauge'],
 ])
-
-const DARK_MODE_LOGO_TITLES = ['Containerd', 'Helm', 'GitHub Actions']
 
 interface CssRule {
   declarations: Map<string, string>
@@ -160,42 +144,19 @@ describe('CloudNativeHome', () => {
       expect.objectContaining({
         title: 'Kubernetes',
         href: '/kubernetes/',
-        logo: '/kubernetes-logo.svg',
+        icon: 'ship-wheel',
       }),
     ])
     expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(23)
   })
 
-  it('assigns one exact visual to each topic and stores the seven official local logos safely', () => {
+  it('assigns one recognizable linear icon to each topic', () => {
     const topics = technologyDomains.flatMap((domain) => domain.topics)
-    const logoTopics = topics.filter((topic) => 'logo' in topic && Boolean(topic.logo))
-    const iconTopics = topics.filter((topic) => 'icon' in topic && Boolean(topic.icon))
 
     expect(topics).toHaveLength(24)
-    expect(topics.every((topic) => {
-      const visualCount = Number('logo' in topic && Boolean(topic.logo))
-        + Number('icon' in topic && Boolean(topic.icon))
-      return visualCount === 1
-    })).toBe(true)
-    expect(logoTopics).toHaveLength(9)
-    expect(iconTopics).toHaveLength(15)
-    expect(new Map(logoTopics.map((topic) => [topic.title, topic.logo]))).toEqual(EXPECTED_TOPIC_LOGOS)
-    expect(new Map(iconTopics.map((topic) => [topic.title, topic.icon]))).toEqual(EXPECTED_TOPIC_ICONS)
-    expect(topics
-      .filter((topic) => (topic as { logoTheme?: string }).logoTheme === 'light-on-dark')
-      .map((topic) => topic.title))
-      .toEqual(DARK_MODE_LOGO_TITLES)
-
-    for (const filename of TOPIC_ICON_ASSETS) {
-      const path = resolve(process.cwd(), 'docs/public/topic-icons', filename)
-      expect(existsSync(path)).toBe(true)
-      if (!existsSync(path)) continue
-
-      const svg = readFileSync(path, 'utf8')
-      expect(svg).toMatch(/<svg\b/i)
-      expect(svg).not.toMatch(/<script\b|<foreignObject\b/i)
-      expect(svg).not.toMatch(/(?:href|xlink:href)=["'][^"']*https?:\/\//i)
-    }
+    expect(new Map(topics.map((topic) => [topic.title, topic.icon]))).toEqual(
+      EXPECTED_TOPIC_ICONS,
+    )
   })
 
   it('renders the workbench counts and preserves available versus planned topic semantics', () => {
@@ -226,23 +187,15 @@ describe('CloudNativeHome', () => {
     expect(kubernetes.text()).not.toContain('已完成')
     expect(kubernetes.find('.cloud-native-home__completion').exists()).toBe(false)
     expect(kubernetes.find('.cloud-native-home__status').exists()).toBe(false)
-    expect(kubernetes.find('img').exists()).toBe(true)
-    expect(kubernetes.findAll('svg[aria-hidden="true"]')).toHaveLength(1)
+    expect(kubernetes.find('img').exists()).toBe(false)
+    expect(kubernetes.findAll('svg[aria-hidden="true"]')).toHaveLength(2)
 
     const visuals = wrapper.findAll('[data-topic-visual]')
     expect(visuals).toHaveLength(24)
-    expect(wrapper.findAll('[data-topic-visual][data-logo-theme="light-on-dark"]')
-      .map((visual) => visual.element.parentElement?.textContent?.replace('规划中', '').trim()))
-      .toEqual(DARK_MODE_LOGO_TITLES)
     for (const visual of visuals) {
       expect(visual.attributes('aria-hidden')).toBe('true')
-      const children = visual.findAll('img, svg')
-      expect(children).toHaveLength(1)
-      expect(children[0].attributes('aria-hidden')).toBe('true')
-      if (children[0].element.tagName === 'IMG') {
-        expect(children[0].attributes('alt')).toBe('')
-        expect(children[0].attributes('src')).toMatch(/^\/project\/(?:topic-icons\/|kubernetes-logo\.svg)/)
-      }
+      expect(visual.find('img').exists()).toBe(false)
+      expect(visual.get('svg').attributes('aria-hidden')).toBe('true')
     }
 
     const planned = wrapper.findAll('[data-topic][data-status="planned"]')
@@ -262,7 +215,7 @@ describe('CloudNativeHome', () => {
     expect(wrapper.find('button[aria-label="搜索文档"]').exists()).toBe(false)
   })
 
-  it('keeps the Kubernetes row transparent and limited to its logo, title, and arrow action', () => {
+  it('keeps the Kubernetes row transparent and limited to its icon, title, and arrow action', () => {
     const available = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?$/)
     const availableHover = rule(/\.cloud-native-home__topic--available(?:\[[^\]]+\])?:hover$/)
 
@@ -270,12 +223,6 @@ describe('CloudNativeHome', () => {
     expect(available.declarations.has('border')).toBe(false)
     expect(availableHover.declarations.has('background')).toBe(false)
     expect(declaration(availableHover, 'color')).toBe('var(--vp-c-brand-1)')
-  })
-
-  it('lightens only the flagged local logo visuals in dark mode', () => {
-    const darkLogoRule = rule(/\.dark.*\.cloud-native-home__topic-visual--light-on-dark/)
-
-    expect(declaration(darkLogoRule, 'filter')).toBe('brightness(0)invert(1)')
   })
 
   it('uses logical catalog dividers with a continuous wide-to-mobile cascade', () => {

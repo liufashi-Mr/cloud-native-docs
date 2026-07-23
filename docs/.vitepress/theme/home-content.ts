@@ -20,12 +20,21 @@ export type TopicIcon =
   | 'hard-drive'
   | 'cloud'
   | 'container'
+  | 'boxes'
+  | 'package-search'
   | 'badge-check'
+  | 'ship-wheel'
+  | 'package-open'
   | 'layers'
   | 'route'
   | 'workflow'
+  | 'git-pull-request-arrow'
+  | 'git-merge'
+  | 'activity'
+  | 'chart-spline'
   | 'logs'
-  | 'user-cog'
+  | 'radio-tower'
+  | 'users-round'
   | 'scroll-text'
   | 'key-round'
   | 'database-backup'
@@ -39,18 +48,15 @@ export interface DeveloperPath {
 
 interface TechnologyTopicBase {
   readonly title: string
+  readonly icon: TopicIcon
 }
 
-export type TopicVisual =
-  | { readonly logo: string; readonly logoTheme?: 'light-on-dark'; readonly icon?: never }
-  | { readonly icon: TopicIcon; readonly logo?: never; readonly logoTheme?: never }
-
-type AvailableTechnologyTopic = TechnologyTopicBase & TopicVisual & {
+type AvailableTechnologyTopic = TechnologyTopicBase & {
   readonly status: 'available'
   readonly href: string
 }
 
-type PlannedTechnologyTopic = TechnologyTopicBase & TopicVisual & {
+type PlannedTechnologyTopic = TechnologyTopicBase & {
   readonly status: 'planned'
   readonly href?: never
 }
@@ -113,13 +119,8 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     tone: 'blue',
     topics: [
       { title: 'Docker / OCI', status: 'planned', icon: 'container' },
-      {
-        title: 'Containerd',
-        status: 'planned',
-        logo: '/topic-icons/containerd.svg',
-        logoTheme: 'light-on-dark',
-      },
-      { title: 'Registry / Harbor', status: 'planned', logo: '/topic-icons/harbor.svg' },
+      { title: 'Containerd', status: 'planned', icon: 'boxes' },
+      { title: 'Registry / Harbor', status: 'planned', icon: 'package-search' },
       { title: 'SBOM 与签名', status: 'planned', icon: 'badge-check' },
     ],
   },
@@ -133,14 +134,9 @@ export const technologyDomains: readonly TechnologyDomain[] = [
         title: 'Kubernetes',
         status: 'available',
         href: '/kubernetes/',
-        logo: '/kubernetes-logo.svg',
+        icon: 'ship-wheel',
       },
-      {
-        title: 'Helm',
-        status: 'planned',
-        logo: '/topic-icons/helm.svg',
-        logoTheme: 'light-on-dark',
-      },
+      { title: 'Helm', status: 'planned', icon: 'package-open' },
       { title: 'Kustomize', status: 'planned', icon: 'layers' },
       { title: 'Gateway API', status: 'planned', icon: 'route' },
     ],
@@ -152,13 +148,8 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     tone: 'green',
     topics: [
       { title: 'CI/CD', status: 'planned', icon: 'workflow' },
-      {
-        title: 'GitHub Actions',
-        status: 'planned',
-        logo: '/topic-icons/github.svg',
-        logoTheme: 'light-on-dark',
-      },
-      { title: 'Argo CD / GitOps', status: 'planned', logo: '/topic-icons/argo-cd.svg' },
+      { title: 'GitHub Actions', status: 'planned', icon: 'git-pull-request-arrow' },
+      { title: 'Argo CD / GitOps', status: 'planned', icon: 'git-merge' },
     ],
   },
   {
@@ -167,10 +158,10 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'activity',
     tone: 'amber',
     topics: [
-      { title: 'Prometheus', status: 'planned', logo: '/topic-icons/prometheus.svg' },
-      { title: 'Grafana', status: 'planned', logo: '/topic-icons/grafana.svg' },
+      { title: 'Prometheus', status: 'planned', icon: 'activity' },
+      { title: 'Grafana', status: 'planned', icon: 'chart-spline' },
       { title: 'Loki / Logging', status: 'planned', icon: 'logs' },
-      { title: 'OpenTelemetry', status: 'planned', logo: '/topic-icons/opentelemetry.svg' },
+      { title: 'OpenTelemetry', status: 'planned', icon: 'radio-tower' },
     ],
   },
   {
@@ -179,7 +170,7 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'shield',
     tone: 'rose',
     topics: [
-      { title: 'Identity / RBAC', status: 'planned', icon: 'user-cog' },
+      { title: 'Identity / RBAC', status: 'planned', icon: 'users-round' },
       { title: 'Policy', status: 'planned', icon: 'scroll-text' },
       { title: 'Secret 管理', status: 'planned', icon: 'key-round' },
       { title: '备份与灾备', status: 'planned', icon: 'database-backup' },

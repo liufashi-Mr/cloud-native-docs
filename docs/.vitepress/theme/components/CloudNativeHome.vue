@@ -4,22 +4,29 @@ import {
   ArrowRight,
   BadgeCheck,
   Boxes,
+  ChartSpline,
   Cloud,
   Container,
   DatabaseBackup,
   Gauge,
   GitBranch,
+  GitMerge,
+  GitPullRequestArrow,
   HardDrive,
   KeyRound,
   Layers,
   Logs,
   Package,
+  PackageOpen,
+  PackageSearch,
   Network,
+  RadioTower,
   Route,
   ScrollText,
   Shield,
+  ShipWheel,
   Terminal,
-  UserCog,
+  UsersRound,
   Workflow,
 } from '@lucide/vue'
 import { withBase } from 'vitepress'
@@ -48,20 +55,29 @@ const topicIcons = {
   'hard-drive': HardDrive,
   cloud: Cloud,
   container: Container,
+  boxes: Boxes,
+  'package-search': PackageSearch,
   'badge-check': BadgeCheck,
+  'ship-wheel': ShipWheel,
+  'package-open': PackageOpen,
   layers: Layers,
   route: Route,
   workflow: Workflow,
+  'git-pull-request-arrow': GitPullRequestArrow,
+  'git-merge': GitMerge,
+  activity: Activity,
+  'chart-spline': ChartSpline,
   logs: Logs,
-  'user-cog': UserCog,
+  'radio-tower': RadioTower,
+  'users-round': UsersRound,
   'scroll-text': ScrollText,
   'key-round': KeyRound,
   'database-backup': DatabaseBackup,
   gauge: Gauge,
 } satisfies Record<TopicIcon, Component>
 
-function topicIconFor(topic: TechnologyTopic): Component | undefined {
-  return topic.icon ? topicIcons[topic.icon] : undefined
+function topicIconFor(topic: TechnologyTopic): Component {
+  return topicIcons[topic.icon]
 }
 </script>
 
@@ -137,18 +153,10 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
               >
                 <span
                   class="cloud-native-home__topic-visual"
-                  :class="{ 'cloud-native-home__topic-visual--light-on-dark': topic.logoTheme === 'light-on-dark' }"
-                  :data-logo-theme="topic.logoTheme"
                   aria-hidden="true"
                   data-topic-visual
                 >
-                  <img
-                    v-if="topic.logo"
-                    :src="withBase(topic.logo)"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <component v-else :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
+                  <component :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
                 </span>
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
                 <ArrowRight :size="16" aria-hidden="true" />
@@ -161,18 +169,10 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
               >
                 <span
                   class="cloud-native-home__topic-visual"
-                  :class="{ 'cloud-native-home__topic-visual--light-on-dark': topic.logoTheme === 'light-on-dark' }"
-                  :data-logo-theme="topic.logoTheme"
                   aria-hidden="true"
                   data-topic-visual
                 >
-                  <img
-                    v-if="topic.logo"
-                    :src="withBase(topic.logo)"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <component v-else :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
+                  <component :is="topicIconFor(topic)" :size="20" aria-hidden="true" />
                 </span>
                 <span class="cloud-native-home__topic-title">{{ topic.title }}</span>
                 <span class="cloud-native-home__status cloud-native-home__status--planned">规划中</span>
@@ -448,16 +448,6 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
   height: 20px;
   place-items: center;
   color: var(--domain-accent);
-}
-
-.cloud-native-home__topic-visual > img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-:global(.dark .cloud-native-home__topic-visual--light-on-dark) > img {
-  filter: brightness(0) invert(1);
 }
 
 .cloud-native-home__topic-title {
