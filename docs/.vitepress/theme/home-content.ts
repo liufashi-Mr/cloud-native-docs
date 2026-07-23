@@ -24,7 +24,6 @@ export type TopicIcon =
   | 'layers'
   | 'route'
   | 'workflow'
-  | 'git-pull-request'
   | 'logs'
   | 'user-cog'
   | 'scroll-text'
@@ -143,7 +142,7 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     tone: 'green',
     topics: [
       { title: 'CI/CD', status: 'planned', icon: 'workflow' },
-      { title: 'GitHub Actions', status: 'planned', icon: 'git-pull-request' },
+      { title: 'GitHub Actions', status: 'planned', logo: '/topic-icons/github.svg' },
       { title: 'Argo CD / GitOps', status: 'planned', logo: '/topic-icons/argo-cd.svg' },
     ],
   },

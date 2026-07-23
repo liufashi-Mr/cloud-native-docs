@@ -12,6 +12,7 @@ The homepage uses the following official SVG artwork, stored locally under
 | `prometheus.svg` | https://raw.githubusercontent.com/cncf/artwork/main/projects/prometheus/icon/color/prometheus-icon-color.svg |
 | `opentelemetry.svg` | https://raw.githubusercontent.com/cncf/artwork/main/projects/opentelemetry/icon/color/opentelemetry-icon-color.svg |
 | `grafana.svg` | https://raw.githubusercontent.com/grafana/grafana/main/public/img/grafana_icon.svg |
+| `github.svg` | https://raw.githubusercontent.com/primer/octicons/main/icons/mark-github-24.svg |
 
 Kubernetes continues to use the existing `docs/public/kubernetes-logo.svg`.
 All trademarks and logos remain the property of their respective owners.

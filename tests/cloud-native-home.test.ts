@@ -38,6 +38,7 @@ const TOPIC_ICON_ASSETS = [
   'prometheus.svg',
   'opentelemetry.svg',
   'grafana.svg',
+  'github.svg',
 ] as const
 
 const EXPECTED_TOPIC_LOGOS = new Map([
@@ -45,6 +46,7 @@ const EXPECTED_TOPIC_LOGOS = new Map([
   ['Registry / Harbor', '/topic-icons/harbor.svg'],
   ['Kubernetes', '/kubernetes-logo.svg'],
   ['Helm', '/topic-icons/helm.svg'],
+  ['GitHub Actions', '/topic-icons/github.svg'],
   ['Argo CD / GitOps', '/topic-icons/argo-cd.svg'],
   ['Prometheus', '/topic-icons/prometheus.svg'],
   ['Grafana', '/topic-icons/grafana.svg'],
@@ -61,7 +63,6 @@ const EXPECTED_TOPIC_ICONS = new Map([
   ['Kustomize', 'layers'],
   ['Gateway API', 'route'],
   ['CI/CD', 'workflow'],
-  ['GitHub Actions', 'git-pull-request'],
   ['Loki / Logging', 'logs'],
   ['Identity / RBAC', 'user-cog'],
   ['Policy', 'scroll-text'],
@@ -174,8 +175,8 @@ describe('CloudNativeHome', () => {
         + Number('icon' in topic && Boolean(topic.icon))
       return visualCount === 1
     })).toBe(true)
-    expect(logoTopics).toHaveLength(8)
-    expect(iconTopics).toHaveLength(16)
+    expect(logoTopics).toHaveLength(9)
+    expect(iconTopics).toHaveLength(15)
     expect(new Map(logoTopics.map((topic) => [topic.title, topic.logo]))).toEqual(EXPECTED_TOPIC_LOGOS)
     expect(new Map(iconTopics.map((topic) => [topic.title, topic.icon]))).toEqual(EXPECTED_TOPIC_ICONS)
 
