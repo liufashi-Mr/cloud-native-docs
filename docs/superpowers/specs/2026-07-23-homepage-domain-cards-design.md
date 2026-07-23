@@ -31,8 +31,8 @@ Make the homepage technology catalog visually independent by domain and remove t
 ## Topic Icons
 
 - Every one of the 24 topic rows has a decorative `20px` icon with stable dimensions.
-- Use locally stored official SVG artwork for Kubernetes, containerd, Harbor, Helm, Argo CD, Prometheus, Grafana, and OpenTelemetry. Record the source URL for every downloaded asset and load all local paths through VitePress `withBase`.
-- Use Lucide icons for generic or combined concepts: Linux, network and DNS, storage, cloud basics, Docker / OCI, SBOM and signing, Kustomize, Gateway API, CI/CD, GitHub Actions, logging, identity / RBAC, policy, secret management, backup, and cost / elasticity.
+- Use locally stored official SVG artwork for Kubernetes, containerd, Harbor, Helm, GitHub Actions, Argo CD, Prometheus, Grafana, and OpenTelemetry. Record the source URL for every downloaded asset and load all local paths through VitePress `withBase`.
+- Use Lucide icons for generic or combined concepts: Linux, network and DNS, storage, cloud basics, Docker / OCI, SBOM and signing, Kustomize, Gateway API, CI/CD, logging, identity / RBAC, policy, secret management, backup, and cost / elasticity.
 - Decorative SVGs and images use empty alternative text or `aria-hidden`; the adjacent topic title remains the accessible name.
 - A missing image must not hide or displace the topic title or status.
 
