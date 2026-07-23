@@ -206,7 +206,7 @@ const domainIcons = {
 }
 
 .cloud-native-home__summary span + span {
-  padding-left: 20px;
+  padding-inline-start: 20px;
   border-inline-start: 1px solid var(--vp-c-divider);
 }
 
@@ -479,7 +479,7 @@ const domainIcons = {
   }
 
   .cloud-native-home__summary span + span {
-    padding-left: 0;
+    padding-inline-start: 0;
     border-inline-start: 0;
   }
 

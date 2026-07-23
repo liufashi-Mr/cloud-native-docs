@@ -181,11 +181,13 @@ describe('CloudNativeHome', () => {
   })
 
   it('uses logical catalog dividers with a continuous wide-to-mobile cascade', () => {
+    const summaryDivider = rule(/\.cloud-native-home__summary.*span\s*\+\s*span/)
     const wideDomains = rule(/\.cloud-native-home__domains(?:\[[^\]]+\])?$/)
     const wideColumns = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(3n\+2\)/)
     const wideRows = rule(/\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(n\+4\)/)
     const medium = '(max-width:1100px)'
     const mobile = '(max-width:680px)'
+    const mobileSummaryDivider = rule(/\.cloud-native-home__summary.*span\s*\+\s*span/, mobile)
     const mediumDomains = rule(/\.cloud-native-home__domains(?:\[[^\]]+\])?/, medium)
     const mediumColumnReset = rule(
       /\.cloud-native-home__domain(?:\[[^\]]+\])?:nth-child\(3n\+2\)/,
@@ -206,6 +208,8 @@ describe('CloudNativeHome', () => {
     )
 
     expect(cssRules.filter((candidate) => candidate.media?.includes('min-width'))).toHaveLength(0)
+    expect(declaration(summaryDivider, 'padding-inline-start')).toBe('20px')
+    expect(declaration(mobileSummaryDivider, 'padding-inline-start')).toBe('0')
     expect(declaration(wideDomains, 'grid-template-columns')).toBe('repeat(3,minmax(0,1fr))')
     expect(declaration(wideColumns, 'border-inline-start')).toContain('var(--catalog-divider)')
     expect(declaration(wideRows, 'border-block-start')).toContain('var(--catalog-divider)')
@@ -217,6 +221,8 @@ describe('CloudNativeHome', () => {
     expect(declaration(mediumRows, 'border-block-start')).toContain('var(--catalog-divider)')
     expect(mediumColumnReset.order).toBeGreaterThan(wideColumns.order)
     expect(mediumRowReset.order).toBeGreaterThan(wideRows.order)
+    expect(mediumColumns.order).toBeGreaterThan(mediumColumnReset.order)
+    expect(mediumRows.order).toBeGreaterThan(mediumRowReset.order)
 
     expect(declaration(mobileDomains, 'grid-template-columns')).toBe('minmax(0,1fr)')
     expect(declaration(mobileColumnReset, 'border-inline-start')).toBe('0')
@@ -224,8 +230,10 @@ describe('CloudNativeHome', () => {
     expect(declaration(mobileRows, 'border-block-start')).toContain('var(--catalog-divider)')
     expect(mobileColumnReset.order).toBeGreaterThan(mediumColumns.order)
     expect(mobileRowReset.order).toBeGreaterThan(mediumRows.order)
+    expect(mobileRows.order).toBeGreaterThan(mobileRowReset.order)
     expect(cssRules.some((candidate) => candidate.declarations.has('border-left'))).toBe(false)
     expect(cssRules.some((candidate) => candidate.declarations.has('border-top'))).toBe(false)
+    expect(cssRules.some((candidate) => candidate.declarations.has('padding-left'))).toBe(false)
   })
 
   it('moves the Kubernetes arrow toward the logical forward direction and honors reduced motion', () => {
