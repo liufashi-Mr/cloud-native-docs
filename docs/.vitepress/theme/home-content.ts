@@ -42,8 +42,8 @@ interface TechnologyTopicBase {
 }
 
 export type TopicVisual =
-  | { readonly logo: string; readonly icon?: never }
-  | { readonly icon: TopicIcon; readonly logo?: never }
+  | { readonly logo: string; readonly logoTheme?: 'light-on-dark'; readonly icon?: never }
+  | { readonly icon: TopicIcon; readonly logo?: never; readonly logoTheme?: never }
 
 type AvailableTechnologyTopic = TechnologyTopicBase & TopicVisual & {
   readonly status: 'available'
@@ -113,7 +113,12 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     tone: 'blue',
     topics: [
       { title: 'Docker / OCI', status: 'planned', icon: 'container' },
-      { title: 'Containerd', status: 'planned', logo: '/topic-icons/containerd.svg' },
+      {
+        title: 'Containerd',
+        status: 'planned',
+        logo: '/topic-icons/containerd.svg',
+        logoTheme: 'light-on-dark',
+      },
       { title: 'Registry / Harbor', status: 'planned', logo: '/topic-icons/harbor.svg' },
       { title: 'SBOM 与签名', status: 'planned', icon: 'badge-check' },
     ],
@@ -130,7 +135,12 @@ export const technologyDomains: readonly TechnologyDomain[] = [
         href: '/kubernetes/',
         logo: '/kubernetes-logo.svg',
       },
-      { title: 'Helm', status: 'planned', logo: '/topic-icons/helm.svg' },
+      {
+        title: 'Helm',
+        status: 'planned',
+        logo: '/topic-icons/helm.svg',
+        logoTheme: 'light-on-dark',
+      },
       { title: 'Kustomize', status: 'planned', icon: 'layers' },
       { title: 'Gateway API', status: 'planned', icon: 'route' },
     ],
@@ -142,7 +152,12 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     tone: 'green',
     topics: [
       { title: 'CI/CD', status: 'planned', icon: 'workflow' },
-      { title: 'GitHub Actions', status: 'planned', logo: '/topic-icons/github.svg' },
+      {
+        title: 'GitHub Actions',
+        status: 'planned',
+        logo: '/topic-icons/github.svg',
+        logoTheme: 'light-on-dark',
+      },
       { title: 'Argo CD / GitOps', status: 'planned', logo: '/topic-icons/argo-cd.svg' },
     ],
   },

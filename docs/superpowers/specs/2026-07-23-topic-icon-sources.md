@@ -16,3 +16,5 @@ The homepage uses the following official SVG artwork, stored locally under
 
 Kubernetes continues to use the existing `docs/public/kubernetes-logo.svg`.
 All trademarks and logos remain the property of their respective owners.
+Containerd, Helm, and GitHub use a lightening filter only in dark mode to preserve
+their contrast without changing the original assets.

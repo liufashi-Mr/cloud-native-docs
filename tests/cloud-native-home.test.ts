@@ -71,6 +71,8 @@ const EXPECTED_TOPIC_ICONS = new Map([
   ['成本与弹性', 'gauge'],
 ])
 
+const DARK_MODE_LOGO_TITLES = ['Containerd', 'Helm', 'GitHub Actions']
+
 interface CssRule {
   declarations: Map<string, string>
   media: string | null
@@ -179,6 +181,10 @@ describe('CloudNativeHome', () => {
     expect(iconTopics).toHaveLength(15)
     expect(new Map(logoTopics.map((topic) => [topic.title, topic.logo]))).toEqual(EXPECTED_TOPIC_LOGOS)
     expect(new Map(iconTopics.map((topic) => [topic.title, topic.icon]))).toEqual(EXPECTED_TOPIC_ICONS)
+    expect(topics
+      .filter((topic) => (topic as { logoTheme?: string }).logoTheme === 'light-on-dark')
+      .map((topic) => topic.title))
+      .toEqual(DARK_MODE_LOGO_TITLES)
 
     for (const filename of TOPIC_ICON_ASSETS) {
       const path = resolve(process.cwd(), 'docs/public/topic-icons', filename)
@@ -225,6 +231,9 @@ describe('CloudNativeHome', () => {
 
     const visuals = wrapper.findAll('[data-topic-visual]')
     expect(visuals).toHaveLength(24)
+    expect(wrapper.findAll('[data-topic-visual][data-logo-theme="light-on-dark"]')
+      .map((visual) => visual.element.parentElement?.textContent?.replace('规划中', '').trim()))
+      .toEqual(DARK_MODE_LOGO_TITLES)
     for (const visual of visuals) {
       expect(visual.attributes('aria-hidden')).toBe('true')
       const children = visual.findAll('img, svg')
@@ -261,6 +270,12 @@ describe('CloudNativeHome', () => {
     expect(available.declarations.has('border')).toBe(false)
     expect(availableHover.declarations.has('background')).toBe(false)
     expect(declaration(availableHover, 'color')).toBe('var(--vp-c-brand-1)')
+  })
+
+  it('lightens only the flagged local logo visuals in dark mode', () => {
+    const darkLogoRule = rule(/\.dark.*\.cloud-native-home__topic-visual--light-on-dark/)
+
+    expect(declaration(darkLogoRule, 'filter')).toBe('brightness(0)invert(1)')
   })
 
   it('uses logical catalog dividers with a continuous wide-to-mobile cascade', () => {

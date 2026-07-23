@@ -135,7 +135,13 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
                 :data-status="topic.status"
                 data-topic
               >
-                <span class="cloud-native-home__topic-visual" aria-hidden="true" data-topic-visual>
+                <span
+                  class="cloud-native-home__topic-visual"
+                  :class="{ 'cloud-native-home__topic-visual--light-on-dark': topic.logoTheme === 'light-on-dark' }"
+                  :data-logo-theme="topic.logoTheme"
+                  aria-hidden="true"
+                  data-topic-visual
+                >
                   <img
                     v-if="topic.logo"
                     :src="withBase(topic.logo)"
@@ -153,7 +159,13 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
                 :data-status="topic.status"
                 data-topic
               >
-                <span class="cloud-native-home__topic-visual" aria-hidden="true" data-topic-visual>
+                <span
+                  class="cloud-native-home__topic-visual"
+                  :class="{ 'cloud-native-home__topic-visual--light-on-dark': topic.logoTheme === 'light-on-dark' }"
+                  :data-logo-theme="topic.logoTheme"
+                  aria-hidden="true"
+                  data-topic-visual
+                >
                   <img
                     v-if="topic.logo"
                     :src="withBase(topic.logo)"
@@ -442,6 +454,10 @@ function topicIconFor(topic: TechnologyTopic): Component | undefined {
   width: 20px;
   height: 20px;
   object-fit: contain;
+}
+
+:global(.dark .cloud-native-home__topic-visual--light-on-dark) > img {
+  filter: brightness(0) invert(1);
 }
 
 .cloud-native-home__topic-title {
