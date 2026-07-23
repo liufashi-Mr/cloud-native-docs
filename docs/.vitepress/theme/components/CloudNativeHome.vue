@@ -5,7 +5,6 @@ import {
   Boxes,
   GitBranch,
   Package,
-  Search,
   Shield,
   Terminal,
 } from '@lucide/vue'
@@ -26,10 +25,6 @@ const domainIcons = {
   shield: Shield,
   terminal: Terminal,
 } satisfies Record<DomainIcon, Component>
-
-function openDocumentSearch(): void {
-  document.querySelector<HTMLButtonElement>('#local-search button')?.click()
-}
 </script>
 
 <template>
@@ -45,16 +40,6 @@ function openDocumentSearch(): void {
         <span>24 个技术主题</span>
         <span>1 个已完成</span>
       </div>
-      <button
-        class="cloud-native-home__search"
-        type="button"
-        aria-label="搜索文档"
-        title="搜索文档"
-        @click="openDocumentSearch"
-      >
-        <Search :size="17" aria-hidden="true" />
-        <span>搜索文档</span>
-      </button>
     </header>
 
     <section id="paths" class="cloud-native-home__section" aria-labelledby="paths-title">
@@ -226,29 +211,6 @@ function openDocumentSearch(): void {
   border-left: 1px solid var(--vp-c-divider);
 }
 
-.cloud-native-home__search {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 7px;
-  margin-top: 22px;
-  padding: 7px 10px;
-  color: var(--vp-c-text-1);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
-  background: var(--vp-c-bg-soft);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.2;
-  cursor: pointer;
-}
-
-.cloud-native-home__search:hover {
-  border-color: var(--vp-c-brand-1);
-  color: var(--vp-c-brand-1);
-}
-
-.cloud-native-home__search:focus-visible,
 .cloud-native-home a:focus-visible {
   outline: 3px solid var(--vp-c-brand-1);
   outline-offset: 3px;
@@ -329,12 +291,18 @@ function openDocumentSearch(): void {
 .cloud-native-home__domains {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 28px 20px;
+  gap: 16px;
+  align-items: start;
   margin-top: 20px;
 }
 
 .cloud-native-home__domain {
   min-width: 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--domain-accent) 24%, var(--vp-c-divider));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--domain-accent) 3%, var(--vp-c-bg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
 .cloud-native-home__domain-heading {
@@ -373,7 +341,7 @@ function openDocumentSearch(): void {
   align-items: center;
   min-height: 38px;
   padding: 7px 9px;
-  border: 1px solid var(--vp-c-divider);
+  border: 1px solid color-mix(in srgb, var(--vp-c-divider) 72%, transparent);
   border-radius: 4px;
   font-size: 13px;
   line-height: 1.25;

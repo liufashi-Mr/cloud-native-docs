@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('vitepress', () => ({
   withBase: (path: string) => `/project${path}`,
@@ -19,16 +19,6 @@ const invalidAvailableTopic: TechnologyTopic = {
 }
 
 describe('CloudNativeHome', () => {
-  beforeEach(() => {
-    document.body.innerHTML =
-      '<div id="local-search"><button class="DocSearch DocSearch-Button" type="button">Search</button></div>'
-  })
-
-  afterEach(() => {
-    document.body.innerHTML = ''
-    vi.restoreAllMocks()
-  })
-
   it('provides the five developer paths and a six-domain, 24-topic catalog', () => {
     const topics = technologyDomains.flatMap((domain) => domain.topics)
 
@@ -80,18 +70,12 @@ describe('CloudNativeHome', () => {
     }
   })
 
-  it('links the recommended start and proxies search to the VitePress search control', async () => {
-    const searchButton = document.querySelector<HTMLButtonElement>(
-      '#local-search button',
-    )
-    const search = vi.spyOn(searchButton!, 'click')
-    const wrapper = mount(CloudNativeHome, { attachTo: document.body })
+  it('links the recommended start without rendering a homepage search control', () => {
+    const wrapper = mount(CloudNativeHome)
 
     const start = wrapper.get('[data-recommended-start] a')
     expect(start.text()).toBe('进入 Kubernetes 专题')
     expect(start.attributes('href')).toBe('/project/kubernetes/')
-
-    await wrapper.get('button[aria-label="搜索文档"]').trigger('click')
-    expect(search).toHaveBeenCalledOnce()
+    expect(wrapper.find('button[aria-label="搜索文档"]').exists()).toBe(false)
   })
 })
