@@ -1,11 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 
 import { kubernetesRouteManifest } from './support/kubernetes-routes'
 
 const root = resolve(import.meta.dirname, '..')
 const docsRoot = resolve(root, 'docs')
+const markdownParser = new MarkdownIt()
 const kubernetesFiles = kubernetesRouteManifest.map(
   (route) => `docs/kubernetes/${route}.md`,
 )
@@ -18,6 +20,25 @@ function sourceMarkdownRoutes(): string[] {
     .filter((file) => file.endsWith('.md'))
     .map((file) => file.replace(/\.md$/, ''))
     .sort()
+}
+
+function nonKubernetesDocumentDestinations(source: string): string[] {
+  return markdownParser
+    .parse(source, {})
+    .flatMap((token) => token.children ?? [])
+    .filter((token) => token.type === 'link_open')
+    .map((token) => token.attrGet('href') ?? '')
+    .filter((destination) => {
+      const pathname = destination.split(/[?#]/, 1)[0]
+      return (
+        destination !== '' &&
+        !destination.startsWith('#') &&
+        !destination.startsWith('//') &&
+        !/^[a-z][a-z\d+.-]*:/i.test(destination) &&
+        !/\.(?:avif|gif|ico|jpe?g|pdf|png|svg|webp)$/i.test(pathname) &&
+        !destination.startsWith('/kubernetes/')
+      )
+    })
 }
 
 describe('Kubernetes topic routing', () => {
@@ -41,6 +62,32 @@ describe('Kubernetes topic routing', () => {
 
     expect(source).not.toMatch(/\]\(\/(?:concepts|guide|operations|reference)(?:\/|\))/)
     expect(source).not.toMatch(/\]\(\/\)/)
+  })
+
+  it('rejects controlled relative Kubernetes document destinations', () => {
+    const relativeDestinations = nonKubernetesDocumentDestinations(
+      '[current](./guide/deployment-flow) [parent](../guide/deployment-flow) [bare](guide/deployment-flow)',
+    )
+
+    expect(relativeDestinations).toEqual([
+      './guide/deployment-flow',
+      '../guide/deployment-flow',
+      'guide/deployment-flow',
+    ])
+  })
+
+  it('excludes anchors, external schemes, and non-document assets from topic-link validation', () => {
+    const excludedDestinations = nonKubernetesDocumentDestinations(
+      '[anchor](#reading-path) [web](https://kubernetes.io) [mail](mailto:docs@example.com) [asset](/kubernetes-logo.svg)',
+    )
+
+    expect(excludedDestinations).toEqual([])
+  })
+
+  it.each(kubernetesFiles)('uses absolute Kubernetes routes for document links in %s', (file) => {
+    const source = readFileSync(resolve(root, file), 'utf8')
+
+    expect(nonKubernetesDocumentDestinations(source)).toEqual([])
   })
 
   it('links the Kubernetes reading path with an absolute topic route', () => {
