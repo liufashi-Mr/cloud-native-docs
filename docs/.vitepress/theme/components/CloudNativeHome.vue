@@ -74,9 +74,7 @@ function openDocumentSearch(): void {
             <h3>{{ path.title }}</h3>
             <span class="cloud-native-home__status cloud-native-home__status--planned">规划中</span>
           </div>
-          <ol class="cloud-native-home__steps">
-            <li v-for="step in path.steps" :key="step">{{ step }}</li>
-          </ol>
+          <p class="cloud-native-home__steps">{{ path.steps.join(' → ') }}</p>
         </article>
       </div>
     </section>
@@ -306,31 +304,11 @@ function openDocumentSearch(): void {
 }
 
 .cloud-native-home__steps {
-  display: grid;
-  gap: 7px;
-  margin: 18px 0 0;
-  padding: 0;
-  list-style: none;
+  margin-top: 18px !important;
   color: var(--vp-c-text-2);
   font-size: 12px;
-  line-height: 1.3;
-}
-
-.cloud-native-home__steps li {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
+  line-height: 1.55;
   overflow-wrap: anywhere;
-}
-
-.cloud-native-home__steps li:not(:last-child)::after {
-  width: 12px;
-  height: 1px;
-  flex: 0 0 12px;
-  order: -1;
-  background: var(--domain-accent);
-  content: '';
 }
 
 .cloud-native-home__status {

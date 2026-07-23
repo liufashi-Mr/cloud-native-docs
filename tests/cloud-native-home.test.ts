@@ -36,6 +36,13 @@ describe('CloudNativeHome', () => {
 
   it('renders the workbench counts and preserves available versus planned topic semantics', () => {
     const wrapper = mount(CloudNativeHome)
+    const expectedPathSequences = [
+      'Git → CI → OCI → Registry → Kubernetes → Helm → GitOps',
+      'DNS → TLS → Gateway → Service → Pod',
+      'Config → Secret → Volume → CSI → Backup',
+      'Metrics → Logs → Traces → Alert → Linux',
+      'Identity → RBAC → Policy → Supply chain',
+    ]
 
     expect(wrapper.get('h1').text()).toBe('应用开发者的云原生技术工作台')
     expect(wrapper.text()).toContain('5 条开发路径')
@@ -44,6 +51,9 @@ describe('CloudNativeHome', () => {
     expect(wrapper.findAll('[data-path]')).toHaveLength(5)
     expect(wrapper.findAll('[data-domain]')).toHaveLength(6)
     expect(wrapper.findAll('[data-topic]')).toHaveLength(24)
+    for (const [index, sequence] of expectedPathSequences.entries()) {
+      expect(wrapper.findAll('[data-path]')[index].text()).toContain(sequence)
+    }
 
     const kubernetes = wrapper.get('[data-topic][data-status="available"]')
     expect(kubernetes.element.tagName).toBe('A')
