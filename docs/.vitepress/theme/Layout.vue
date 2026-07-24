@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import DefaultTheme from 'vitepress/theme'
+import { useSidebar } from 'vitepress/theme'
 
 import AppearanceControl from './components/AppearanceControl.vue'
 import BackToTop from './components/BackToTop.vue'
 import SidebarResizeHandle from './components/SidebarResizeHandle.vue'
+
+const { hasSidebar } = useSidebar()
 </script>
 
 <template>
@@ -20,5 +23,5 @@ import SidebarResizeHandle from './components/SidebarResizeHandle.vue'
     </template>
   </DefaultTheme.Layout>
   <BackToTop />
-  <SidebarResizeHandle />
+  <SidebarResizeHandle v-if="hasSidebar" />
 </template>

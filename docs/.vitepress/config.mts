@@ -111,18 +111,20 @@ export default defineConfig({
         root.classList.toggle('dark', mode === 'dark' || (mode === 'auto' && systemDark))
       })()`,
     ],
+    [
+      'link',
+      {
+        rel: 'icon',
+        type: 'image/png',
+        href: `${siteBase}logo.png`,
+      },
+    ],
   ],
-  transformHead({ siteData }) {
-    return [
-      [
-        'link',
-        {
-          rel: 'icon',
-          type: 'image/png',
-          href: `${siteData.base}logo.png`,
-        },
-      ],
-    ]
+  transformHead({ siteData, head }) {
+    const favicon = head.find(
+      ([tag, attributes]) => tag === 'link' && attributes.rel === 'icon',
+    )
+    if (favicon) favicon[1].href = `${siteData.base}logo.png`
   },
   markdown: {
     config(markdown) {

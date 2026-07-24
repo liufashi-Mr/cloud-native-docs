@@ -26,14 +26,18 @@ describe('appearance theme integration', () => {
       resolve(process.cwd(), 'docs/.vitepress/config.mts'),
       'utf8',
     )
+    const staticHead = config.slice(
+      config.indexOf('head: ['),
+      config.indexOf('transformHead'),
+    )
 
     expect(config).toContain("outlineTitle: '本页目录'")
     expect(config).toContain("returnToTopLabel: '返回顶部'")
-    expect(config).toContain('transformHead({ siteData })')
-    expect(config).toMatch(
-      /rel:\s*'icon'[\s\S]*type:\s*'image\/png'[\s\S]*href:\s*`\$\{siteData\.base\}logo\.png`/,
+    expect(staticHead).toMatch(
+      /rel:\s*'icon'[\s\S]*type:\s*'image\/png'[\s\S]*href:\s*`\$\{siteBase\}logo\.png`/,
     )
-    expect(config).not.toContain("href: '/logo.png'")
+    expect(config).toContain('transformHead({ siteData, head })')
+    expect(config).toContain("favicon[1].href = `${siteData.base}logo.png`")
   })
 
   it('mounts the appearance control in desktop and mobile-safe layout slots', async () => {
@@ -44,7 +48,10 @@ describe('appearance theme integration', () => {
     expect(layout).toContain('#nav-screen-content-after')
     expect(layout.match(/<AppearanceControl/g)).toHaveLength(2)
     expect(layout).toContain('<BackToTop />')
-    expect(layout).toContain('<SidebarResizeHandle />')
+    expect(layout).toContain("import { useSidebar } from 'vitepress/theme'")
+    expect(layout).toContain('const { hasSidebar } = useSidebar()')
+    expect(layout).toContain('<SidebarResizeHandle v-if="hasSidebar" />')
+    expect(layout).not.toContain('<SidebarResizeHandle />')
   })
 
   it('keeps color and mode as independent stable icon controls', async () => {
