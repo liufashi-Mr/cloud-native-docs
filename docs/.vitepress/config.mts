@@ -7,8 +7,8 @@ const siteBase = process.env.BASE_PATH || '/'
 export default defineConfig({
   base: siteBase,
   lang: 'zh-CN',
-  title: 'Kubernetes',
-  description: '用关系与场景串联 Kubernetes 核心概念。',
+  title: '云原生开发手册',
+  description: '面向应用开发者的云原生技术工作台。',
   appearance: false,
   srcExclude: ['superpowers/**'],
   head: [
@@ -118,8 +118,8 @@ export default defineConfig({
         'link',
         {
           rel: 'icon',
-          type: 'image/svg+xml',
-          href: `${siteData.base}kubernetes-logo.svg`,
+          type: 'image/png',
+          href: `${siteData.base}logo.png`,
         },
       ],
     ]
@@ -130,13 +130,8 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: '/kubernetes-logo.svg',
-    siteTitle: 'Kubernetes',
-    nav: [
-      { text: '概念', link: '/concepts/resource-model' },
-      { text: '运行实践', link: '/operations/health-lifecycle' },
-      { text: '速查', link: '/reference/concept-map' },
-    ],
+    logo: '/logo.png',
+    siteTitle: '云原生开发手册',
     sidebar: {
       '/kubernetes/': [
         {

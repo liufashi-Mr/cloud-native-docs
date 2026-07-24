@@ -30,6 +30,7 @@ beforeAll(() => {
 describe('production build', () => {
   it('publishes the root workbench and every Kubernetes topic page without legacy routes', () => {
     expect(existsSync(resolve(dist, 'index.html'))).toBe(true)
+    expect(existsSync(resolve(dist, 'logo.png'))).toBe(true)
     for (const route of kubernetesRouteManifest) {
       const page = `kubernetes/${route}.html`
       expect(existsSync(resolve(dist, page)), `${page} must be published`).toBe(true)
@@ -42,6 +43,7 @@ describe('production build', () => {
     const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
     const kubernetesHome = readFileSync(resolve(dist, 'kubernetes/index.html'), 'utf8')
     expect(home).toContain('应用开发者的云原生技术工作台')
+    expect(home).toContain('云原生开发手册')
     expect(home).toContain('href="/kubernetes/"')
     expect(home).toContain('Kubernetes')
     expect(kubernetesHome).toContain('Kubernetes 概念总览')

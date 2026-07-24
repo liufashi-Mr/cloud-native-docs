@@ -78,7 +78,7 @@ describe('Kubernetes topic routing', () => {
 
   it('excludes anchors, external schemes, and non-document assets from topic-link validation', () => {
     const excludedDestinations = nonKubernetesDocumentDestinations(
-      '[anchor](#reading-path) [web](https://kubernetes.io) [mail](mailto:docs@example.com) [asset](/kubernetes-logo.svg)',
+      '[anchor](#reading-path) [web](https://kubernetes.io) [mail](mailto:docs@example.com) [asset](/logo.png)',
     )
 
     expect(excludedDestinations).toEqual([])

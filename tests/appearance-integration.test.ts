@@ -6,22 +6,22 @@ import { describe, expect, it } from 'vitest'
 const themeDirectory = resolve(process.cwd(), 'docs/.vitepress/theme')
 
 describe('appearance theme integration', () => {
-  it('uses the Kubernetes brand and links the local logo to the site home', async () => {
+  it('uses the cloud native handbook brand and leaves the top navigation empty', async () => {
     const config = await readFile(
       resolve(process.cwd(), 'docs/.vitepress/config.mts'),
       'utf8',
     )
 
-    expect(config).toContain("title: 'Kubernetes'")
-    expect(config).toContain("siteTitle: 'Kubernetes'")
-    expect(config).toContain("logo: '/kubernetes-logo.svg'")
+    expect(config).toContain("title: '云原生开发手册'")
+    expect(config).toContain("siteTitle: '云原生开发手册'")
+    expect(config).toContain("logo: '/logo.png'")
     expect(config).toContain("const siteBase = process.env.BASE_PATH || '/'")
     expect(config).toContain('base: siteBase')
     expect(config).not.toContain('logoLink:')
-    expect(config).not.toContain("title: 'K8s 概念手册'")
+    expect(config).not.toMatch(/\bnav:\s*\[/)
   })
 
-  it('localizes the page outline and uses the Kubernetes logo as favicon', async () => {
+  it('localizes the page outline and uses the base-aware PNG logo as favicon', async () => {
     const config = await readFile(
       resolve(process.cwd(), 'docs/.vitepress/config.mts'),
       'utf8',
@@ -31,9 +31,9 @@ describe('appearance theme integration', () => {
     expect(config).toContain("returnToTopLabel: '返回顶部'")
     expect(config).toContain('transformHead({ siteData })')
     expect(config).toMatch(
-      /rel:\s*'icon'[\s\S]*type:\s*'image\/svg\+xml'[\s\S]*href:\s*`\$\{siteData\.base\}kubernetes-logo\.svg`/,
+      /rel:\s*'icon'[\s\S]*type:\s*'image\/png'[\s\S]*href:\s*`\$\{siteData\.base\}logo\.png`/,
     )
-    expect(config).not.toContain("href: '/kubernetes-logo.svg'")
+    expect(config).not.toContain("href: '/logo.png'")
   })
 
   it('mounts the appearance control in desktop and mobile-safe layout slots', async () => {
