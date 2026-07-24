@@ -28,6 +28,16 @@ beforeAll(() => {
 }, 30_000)
 
 describe('production build', () => {
+  it('keeps the source logo within navigation asset bounds', () => {
+    const logo = readFileSync(resolve(root, 'docs/public/logo.png'))
+
+    expect(logo.subarray(12, 16).toString('ascii')).toBe('IHDR')
+    expect(logo.readUInt32BE(16)).toBe(256)
+    expect(logo.readUInt32BE(20)).toBe(256)
+    expect([4, 6]).toContain(logo[25])
+    expect(logo.byteLength).toBeLessThanOrEqual(200 * 1024)
+  })
+
   it('publishes the root workbench and every Kubernetes topic page without legacy routes', () => {
     expect(existsSync(resolve(dist, 'index.html'))).toBe(true)
     expect(existsSync(resolve(dist, 'logo.png'))).toBe(true)

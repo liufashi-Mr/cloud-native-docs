@@ -59,6 +59,18 @@ describe('appearance theme integration', () => {
     )
   })
 
+  it('renders the square navbar logo at a compact fixed size', async () => {
+    const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
+    const logoRule = styles.match(
+      /\.VPNavBarTitle\s+\.logo\s*\{([^}]*)\}/,
+    )?.[1]
+
+    expect(logoRule).toMatch(/width:\s*32px/)
+    expect(logoRule).toMatch(/height:\s*32px/)
+    expect(logoRule).toMatch(/margin-right:\s*4px/)
+    expect(logoRule).toMatch(/object-fit:\s*contain/)
+  })
+
   it('keeps the desktop nav title border inside the resizable sidebar', async () => {
     const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
     const desktopStyles = styles.match(

@@ -7,7 +7,8 @@
 ## Brand
 
 - VitePress `title`、顶部 `siteTitle` 和首页浏览器标题统一为“云原生开发手册”。
-- 顶部 logo 使用 `docs/public/logo.png`，通过 `withBase`/站点 base 路径正确加载。
+- 顶部 logo 使用 `docs/public/logo.png`，源文件保持 1:1 比例并优化为 256 x 256，通过 `withBase`/站点 base 路径正确加载。
+- 顶部栏将 logo 渲染为 32 x 32，右侧保留 4px 间距，并使用 `object-fit: contain` 保持图片比例。
 - favicon 使用同一份 `logo.png`，不再引用 Kubernetes 专属 SVG。
 - 保留 logo 的空替代文本，由旁边的站点名称承担可访问名称；图片加载失败时站点名称仍然可见。
 
