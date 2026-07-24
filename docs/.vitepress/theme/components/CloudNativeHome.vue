@@ -314,6 +314,7 @@ function topicIconFor(topic: TechnologyTopic): Component {
 
 .cloud-native-home__path--green,
 .cloud-native-home__domain--green { --domain-accent: #2f8a61; }
+.cloud-native-home__domain--coral { --domain-accent: #c2603f; }
 .cloud-native-home__path--blue,
 .cloud-native-home__domain--blue { --domain-accent: #3978a8; }
 .cloud-native-home__path--violet,
@@ -426,6 +427,10 @@ function topicIconFor(topic: TechnologyTopic): Component {
   color: var(--vp-c-brand-1);
 }
 
+.cloud-native-home__topic--available:focus-visible {
+  color: var(--vp-c-brand-1);
+}
+
 .cloud-native-home__topic--available > svg {
   transition: transform 160ms ease;
 }
@@ -447,7 +452,17 @@ function topicIconFor(topic: TechnologyTopic): Component {
   width: 20px;
   height: 20px;
   place-items: center;
-  color: var(--domain-accent);
+  color: var(--vp-c-text-3);
+  transition: color 160ms ease;
+}
+
+.cloud-native-home__topic--available .cloud-native-home__topic-visual {
+  color: var(--vp-c-text-2);
+}
+
+.cloud-native-home__topic--available:hover .cloud-native-home__topic-visual,
+.cloud-native-home__topic--available:focus-visible .cloud-native-home__topic-visual {
+  color: var(--vp-c-brand-1);
 }
 
 .cloud-native-home__topic-title {
@@ -528,7 +543,8 @@ function topicIconFor(topic: TechnologyTopic): Component {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cloud-native-home__topic--available > svg {
+  .cloud-native-home__topic--available > svg,
+  .cloud-native-home__topic-visual {
     transition: none;
   }
 }

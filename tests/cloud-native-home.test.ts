@@ -139,6 +139,10 @@ describe('CloudNativeHome', () => {
 
     expect(developerPaths).toHaveLength(5)
     expect(technologyDomains).toHaveLength(6)
+    expect(technologyDomains[0]).toEqual(expect.objectContaining({
+      title: '运行基础',
+      tone: 'coral',
+    }))
     expect(topics).toHaveLength(24)
     expect(topics.filter((topic) => topic.status === 'available')).toEqual([
       expect.objectContaining({
@@ -223,6 +227,25 @@ describe('CloudNativeHome', () => {
     expect(available.declarations.has('border')).toBe(false)
     expect(availableHover.declarations.has('background')).toBe(false)
     expect(declaration(availableHover, 'color')).toBe('var(--vp-c-brand-1)')
+  })
+
+  it('makes the available topic icon brighter and applies the theme color on interaction', () => {
+    const topicVisual = rule(/\.cloud-native-home__topic-visual(?:\[[^\]]+\])?$/)
+    const availableVisual = rule(
+      /\.cloud-native-home__topic--available(?:\[[^\]]+\])?\s+\.cloud-native-home__topic-visual/,
+    )
+    const availableVisualHover = rule(
+      /\.cloud-native-home__topic--available(?:\[[^\]]+\])?:hover\s+\.cloud-native-home__topic-visual/,
+    )
+    const availableVisualFocus = rule(
+      /\.cloud-native-home__topic--available(?:\[[^\]]+\])?:focus-visible\s+\.cloud-native-home__topic-visual/,
+    )
+
+    expect(declaration(topicVisual, 'color')).toBe('var(--vp-c-text-3)')
+    expect(declaration(topicVisual, 'transition')).toContain('color')
+    expect(declaration(availableVisual, 'color')).toBe('var(--vp-c-text-2)')
+    expect(declaration(availableVisualHover, 'color')).toBe('var(--vp-c-brand-1)')
+    expect(declaration(availableVisualFocus, 'color')).toBe('var(--vp-c-brand-1)')
   })
 
   it('uses logical catalog dividers with a continuous wide-to-mobile cascade', () => {

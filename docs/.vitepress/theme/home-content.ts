@@ -9,6 +9,7 @@ export type DomainIcon =
 export type DomainTone =
   | 'amber'
   | 'blue'
+  | 'coral'
   | 'green'
   | 'neutral'
   | 'rose'
@@ -104,7 +105,7 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     title: '运行基础',
     description: '理解应用实际运行的环境',
     icon: 'terminal',
-    tone: 'neutral',
+    tone: 'coral',
     topics: [
       { title: 'Linux', status: 'planned', icon: 'terminal' },
       { title: '网络与 DNS', status: 'planned', icon: 'network' },
