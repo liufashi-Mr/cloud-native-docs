@@ -106,23 +106,24 @@ describe('AppearanceControl', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
-  it('keeps icon-only mobile mode controls accessibly named', async () => {
+  it('renders an accessible standalone trigger for the current mode', async () => {
     installMatchMedia()
     const wrapper = mountControl()
+    const modeTrigger = wrapper.get('button[data-mode-trigger]')
+
+    expect(modeTrigger.attributes('data-mode')).toBe('auto')
+    expect(modeTrigger.attributes('aria-label')).toBe(
+      '明暗模式：当前自适应，点击切换为浅色',
+    )
+    expect(modeTrigger.attributes('title')).toBe(
+      '明暗模式：当前自适应，点击切换为浅色',
+    )
+    expect(modeTrigger.get('svg').classes()).toContain('lucide-monitor')
+    expect(modeTrigger.get('svg').attributes('aria-hidden')).toBe('true')
 
     await wrapper.get('button[aria-label="外观设置"]').trigger('click')
 
-    for (const [mode, label] of [
-      ['auto', '跟随系统'],
-      ['light', '浅色'],
-      ['dark', '深色'],
-    ] as const) {
-      const button = wrapper.get(`button[data-mode="${mode}"]`)
-      expect(button.attributes('aria-label')).toBe(label)
-      expect(button.attributes('title')).toBe(label)
-      expect(button.get('.k8s-appearance__mode-label').text()).toBe(label)
-      expect(button.get('svg').attributes('aria-hidden')).toBe('true')
-    }
+    expect(wrapper.get('[role="dialog"]').find('[data-mode]').exists()).toBe(false)
   })
 
   it('focuses the selected color when the popover opens', async () => {
@@ -184,25 +185,49 @@ describe('AppearanceControl', () => {
     )
   })
 
-  it('loads mode state and keeps VitePress isDark synchronized with choices', async () => {
-    installMatchMedia(false)
-    localStorage.setItem('k8s-theme-color', '#555DB0')
-    localStorage.setItem('k8s-theme-mode', 'dark')
-
+  it('cycles auto, light, and dark while persisting and synchronizing state', async () => {
+    installMatchMedia(true)
     const wrapper = mountControl()
-    await wrapper.get('button[aria-label="外观设置"]').trigger('click')
+    const modeTrigger = wrapper.get('button[data-mode-trigger]')
 
-    expect(wrapper.get('button[data-mode="dark"]').attributes('aria-pressed')).toBe(
-      'true',
-    )
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(vitepressData.isDark!.value).toBe(true)
 
-    await wrapper.get('button[data-mode="light"]').trigger('click')
+    await modeTrigger.trigger('click')
 
+    expect(modeTrigger.attributes('data-mode')).toBe('light')
+    expect(modeTrigger.attributes('aria-label')).toBe(
+      '明暗模式：当前浅色，点击切换为深色',
+    )
+    expect(modeTrigger.attributes('title')).toBe(
+      '明暗模式：当前浅色，点击切换为深色',
+    )
+    expect(modeTrigger.get('svg').classes()).toContain('lucide-sun')
     expect(localStorage.getItem('k8s-theme-mode')).toBe('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(vitepressData.isDark!.value).toBe(false)
+
+    await modeTrigger.trigger('click')
+
+    expect(modeTrigger.attributes('data-mode')).toBe('dark')
+    expect(modeTrigger.attributes('aria-label')).toBe(
+      '明暗模式：当前深色，点击切换为自适应',
+    )
+    expect(modeTrigger.attributes('title')).toBe(
+      '明暗模式：当前深色，点击切换为自适应',
+    )
+    expect(modeTrigger.get('svg').classes()).toContain('lucide-moon')
+    expect(localStorage.getItem('k8s-theme-mode')).toBe('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(vitepressData.isDark!.value).toBe(true)
+
+    await modeTrigger.trigger('click')
+
+    expect(modeTrigger.attributes('data-mode')).toBe('auto')
+    expect(modeTrigger.get('svg').classes()).toContain('lucide-monitor')
+    expect(localStorage.getItem('k8s-theme-mode')).toBe('auto')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(vitepressData.isDark!.value).toBe(true)
   })
 
   it('closes on outside click and Escape', async () => {
@@ -234,7 +259,7 @@ describe('AppearanceControl', () => {
 
     await desktop.get('button[aria-label="外观设置"]').trigger('click')
     await desktop.get(`button[data-color="${PRESET_COLORS[4]}"]`).trigger('click')
-    await desktop.get('button[data-mode="dark"]').trigger('click')
+    await desktop.get('button[data-mode-trigger]').trigger('click')
 
     await mobile.get('button[aria-label="外观设置"]').trigger('click')
 
@@ -243,8 +268,17 @@ describe('AppearanceControl', () => {
         .get(`button[data-color="${PRESET_COLORS[4]}"]`)
         .attributes('aria-pressed'),
     ).toBe('true')
-    expect(mobile.get('button[data-mode="dark"]').attributes('aria-pressed')).toBe(
-      'true',
+    expect(mobile.get('button[data-mode-trigger]').attributes('data-mode')).toBe(
+      'light',
+    )
+
+    await mobile.get('button[data-mode-trigger]').trigger('click')
+
+    expect(desktop.get('button[data-mode-trigger]').attributes('data-mode')).toBe(
+      'dark',
+    )
+    expect(desktop.get('button[data-mode-trigger] svg').classes()).toContain(
+      'lucide-moon',
     )
 
     desktop.unmount()
@@ -265,7 +299,8 @@ describe('AppearanceControl', () => {
     const first = mountControl()
     await first.get('button[aria-label="外观设置"]').trigger('click')
     await first.get(`button[data-color="${PRESET_COLORS[6]}"]`).trigger('click')
-    await first.get('button[data-mode="dark"]').trigger('click')
+    await first.get('button[data-mode-trigger]').trigger('click')
+    await first.get('button[data-mode-trigger]').trigger('click')
     expect(vitepressData.isDark!.value).toBe(true)
     first.unmount()
 
@@ -278,9 +313,12 @@ describe('AppearanceControl', () => {
         .get(`button[data-color="${PRESET_COLORS[6]}"]`)
         .attributes('aria-pressed'),
     ).toBe('true')
-    expect(
-      remounted.get('button[data-mode="dark"]').attributes('aria-pressed'),
-    ).toBe('true')
+    expect(remounted.get('button[data-mode-trigger]').attributes('data-mode')).toBe(
+      'dark',
+    )
+    expect(remounted.get('button[data-mode-trigger] svg').classes()).toContain(
+      'lucide-moon',
+    )
     expect(vitepressData.isDark!.value).toBe(true)
   })
 
@@ -296,8 +334,7 @@ describe('AppearanceControl', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(vitepressData.isDark!.value).toBe(true)
 
-    await wrapper.get('button[aria-label="外观设置"]').trigger('click')
-    await wrapper.get('button[data-mode="light"]').trigger('click')
+    await wrapper.get('button[data-mode-trigger]').trigger('click')
     media.emit(true)
     await nextTick()
     expect(document.documentElement.classList.contains('dark')).toBe(false)

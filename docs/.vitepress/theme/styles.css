@@ -227,15 +227,18 @@ body {
 
 .k8s-appearance {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.k8s-appearance__trigger {
+.k8s-appearance__trigger,
+.k8s-appearance__mode-trigger {
   display: inline-flex;
-  width: 44px;
+  width: 36px;
   height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -245,7 +248,9 @@ body {
 }
 
 .k8s-appearance__trigger:hover,
-.k8s-appearance__trigger:focus-visible {
+.k8s-appearance__trigger:focus-visible,
+.k8s-appearance__mode-trigger:hover,
+.k8s-appearance__mode-trigger:focus-visible {
   border-color: var(--k8s-line);
   color: var(--vp-c-text-1);
 }
@@ -296,7 +301,7 @@ body {
   grid-template-columns: 36px 1fr auto;
   align-items: center;
   gap: 8px;
-  margin: 12px 0 16px;
+  margin: 12px 0 0;
   color: var(--vp-c-text-1);
   font-size: 13px;
 }
@@ -313,37 +318,6 @@ body {
 .k8s-appearance__custom code {
   color: var(--vp-c-text-2);
   font-size: 11px;
-}
-
-.k8s-appearance__modes {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-}
-
-.k8s-appearance__modes button {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--vp-c-text-2);
-  cursor: pointer;
-  font-size: 11px;
-}
-
-.k8s-appearance__modes button:hover,
-.k8s-appearance__modes button:focus-visible,
-.k8s-appearance__modes button[aria-pressed='true'] {
-  border-color: var(--k8s-accent-active);
-  color: var(--vp-c-text-1);
-}
-
-.k8s-appearance__modes button[aria-pressed='true'] {
-  background: var(--vp-c-brand-soft);
 }
 
 .k8s-appearance-slot--mobile {
@@ -480,25 +454,18 @@ body {
     padding: 12px 0;
   }
 
-  .k8s-appearance-slot--mobile .k8s-appearance__trigger {
-    width: 36px;
-    height: 32px;
+  .k8s-appearance-slot--mobile .k8s-appearance {
+    flex-wrap: wrap;
+    width: 100%;
+    row-gap: 0;
   }
 
   .k8s-appearance-slot--mobile .k8s-appearance__popover {
     position: static;
+    flex: 0 0 100%;
     width: 100%;
     margin-top: 8px;
     box-shadow: none;
-  }
-
-  .k8s-appearance__modes button {
-    min-width: 0;
-    padding: 0 8px;
-  }
-
-  .k8s-appearance__mode-label {
-    display: none;
   }
 }
 

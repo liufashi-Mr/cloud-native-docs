@@ -95,14 +95,14 @@ describe('responsive theme styles', () => {
     expect(reducedMotionStyles).toMatch(/scroll-behavior:\s*auto\s*!important/)
   })
 
-  it('hides only the visible mobile mode labels', () => {
-    const mobileStyles = styles.slice(
-      styles.indexOf('@media (max-width: 767px)'),
-      styles.indexOf('@media (prefers-reduced-motion: reduce)'),
+  it('keeps both appearance icon controls at a stable size', () => {
+    const triggerRule = styles.match(
+      /\.k8s-appearance__trigger,\s*\.k8s-appearance__mode-trigger\s*{([^}]*)}/,
     )
 
-    expect(mobileStyles).toMatch(
-      /\.k8s-appearance__mode-label\s*{[^}]*display:\s*none/,
-    )
+    expect(triggerRule?.[1]).toMatch(/width:\s*36px/)
+    expect(triggerRule?.[1]).toMatch(/height:\s*32px/)
+    expect(styles).not.toContain('.k8s-appearance__mode-label')
+    expect(styles).not.toContain('.k8s-appearance__modes')
   })
 })

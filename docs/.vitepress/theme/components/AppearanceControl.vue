@@ -7,6 +7,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  type Component,
   useId,
   useTemplateRef,
 } from 'vue'
@@ -32,6 +33,24 @@ const trigger = useTemplateRef<HTMLButtonElement>('trigger')
 const popoverId = useId()
 const open = ref(false)
 const displayColor = computed(() => normalizeHex(color.value) ?? DEFAULT_COLOR)
+const modeSequence: readonly AppearanceMode[] = ['auto', 'light', 'dark']
+const modeOptions: Record<
+  AppearanceMode,
+  { icon: Component; name: string }
+> = {
+  auto: { icon: Monitor, name: '自适应' },
+  light: { icon: Sun, name: '浅色' },
+  dark: { icon: Moon, name: '深色' },
+}
+const currentModeOption = computed(() => modeOptions[mode.value])
+const nextMode = computed(() => {
+  const currentIndex = modeSequence.indexOf(mode.value)
+  return modeSequence[(currentIndex + 1) % modeSequence.length] ?? 'auto'
+})
+const modeLabel = computed(
+  () =>
+    `明暗模式：当前${currentModeOption.value.name}，点击切换为${modeOptions[nextMode.value].name}`,
+)
 
 let unmountAppearance: (() => void) | null = null
 
@@ -59,8 +78,8 @@ function selectColor(nextColor: string): void {
   selectAppearanceColor(nextColor)
 }
 
-function selectMode(nextMode: AppearanceMode): void {
-  selectAppearanceMode(nextMode)
+function cycleMode(): void {
+  selectAppearanceMode(nextMode.value)
 }
 
 function handleCustomColor(event: Event): void {
@@ -106,6 +125,18 @@ onBeforeUnmount(() => {
       <Palette :size="18" aria-hidden="true" :color="displayColor" />
     </button>
 
+    <button
+      class="k8s-appearance__mode-trigger"
+      type="button"
+      data-mode-trigger
+      :data-mode="mode"
+      :aria-label="modeLabel"
+      :title="modeLabel"
+      @click="cycleMode"
+    >
+      <component :is="currentModeOption.icon" :size="18" aria-hidden="true" />
+    </button>
+
     <div
       v-if="open"
       ref="popover"
@@ -141,43 +172,6 @@ onBeforeUnmount(() => {
         <span>自定义颜色</span>
         <code>{{ displayColor }}</code>
       </label>
-
-      <p class="k8s-appearance__label">明暗模式</p>
-      <div class="k8s-appearance__modes" role="group" aria-label="明暗模式">
-        <button
-          type="button"
-          data-mode="auto"
-          aria-label="跟随系统"
-          :aria-pressed="mode === 'auto'"
-          title="跟随系统"
-          @click="selectMode('auto')"
-        >
-          <Monitor :size="16" aria-hidden="true" />
-          <span class="k8s-appearance__mode-label">跟随系统</span>
-        </button>
-        <button
-          type="button"
-          data-mode="light"
-          aria-label="浅色"
-          :aria-pressed="mode === 'light'"
-          title="浅色"
-          @click="selectMode('light')"
-        >
-          <Sun :size="16" aria-hidden="true" />
-          <span class="k8s-appearance__mode-label">浅色</span>
-        </button>
-        <button
-          type="button"
-          data-mode="dark"
-          aria-label="深色"
-          :aria-pressed="mode === 'dark'"
-          title="深色"
-          @click="selectMode('dark')"
-        >
-          <Moon :size="16" aria-hidden="true" />
-          <span class="k8s-appearance__mode-label">深色</span>
-        </button>
-      </div>
     </div>
   </div>
 </template>

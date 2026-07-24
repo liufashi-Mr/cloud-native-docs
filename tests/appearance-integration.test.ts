@@ -47,6 +47,28 @@ describe('appearance theme integration', () => {
     expect(layout).toContain('<SidebarResizeHandle />')
   })
 
+  it('keeps color and mode as independent stable icon controls', async () => {
+    const component = await readFile(
+      resolve(themeDirectory, 'components/AppearanceControl.vue'),
+      'utf8',
+    )
+    const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
+
+    expect(component).toContain('data-mode-trigger')
+    expect(component).toContain('k8s-appearance__mode-trigger')
+    expect(component).not.toContain('k8s-appearance__modes')
+    expect(styles).toMatch(
+      /\.k8s-appearance\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*4px;/,
+    )
+    expect(styles).toMatch(
+      /\.k8s-appearance__trigger,\s*\.k8s-appearance__mode-trigger\s*\{[^}]*width:\s*36px;[^}]*height:\s*32px;/,
+    )
+    expect(styles).toMatch(
+      /\.k8s-appearance-slot--mobile\s+\.k8s-appearance\s*\{[^}]*flex-wrap:\s*wrap;[^}]*width:\s*100%;[^}]*row-gap:\s*0;/,
+    )
+    expect(styles).not.toContain('.k8s-appearance__modes')
+  })
+
   it('keeps the outline text spaced from its divider at every desktop width', async () => {
     const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
     const outlineContentRule = styles.match(
