@@ -79,6 +79,7 @@ function selectColor(nextColor: string): void {
 }
 
 function cycleMode(): void {
+  closePopover()
   selectAppearanceMode(nextMode.value)
 }
 

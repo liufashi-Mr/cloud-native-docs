@@ -230,6 +230,25 @@ describe('AppearanceControl', () => {
     expect(vitepressData.isDark!.value).toBe(true)
   })
 
+  it('closes the color popover without restoring palette focus on mode change', async () => {
+    installMatchMedia()
+    const wrapper = mountControl()
+    const paletteTrigger = wrapper.get('button[aria-label="外观设置"]')
+    const modeTrigger = wrapper.get('button[data-mode-trigger]')
+
+    await paletteTrigger.trigger('click')
+    await nextTick()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+
+    await modeTrigger.trigger('click')
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(paletteTrigger.attributes('aria-expanded')).toBe('false')
+    expect(modeTrigger.attributes('data-mode')).toBe('light')
+    expect(localStorage.getItem('k8s-theme-mode')).toBe('light')
+    expect(document.activeElement).not.toBe(paletteTrigger.element)
+  })
+
   it('closes on outside click and Escape', async () => {
     installMatchMedia()
     const wrapper = mountControl()
