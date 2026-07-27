@@ -182,11 +182,7 @@ function fenceContents(source: string, file: string, language: string): string[]
     .map((fence) => fence.content)
 }
 
-function compactWhitespace(source: string): string {
-  return source.replace(/\s+/g, ' ').trim()
-}
-
-function shellCommands(source: string): string[] {
+function continuedLines(source: string): string[] {
   return source
     .replace(/\\\r?\n\s*/g, ' ')
     .split(/\r?\n/)
@@ -194,8 +190,22 @@ function shellCommands(source: string): string[] {
     .filter(Boolean)
 }
 
+function shellCommands(source: string): string[] {
+  return continuedLines(source)
+}
+
 function bashCommands(source: string, file: string): string[] {
   return fenceContents(source, file, 'bash').flatMap(shellCommands)
+}
+
+function dockerfileInstructions(source: string): string[] {
+  return continuedLines(source).filter((line) => !line.startsWith('#'))
+}
+
+function hasBindAndCacheMount(instruction: string): boolean {
+  return /^RUN(?:\s|$)/.test(instruction)
+    && instruction.includes('--mount=type=bind,')
+    && instruction.includes('--mount=type=cache,')
 }
 
 function nodeHeredoc(source: string, file: string): string {
@@ -441,18 +451,17 @@ describe('Docker / OCI content contracts', () => {
   it('keeps build mounts and remote cache options in coherent commands', () => {
     const file = 'docs/docker-oci/build/buildkit-cache.md'
     const source = readRequiredPage(file)
-    const dockerfiles = fenceContents(source, file, 'dockerfile').map(compactWhitespace)
+    const instructions = fenceContents(source, file, 'dockerfile')
+      .flatMap(dockerfileInstructions)
     const commands = bashCommands(source, file)
 
     expect(
-      dockerfiles.some((fence) =>
-        /RUN --mount=type=bind,[^\n]* --mount=type=cache,/.test(fence),
-      ),
+      instructions.some(hasBindAndCacheMount),
       'one RUN must combine the documented bind and cache mounts',
     ).toBe(true)
     expect(
-      dockerfiles.some((fence) =>
-        /RUN --mount=type=secret,id=build_token,required=true/.test(fence),
+      instructions.some((instruction) =>
+        /^RUN --mount=type=secret,id=build_token,required=true/.test(instruction),
       ),
       'the secret example must use a required secret mount',
     ).toBe(true)
@@ -467,6 +476,18 @@ describe('Docker / OCI content contracts', () => {
     expect(remoteCache).toMatch(
       /docker buildx build .*--platform linux\/amd64 .*--cache-from type=registry,[^ ]+ .*--cache-to type=registry,[^ ]+,mode=max .*--push \./,
     )
+  })
+
+  it('does not combine mounts from separate Dockerfile RUN instructions', () => {
+    const instructions = dockerfileInstructions(
+      [
+        'RUN --mount=type=bind,source=server.mjs,target=/src/server.mjs,ro true',
+        'RUN --mount=type=cache,target=/tmp/demo-api-checks true',
+      ].join('\n'),
+    )
+
+    expect(instructions).toHaveLength(2)
+    expect(instructions.some(hasBindAndCacheMount)).toBe(false)
   })
 
   it('separates single-platform load from two-platform push', () => {
