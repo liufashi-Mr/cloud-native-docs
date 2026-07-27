@@ -155,6 +155,45 @@ function readRequiredPage(file: string): string {
   return existsSync(absoluteFile) ? readFileSync(absoluteFile, 'utf8') : ''
 }
 
+function fenceContents(source: string, file: string, language: string): string[] {
+  return markdownFences(source, file)
+    .filter((fence) => fence.language === language)
+    .map((fence) => fence.content)
+}
+
+function compactWhitespace(source: string): string {
+  return source.replace(/\s+/g, ' ').trim()
+}
+
+function markdownTable(source: string, header: string): string[] {
+  const lines = source.split('\n')
+  const start = lines.indexOf(header)
+  expect(start, `missing table header: ${header}`).toBeGreaterThanOrEqual(0)
+  const table: string[] = []
+  for (let index = start; index < lines.length && lines[index].startsWith('|'); index += 1) {
+    table.push(lines[index])
+  }
+  return table
+}
+
+function expectStepsInOrder(source: string, steps: string[], context: string): void {
+  let previousPosition = -1
+  for (const step of steps) {
+    const position = source.indexOf(step)
+    expect(position, `${context} is missing or misorders: ${step}`).toBeGreaterThan(
+      previousPosition,
+    )
+    previousPosition = position
+  }
+}
+
+function mermaidEdgeInitiators(diagram: string): string[] {
+  return diagram.split('\n').flatMap((line) => {
+    const match = line.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:-->>|->>|-->|-\.->|==>)/)
+    return match ? [match[1]] : []
+  })
+}
+
 describe('Docker / OCI content contracts', () => {
   it.each(Object.entries(pageContracts))('%s teaches its required model', (file, contract) => {
     const source = readRequiredPage(file)
@@ -256,5 +295,131 @@ describe('Docker / OCI content contracts', () => {
     expect(imageModel).toMatch(
       /未压缩 mediaType[^。]*descriptor[^。]*相同的算法[^。]*与 DiffID 相同/,
     )
+  })
+
+  it('keeps the ENTRYPOINT and CMD override matrix exact and complete', () => {
+    const source = readRequiredPage('docs/docker-oci/build/dockerfile.md')
+
+    expect(markdownTable(source, '| Image config | `docker run` input | Final behavior |')).toEqual([
+      '| Image config | `docker run` input | Final behavior |',
+      '| --- | --- | --- |',
+      '| ENTRYPOINT only | arguments | arguments append to ENTRYPOINT |',
+      '| CMD only | arguments | arguments replace CMD |',
+      '| ENTRYPOINT + CMD | no arguments | ENTRYPOINT runs with CMD defaults |',
+      '| ENTRYPOINT + CMD | arguments | ENTRYPOINT runs with replacement arguments |',
+      '| either | `--entrypoint` | executable entry is replaced explicitly |',
+    ])
+  })
+
+  it('keeps build mounts and remote cache options in coherent commands', () => {
+    const file = 'docs/docker-oci/build/buildkit-cache.md'
+    const source = readRequiredPage(file)
+    const dockerfiles = fenceContents(source, file, 'dockerfile').map(compactWhitespace)
+    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
+
+    expect(
+      dockerfiles.some((fence) =>
+        /RUN --mount=type=bind,[^\n]* --mount=type=cache,/.test(fence),
+      ),
+      'one RUN must combine the documented bind and cache mounts',
+    ).toBe(true)
+    expect(
+      dockerfiles.some((fence) =>
+        /RUN --mount=type=secret,id=build_token,required=true/.test(fence),
+      ),
+      'the secret example must use a required secret mount',
+    ).toBe(true)
+
+    const remoteCache = commands.find((command) =>
+      command.includes('--cache-from type=registry'),
+    )
+    expect(remoteCache).toBeDefined()
+    expect(remoteCache).toMatch(
+      /docker buildx build .*--platform linux\/amd64 .*--cache-from type=registry,[^ ]+ .*--cache-to type=registry,[^ ]+,mode=max .*--push \./,
+    )
+  })
+
+  it('separates single-platform load from two-platform push', () => {
+    const file = 'docs/docker-oci/build/multi-platform-builds.md'
+    const source = readRequiredPage(file)
+    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
+
+    const localLoad = commands.find((command) => command.includes('--load --tag demo-api:dev'))
+    expect(localLoad).toMatch(
+      /docker buildx build --platform "\$DEMO_API_PLATFORM" --load --tag demo-api:dev \./,
+    )
+
+    const multiPush = commands.find((command) =>
+      command.includes('--platform linux/amd64,linux/arm64'),
+    )
+    expect(multiPush).toMatch(
+      /docker buildx build .*--platform linux\/amd64,linux\/arm64 .*--tag registry\.example\.com\/team\/demo-api:dev .*--push \./,
+    )
+    expect(multiPush).not.toContain('--load')
+  })
+
+  it('keeps build data passive and verifies returned content on the consuming side', () => {
+    const cacheFile = 'docs/docker-oci/build/buildkit-cache.md'
+    const cacheSource = readRequiredPage(cacheFile)
+    const cacheDiagram = fenceContents(cacheSource, cacheFile, 'mermaid').join('\n')
+    const platformFile = 'docs/docker-oci/build/multi-platform-builds.md'
+    const platformSource = readRequiredPage(platformFile)
+    const platformDiagram = fenceContents(platformSource, platformFile, 'mermaid').join('\n')
+
+    expect(new Set(mermaidEdgeInitiators(cacheDiagram))).toEqual(
+      new Set(['DEV', 'BK', 'CS']),
+    )
+    expect(cacheDiagram).not.toMatch(/CS-->>BK: return verified/i)
+    expectStepsInOrder(cacheDiagram, [
+      'CS-->>BK: return cached result candidate and metadata',
+      'BK->>BK: verify candidate digest and size',
+      'BK->>BK: confirm cache key and result are usable',
+      'BK-->>DEV: report CACHED',
+    ], 'cache hit validation')
+
+    expect(new Set(mermaidEdgeInitiators(platformDiagram))).toEqual(
+      new Set(['CLI', 'REG', 'CM']),
+    )
+    expect(platformDiagram).not.toMatch(/REG-->>CLI: return verified/i)
+    expectStepsInOrder(platformDiagram, [
+      'REG-->>CLI: return index or manifest candidate',
+      'CLI->>CLI: verify returned digest and size',
+      'CLI->>CLI: select runnable platform manifest descriptor',
+      'REG-->>CLI: return selected manifest candidate',
+      'CLI->>CLI: verify selected manifest descriptor digest and size',
+      'REG-->>CLI: return config and layer blob candidates',
+      'CLI->>CLI: verify config and layer descriptor digests and sizes',
+      'CLI->>CM: provide verified selected image content',
+    ], 'multi-platform retrieval validation')
+  })
+
+  it('qualifies platform fields, emulation setup, and OCI archive validation', () => {
+    const file = 'docs/docker-oci/build/multi-platform-builds.md'
+    const source = readRequiredPage(file)
+    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
+
+    expect(source).toContain('BUILDPLATFORM 表示执行构建的 builder node 平台')
+    expect(source).toContain('stage 的基础镜像与用户空间平台由 `FROM --platform` 决定')
+    expect(source).toContain('descriptor 的 `platform` 是可选字段')
+    expect(source).toContain('provenance/attestation 辅助 manifest')
+    expect(source).toContain('Docker Desktop')
+    expect(source).toContain('Docker Engine + buildx')
+    expect(source).toContain('upstream BuildKit')
+    expect(source).toContain('third-party BuildKit package')
+    expect(source).toContain('host binfmt')
+    expect(source).toContain('先用 `docker buildx inspect --bootstrap` 检查 builder capability')
+
+    const archiveInspection = commands.find((command) =>
+      command.includes('node --input-type=module'),
+    )
+    expect(archiveInspection).toBeDefined()
+    expect(archiveInspection).toContain('createHash')
+    expect(archiveInspection).toContain('descriptor.size')
+    expect(archiveInspection).toContain('verifyDescriptor')
+    expect(archiveInspection).toContain('walkIndex')
+    expect(archiveInspection).toContain('platform?.os')
+    expect(archiveInspection).toContain('platform?.architecture')
+    expect(archiveInspection).toContain('linux/amd64')
+    expect(archiveInspection).toContain('linux/arm64')
   })
 })

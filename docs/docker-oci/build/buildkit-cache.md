@@ -17,7 +17,9 @@ sequenceDiagram
   BK->>BK: compute cache key from operation inputs
   BK->>CS: query result by cache key
   alt reusable result exists
-    CS-->>BK: return verified cached result
+    CS-->>BK: return cached result candidate and metadata
+    BK->>BK: verify candidate digest and size
+    BK->>BK: confirm cache key and result are usable
     BK-->>DEV: report CACHED
   else no reusable result exists
     CS-->>BK: report cache miss
@@ -27,7 +29,7 @@ sequenceDiagram
   end
 ```
 
-图中的 Developer/CI client、BuildKit 和 cache storage service 都是能发起请求或执行工作的参与者；Dockerfile 操作、文件输入和 cache key 只是消息中的数据，不会主动查询缓存。缓存后端可以嵌在 builder 中，也可以是本地目录或 Registry exporter，图不承诺固定进程拓扑。
+图中的 Developer/CI client、BuildKit 和 cache storage service 都是能发起请求或执行工作的参与者；Dockerfile 操作、文件输入和 cache key 只是消息中的数据，不会主动查询缓存。图以带 digest/size metadata 的内容寻址缓存后端表达信任边界：cache storage 只返回 candidate，消费它的 BuildKit 校验 descriptor 指向的字节与大小，再判断 cache key 和结果是否可用。嵌入式本地缓存可以使用不同内部表示，图不承诺固定进程拓扑，但存储端返回数据不等于消费侧已验证。
 
 几个会直接影响调优的边界：
 

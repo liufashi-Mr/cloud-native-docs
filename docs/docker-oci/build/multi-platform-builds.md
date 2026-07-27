@@ -8,10 +8,12 @@
 
 BuildKit 自动提供一组 platform `ARG`：
 
-- `BUILDPLATFORM`：builder 实际执行当前构建 stage 的平台。
+- `BUILDPLATFORM`：执行本次构建工作的 builder node 平台。
 - `BUILDOS`、`BUILDARCH`、`BUILDVARIANT`：`BUILDPLATFORM` 的拆分值。
 - `TARGETPLATFORM`：当前输出目标平台。
 - `TARGETOS`、`TARGETARCH`、`TARGETVARIANT`：`TARGETPLATFORM` 的拆分值。
+
+准确地说，BUILDPLATFORM 表示执行构建的 builder node 平台，不等同于任意“当前 stage 实际执行平台”。stage 的基础镜像与用户空间平台由 `FROM --platform` 决定；省略该 flag 时，`FROM` 默认使用构建请求的目标平台。只有 `FROM --platform=$BUILDPLATFORM` 才把该 stage 的基础镜像和用户空间固定到构建平台，使其中的 `RUN` 通常可以原生执行；若 stage 用户空间与 node 架构不同，执行其中的程序仍需要可用的模拟机制。
 
 这些自动参数在全局作用域可供 `FROM --platform=...` 使用；要在 stage 的 `RUN` 中读取，仍需在该 stage 重新声明相应 `ARG`。它们是 Dockerfile frontend/BuildKit 提供的构建变量，不是 OCI image config 强制环境变量，也不会自动进入最终容器环境。
 
@@ -48,7 +50,9 @@ CMD ["server.mjs"]
 
 ## 一个 tag 如何选择平台
 
-一个多平台 tag 通常指向 OCI index。index 中每个 manifest descriptor 声明自己的 `platform`，并以 digest 指向该平台的 image manifest；Docker media type 的 manifest list 可以承担相同角色，所以实际类型应以 Registry 返回的 `mediaType` 为准。
+一个多平台 tag 通常指向 OCI index。对可运行平台 image manifest，descriptor 通常声明 `platform`，并以 digest 指向该平台的 manifest；但 descriptor 的 `platform` 是可选字段，不能断言 index 中每个条目都有它。Docker media type 的 manifest list 可以承担相同角色，所以实际类型应以 Registry 返回的 `mediaType` 为准。
+
+Buildx 输出还可能在顶层 index 附带 provenance/attestation 辅助 manifest。Docker 当前的 attestation storage 会把这类 descriptor 标为 `vnd.docker.reference.type=attestation-manifest`，并可显示 `unknown/unknown`，防止 runtime 把它当成可运行镜像。检查平台集合时应区分带真实 `os`/`architecture` 的可运行 image descriptor 与这些辅助 descriptor；`unknown/unknown` 不是第三个应用目标平台。
 
 ```mermaid
 sequenceDiagram
@@ -57,17 +61,24 @@ sequenceDiagram
   participant CM as Container manager
   participant RT as OCI runtime
   CLI->>REG: request tag or digest
-  REG-->>CLI: return OCI index with platform descriptors
-  CLI->>CLI: match requested os architecture and variant
-  CLI->>REG: request selected manifest by digest
-  REG-->>CLI: return manifest config and layer references
+  REG-->>CLI: return index or manifest candidate
+  CLI->>CLI: verify returned digest and size
+  alt returned content is an index or manifest list
+    CLI->>CLI: select runnable platform manifest descriptor
+    CLI->>REG: request selected manifest by descriptor digest
+    REG-->>CLI: return selected manifest candidate
+    CLI->>CLI: verify selected manifest descriptor digest and size
+  else returned content is an image manifest
+    CLI->>CLI: use verified top-level manifest
+  end
   CLI->>REG: request referenced config and layer blobs
-  REG-->>CLI: return verified blobs
-  CLI->>CM: provide selected image content
+  REG-->>CLI: return config and layer blob candidates
+  CLI->>CLI: verify config and layer descriptor digests and sizes
+  CLI->>CM: provide verified selected image content
   CM->>RT: invoke runtime with prepared target rootfs
 ```
 
-图中 index、manifest、config 和 layer 只作为服务返回或客户端传递的数据，不会发起请求。客户端按请求平台选择一个 manifest 后，通常只拉取该 manifest 需要的内容；没有匹配 descriptor 时应失败。QEMU 等执行能力不能让 Registry 中缺失的平台 manifest 自动出现，也不改变 OCI index 的选择规则。规范字段见 [OCI Image Index Specification](https://github.com/opencontainers/image-spec/blob/main/image-index.md)。
+图中 index、manifest、config 和 layer 只作为服务返回或客户端传递的数据，不会发起请求。Registry 返回 candidate，不负责替客户端证明内容可信；客户端根据请求 digest、响应 metadata 或上游 descriptor 校验 digest 和 size，只有验证后才选择或交给 container manager。客户端按请求平台从可运行 descriptor 中选择一个 manifest 后，通常只拉取该 manifest 需要的内容；没有匹配项时应失败。QEMU 等执行能力不能让 Registry 中缺失的平台 manifest 自动出现，也不改变 OCI index 的选择规则。规范字段见 [OCI Image Index Specification](https://github.com/opencontainers/image-spec/blob/main/image-index.md)，Buildx 辅助 manifest 的当前表示见 Docker 官方 [Attestation storage](https://docs.docker.com/build/metadata/attestations/attestation-storage/)。
 
 ## 三种执行策略
 
@@ -75,11 +86,18 @@ QEMU 模拟、原生多节点和交叉编译是三种不同策略，可以按 st
 
 | 策略 | 构建 stage 如何执行 | 优点 | 边界与验证 |
 | --- | --- | --- | --- |
-| QEMU emulation | 在主机注册的 binfmt/QEMU 上执行另一架构程序 | Dockerfile 改动少，适合快速覆盖 | 计算密集步骤更慢；模拟器可用不等于产物正确，仍要测试目标镜像 |
+| QEMU emulation | builder 通过 bundled emulator 或 host binfmt 执行另一架构程序 | Dockerfile 改动少，适合快速覆盖 | 可用方式取决于运行形态；计算密集步骤更慢，仍要测试目标镜像 |
 | native multi-node | builder 为不同 platform 调度到对应原生节点 | 执行快，能运行真实目标工具链和测试 | 要管理节点版本、凭据、网络和一致的构建输入 |
 | cross-compilation | 在 `BUILDPLATFORM` 工具链中生成 `TARGETPLATFORM` 产物 | 避免大量模拟，适合原生支持交叉编译的语言 | 构建脚本必须显式设置目标，且目标系统库、ABI 与最终基础镜像要匹配 |
 
-Docker Desktop 通常预配置常见 QEMU 支持；独立 Linux builder 需要按 Docker 官方 [Multi-platform builds](https://docs.docker.com/build/building/multi-platform/) 指引配置内核 binfmt 与静态解释器。注册解释器通常需要主机级权限，应由基础设施管理员完成并审计，而不是在普通 CI job 中临时运行不受控的 privileged 容器。
+先用 `docker buildx inspect --bootstrap` 检查 builder capability，确认 `Platforms` 是否包含目标，并用一个最小构建验证 foreign-architecture `RUN`；不要仅凭主机安装方式推断模拟能力。不同运行形态的默认条件不同：
+
+- **Docker Desktop：** Desktop VM 通常预配置 bundled QEMU，常见目标默认可用于构建和运行，但仍以当前 builder inspect 与实际构建为准。
+- **Docker Engine + buildx / 独立 builder：** Docker 官方文档说明，standalone Engine 使用 official BuildKit release 时通常已经 bundled QEMU user-mode emulator，多数情况无需手动安装。自定义 driver、固定旧版本或替换 BuildKit 镜像后必须重新检查 capability。
+- **直接运行 upstream BuildKit：** 能否透明模拟取决于实际分发物与 worker。官方 release 可能带 `buildkit-qemu-*` helper；third-party BuildKit package 可能不带，或者没有放进 BuildKit 可发现的路径，不能从“使用 BuildKit”这一名称推断可用。
+- **host binfmt：** 只有已经选择 QEMU 策略，并且目标平台未报告、foreign `RUN` 失败或所用分发物没有可用 bundled emulator 时，才评估按官方步骤在 Linux host 注册静态 QEMU。该动作通常需要 privileged 主机权限并改变全局 `binfmt_misc` 状态，应先获得基础设施授权、记录原状态和回滚方案；不要在普通 CI job 中直接修改。
+
+这些条件以 Docker 官方 [Multi-platform builds](https://docs.docker.com/build/building/multi-platform/) 当前说明为准。builder 报告目标 platform 也只说明调度/模拟入口可用，不证明应用产物正确。
 
 ### 原生多节点 builder
 
@@ -165,20 +183,79 @@ docker buildx rm demo-api-multi
 
 ## 导出多平台 OCI 归档
 
-需要审查多平台内容但暂不发布时，可以导出 OCI layout。前置条件仍是 builder 支持两个目标，当前目录可写且不存在需要保留的 `demo-api.oci.tar`：
+需要审查多平台内容但暂不发布时，可以导出 OCI layout。前置条件仍是 builder 支持两个目标，当前目录可写且不存在需要保留的 `demo-api.oci.tar`，并且安装了带内置 `node:fs` 与 `node:crypto` 的 Node.js 20+ 以及 `tar`。以下校验脚本不依赖 npm 包：它递归验证每个 descriptor 的 size/digest、继续检查 manifest 的 config/layers，并单独统计可运行平台。
 
 ```bash
+set -eu
+export DEMO_API_OCI_DIR="$(mktemp -d)"
+trap 'rm -r -- "$DEMO_API_OCI_DIR"; rm -f -- demo-api.oci.tar' EXIT
+
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --output type=oci,dest=demo-api.oci.tar .
-tar -tf demo-api.oci.tar | sed -n '1,20p'
+tar -xf demo-api.oci.tar -C "$DEMO_API_OCI_DIR"
+
+node --input-type=module <<'NODE'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+const root = process.env.DEMO_API_OCI_DIR
+const runnablePlatforms = []
+
+async function verifyDescriptor(descriptor) {
+  const [algorithm, encoded] = descriptor.digest.split(':', 2)
+  const bytes = await readFile(join(root, 'blobs', algorithm, encoded))
+  if (bytes.length !== descriptor.size) {
+    throw new Error(`size mismatch for ${descriptor.digest}`)
+  }
+  const actual = `${algorithm}:${createHash(algorithm).update(bytes).digest('hex')}`
+  if (actual !== descriptor.digest) {
+    throw new Error(`digest mismatch for ${descriptor.digest}`)
+  }
+  return JSON.parse(bytes.toString('utf8'))
+}
+
+async function walkIndex(index) {
+  for (const descriptor of index.manifests) {
+    const document = await verifyDescriptor(descriptor)
+    if (descriptor.mediaType.endsWith('.image.index.v1+json')) {
+      await walkIndex(document)
+      continue
+    }
+
+    if (!descriptor.mediaType.endsWith('.image.manifest.v1+json')) continue
+    await verifyDescriptor(document.config)
+    for (const layer of document.layers) await verifyDescriptor(layer)
+
+    const referenceType = descriptor.annotations?.['vnd.docker.reference.type']
+    const platform = descriptor.platform
+    if (referenceType !== 'attestation-manifest'
+      && platform?.os
+      && platform?.architecture
+      && platform.os !== 'unknown'
+      && platform.architecture !== 'unknown') {
+      runnablePlatforms.push(`${platform.os}/${platform.architecture}`)
+    }
+  }
+}
+
+const index = JSON.parse(await readFile(join(root, 'index.json'), 'utf8'))
+await walkIndex(index)
+const actual = [...new Set(runnablePlatforms)].sort()
+const expected = ['linux/amd64', 'linux/arm64']
+if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  throw new Error(`unexpected runnable platforms: ${actual.join(', ')}`)
+}
+console.log(`verified runnable platforms: ${actual.join(', ')}`)
+NODE
+
+rm -r -- "$DEMO_API_OCI_DIR"
+rm -- demo-api.oci.tar
+trap - EXIT
 ```
 
-成功证据是构建返回零状态，tar 列表包含 `oci-layout`、`index.json` 与 `blobs/`。这个归档未载入本地 image store，也未推送 Registry；使用者仍应校验 digest 和平台描述。确认归档仅为本次实验产物后清理：
-
-```bash
-rm demo-api.oci.tar
-```
+成功证据是构建与脚本都返回零状态，并输出 `verified runnable platforms: linux/amd64, linux/arm64`。这比 `tar -tf` 只看到 `oci-layout`、`index.json` 与 `blobs/` 的外壳更强：脚本实际读取并验证 descriptor 内容链，同时排除了 attestation manifest。最后三条命令清理临时目录和归档；若中途失败，`trap` 也会清理这两个明确路径。这个流程验证 OCI 结构与两个目标，不会把归档载入本地 image store，也不会运行其中应用，运行期验证仍需另做。
 
 ## 缓存与多平台
 

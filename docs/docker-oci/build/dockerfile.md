@@ -4,7 +4,7 @@ Dockerfile 是 builder 执行的构建定义，不是容器启动脚本，也不
 
 ## build context 与 `.dockerignore`
 
-`docker build ... .` 最后的 `.` 指定 build context（构建上下文）根目录。构建只能读取 build context 中的文件；普通 `COPY` 和 `ADD` 不能用 `../` 越过这个边界读取主机任意路径。Git、远端 tar 或 named context 也可以成为上下文，但读取范围仍由显式提供给 builder 的输入决定，而不是由 Dockerfile 所在目录无限扩展。
+`docker build ... .` 最后的 `.` 指定 build context（构建上下文）根目录。对普通 `COPY` 和 `ADD`，构建只能读取 build context 中的文件，不能用 `../` 越过这个边界读取主机任意路径。Git、远端 tar、named context 或 `RUN --mount` 只有在构建请求或 Dockerfile 中显式声明时才形成额外输入；读取范围由这些显式输入共同决定，而不是由 Dockerfile 所在目录无限扩展。
 
 `.dockerignore` 在上下文发送给 builder 前排除路径。对 `demo-api`，可保持输入最小：
 
@@ -103,7 +103,7 @@ ENTRYPOINT 定义可执行入口，CMD 提供默认参数。下表讨论推荐�
 
 `WORKDIR /app` 同时影响后续 `RUN`、`COPY`、`ENTRYPOINT`/`CMD` 的相对路径以及容器默认工作目录。明确写出绝对路径可避免继承基础镜像意外默认值。
 
-`USER node` 设置后续构建指令和容器默认进程用户。因为 `COPY` 默认创建 root 所有的文件，示例用 `--chown=node:node` 明确运行文件的所有权。非 root 默认值能减小一部分影响面，但不能替代只读文件系统、capability、挂载、seccomp 和主机权限控制；数字 UID/GID 在跨基础镜像时通常比名称更稳定，也需要与实际镜像账户定义一起评审。
+`USER node` 设置后续 `RUN` 的执行身份，并写入镜像的默认运行用户；容器创建后，`CMD`/`ENTRYPOINT` 启动的进程默认采用这个身份。它不改变 `COPY` 的默认 ownership：没有 `--chown` 时，复制文件仍默认为 root 所有，所以示例显式使用 `--chown=node:node`。非 root 默认值能减小一部分影响面，但不能替代只读文件系统、capability、挂载、seccomp 和主机权限控制；数字 UID/GID 在跨基础镜像时通常比名称更稳定，也需要与实际镜像账户定义一起评审。
 
 ## 构建、验证与清理
 
