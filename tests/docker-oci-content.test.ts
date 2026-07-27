@@ -268,6 +268,35 @@ const pageContracts: Record<string, PageContract> = {
       'config.json',
     ],
   },
+  'docs/docker-oci/operations/security.md': {
+    fences: ['bash', 'dockerfile', 'mermaid'],
+    phrases: [
+      '能够访问 Docker daemon socket 的主体通常可以取得主机级高权限',
+      '镜像中的 USER 与 rootless Docker 解决的是不同边界',
+      '只读根文件系统仍需要显式提供可写目录',
+      '构建 secret、运行时 secret 和镜像签名不是同一种控制',
+    ],
+    terms: ['Docker socket', 'rootless', 'USER', 'capabilities', 'seccomp', 'no-new-privileges', 'read-only', 'secret mount', 'digest'],
+  },
+  'docs/docker-oci/operations/troubleshooting.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '先判断失败发生在 build、pull、create、start 还是运行阶段',
+      '容器是 running 不代表应用已经 ready',
+      '网络问题先区分监听地址、容器网络、端口发布和外部防火墙',
+      '删除容器不能解决 Volume 中已有的数据或权限问题',
+    ],
+    terms: ['docker events', 'docker inspect', 'docker logs', 'docker top', 'docker stats', 'docker system df', 'OOMKilled', 'exit code'],
+  },
+  'docs/docker-oci/reference/command-map.md': {
+    fences: ['bash'],
+    phrases: [
+      '| 目标 | 首要证据 | 命令 |',
+      '命令速查不能替代对应概念页的边界说明',
+      '清理命令执行前先检查目标和数据生命周期',
+    ],
+    terms: ['docker version', 'docker info', 'docker image inspect', 'docker container inspect', 'docker network inspect', 'docker volume inspect', 'docker buildx du', 'docker system df'],
+  },
 }
 
 function readRequiredPage(file: string): string {
@@ -669,6 +698,79 @@ describe('Docker / OCI content contracts', () => {
     }
     expect(source).toMatch(/(?:误区|注意|不要|并不|不能|边界)/)
     expect(source).toMatch(/\]\(\/docker-oci\//)
+  })
+
+  it('keeps the hardened runtime example observable and bounded', () => {
+    const file = 'docs/docker-oci/operations/security.md'
+    const source = readRequiredPage(file)
+    const commands = normalizedBashCommands(source, file)
+
+    expectExactStepsInOrder(commands, [
+      'docker run --detach --name demo-api-secure --init --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop ALL --security-opt no-new-privileges=true --memory 128m --cpus 0.50 --publish 127.0.0.1:8080:3000 demo-api:dev',
+      "docker container inspect demo-api-secure --format '{{json .HostConfig.ReadonlyRootfs}} {{json .HostConfig.CapDrop}} {{json .HostConfig.SecurityOpt}}'",
+      'docker top demo-api-secure -eo pid,user,args',
+      'curl --fail --silent --show-error http://127.0.0.1:8080/healthz',
+      'docker rm --force demo-api-secure',
+    ], 'security create, evidence, request, and cleanup')
+
+    const diagram = fenceContents(source, file, 'mermaid')[0] ?? ''
+    expect(diagram).toContain('U["authorized operator or CI runner"] -->')
+    expect(diagram).toContain('A["authorization policy"] -->')
+    expect(mermaidEdgeInitiators(diagram)).toEqual(['D', 'R', 'D'])
+    expect(mermaidEdgeInitiators(diagram)).not.toContain('P')
+    expect(mermaidEdgeInitiators(diagram)).not.toContain('H')
+  })
+
+  it('keeps troubleshooting evidence organized by failure phase', () => {
+    const file = 'docs/docker-oci/operations/troubleshooting.md'
+    const source = readRequiredPage(file)
+
+    expectStepsInOrder(source, [
+      '## Build 失败',
+      '## Pull 与 Registry 失败',
+      '## Create 与 start 失败',
+      '## 立即退出与信号',
+      '## running、health 与 ready',
+      '## 网络分层',
+      '## 存储与权限',
+      '## 资源、OOM 与磁盘',
+    ], 'troubleshooting phase evidence')
+    for (const evidence of [
+      'docker buildx build --progress=plain',
+      'docker buildx imagetools inspect',
+      'docker container inspect',
+      'docker logs --timestamps',
+      'docker exec demo-api wget',
+      'docker network inspect',
+      'docker volume inspect',
+      'docker stats --no-stream',
+      'docker system df --verbose',
+    ]) {
+      expect(source).toContain(evidence)
+    }
+    expect(source).toContain('live DB 的直接 tar 不是 application-consistent backup')
+  })
+
+  it('locks the destructive command map scope and recovery consequences', () => {
+    const file = 'docs/docker-oci/reference/command-map.md'
+    const source = readRequiredPage(file)
+    const cleanupSection = source.slice(source.indexOf('## 清理与破坏性操作'))
+
+    expect(markdownTable(cleanupSection, '| 命令 | 删除范围 | 恢复影响 |')).toEqual([
+      '| 命令 | 删除范围 | 恢复影响 |',
+      '| --- | --- | --- |',
+      '| `docker container prune` | 所有 stopped containers | writable layer 与未另存的证据丢失 |',
+      '| `docker image prune -a` | 所有未被容器引用的镜像 | 需要重新 pull/build，未推送内容可能丢失 |',
+      '| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |',
+      '| `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |',
+      '| `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |',
+      '| `docker compose down --volumes` | 当前 Compose project 容器、网络和声明 Volume | project 数据可能永久丢失 |',
+    ])
+    expect(normalizedBashCommands(source, file)).toEqual([
+      'docker context show',
+      'docker version',
+      'docker system df --verbose',
+    ])
   })
 
   it('keeps the image-to-Pod mapping table exact and complete', () => {
