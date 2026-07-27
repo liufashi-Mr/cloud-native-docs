@@ -56,7 +56,7 @@ docker system df --verbose
 | --- | --- | --- |
 | 名称或平台不匹配 | `docker buildx imagetools inspect <reference>` | 查看 index 中的平台 descriptor 与 digest |
 | 认证失败 | `docker pull <reference>` 并检查 challenge/状态码 | 区分无凭据、无 repository 权限和 token scope |
-| digest 不匹配 | 保留 daemon/Registry 错误并停止消费 | 内容完整性失败，不应靠重试跳过 |
+| digest 不匹配 | `docker image inspect <reference> --format '{{json .RepoDigests}}'` | 只读比较本地 RepoDigests 与错误中的预期 digest；不匹配或没有本地对象时保留完整性错误并停止消费 |
 | tag 指向变化 | 比较已记录 digest 与 `docker image inspect <reference>` | tag 可变；确认是否为预期发布 |
 
 代理、DNS、证书和 Registry 服务端错误属于不同边界。先确认 Docker daemon 所在主机的网络路径，而不只是 CLI 主机的 `curl`。
@@ -74,13 +74,13 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 
 ## 立即退出与信号
 
-容器的主进程退出后容器停止。使用下面的状态字段区分正常退出、信号退出、OOM 和启动错误：
+容器的主进程退出后容器停止。保留 stopped container，再按状态、输出和事件时序逐层取证：
 
-```bash
-docker container inspect demo-api --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}'
-docker logs --timestamps --tail 200 demo-api
-docker events --since 10m --filter container=demo-api
-```
+| 证据 | 下一条命令 | 如何缩小范围 |
+| --- | --- | --- |
+| 容器已经 stopped | `docker container inspect demo-api --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}'` | exit、OOMKilled、runtime error 与时间戳区分正常退出、信号、OOM 和启动错误 |
+| 主进程可能输出错误 | `docker logs --timestamps --tail 200 demo-api` | 关联退出前 stdout/stderr；无日志不等于进程未失败 |
+| 退出原因与操作时序不明 | `docker events --since 10m --filter container=demo-api` | create/start/die/oom/kill 事件顺序区分进程自行退出、资源终止与外部操作 |
 
 本项目连续示例未注册 `SIGTERM` handler，正常 `docker stop` 后在 Unix 上常见 exit code 143；exit code 0 需要应用主动处理信号并完成关闭。`OOMKilled=true` 是强信号，但还应结合 memory limit、主机日志和 `docker stats` 判断。
 
@@ -88,24 +88,26 @@ docker events --since 10m --filter container=demo-api
 
 容器是 running 不代表应用已经 ready。主进程可以存在，但仍未监听、依赖未就绪或 healthcheck 失败。
 
-1. `docker container inspect demo-api --format '{{json .State.Health}}'` 查看 health 历史和输出。
-2. `docker logs --timestamps demo-api` 查看应用启动阶段。
-3. `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` 验证容器内回环路径。
-4. `curl --fail http://127.0.0.1:8080/healthz` 验证本地主机发布路径。
+| 证据 | 下一条命令 | 如何缩小范围 |
+| --- | --- | --- |
+| health 状态不是 healthy | `docker container inspect demo-api --format '{{json .State.Health}}'` | status、failing streak 与探针输出区分 starting、unhealthy 和未配置 healthcheck |
+| 应用仍在启动或报错 | `docker logs --timestamps --tail 200 demo-api` | 启动日志缩小到应用配置、依赖或监听失败 |
+| 容器内回环访问失败 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败指向进程、监听地址或容器端口；成功说明应用路径可用 |
+| 容器内成功但主机访问失败 | `curl --fail http://127.0.0.1:8080/healthz` | 失败转向端口发布、主机监听和防火墙；成功证明本地主机发布路径 |
 
-第 3 步成功而第 4 步失败，说明应用进程大概率可用，应转向端口发布、主机监听或防火墙；两者都失败则先检查应用监听和日志。
+容器内回环请求成功而本地主机请求失败，说明应用进程大概率可用，应转向端口发布、主机监听或防火墙；两者都失败则先检查应用监听和日志。
 
 ## 网络分层
 
 网络问题先区分监听地址、容器网络、端口发布和外部防火墙。
 
-| 层 | 证据命令 | 输出解释 |
+| 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| 应用监听 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败先查进程、监听地址和端口 |
-| 容器 DNS/同网通信 | `docker network inspect <network>` | 核对双方 endpoint 与别名；默认 bridge 不承诺同样的名称解析体验 |
-| 发布映射 | `docker port demo-api 3000` | 核对主机地址、主机端口与容器端口 |
-| 本地主机访问 | `curl http://127.0.0.1:8080/healthz` | 只证明 CLI 主机路径；远程 context 应在 daemon 主机验证 |
-| 外部访问 | 主机防火墙/云安全规则证据 | 只绑定 `127.0.0.1` 时外部本就不可达 |
+| 应用监听未知 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败先查进程、监听地址和端口 |
+| 容器 DNS 或同网通信失败 | `docker network inspect <network>` | 核对双方 endpoint 与别名；默认 bridge 不承诺同样的名称解析体验 |
+| 发布映射未知 | `docker port demo-api 3000` | 核对主机地址、主机端口与容器端口 |
+| 本地主机访问失败 | `curl --fail http://127.0.0.1:8080/healthz` | 只验证 CLI 所在主机路径；远程 context 需在 daemon 主机取证 |
+| 外部客户端访问失败 | `curl --fail http://<daemon-host>:8080/healthz` | 本地主机成功而外部失败时，转向监听地址、主机防火墙和云安全规则 |
 
 容器中的 `127.0.0.1` 是容器自身，不是 Docker host 或另一个容器。
 
@@ -113,18 +115,34 @@ docker events --since 10m --filter container=demo-api
 
 删除容器不能解决 Volume 中已有的数据或权限问题。先用 `docker volume inspect <volume>` 找到实际挂载，再用与镜像相符的只读诊断容器检查 numeric UID/GID；不要未经确认直接递归 `chown`。
 
-| 症状 | 证据 | 下一步 |
+| 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| permission denied | `docker exec <container> id` 与 `ls -ln <path>` | 比较进程 UID/GID 与文件 ownership |
-| 新 Volume 出现旧文件 | inspect + 首次挂载记录 | 判断是否发生 volume copy-up；必要时评估 `volume-nocopy` |
-| bind mount 空或路径错误 | inspect 的 Source/Destination | 在 daemon 主机核对路径；Docker Desktop 还需检查文件共享 |
-| 数据内容异常 | 应用一致性检查与 Volume 备份 | live DB 的直接 tar 不是 application-consistent backup |
+| permission denied | `docker exec <container> sh -c 'id; ls -lnd <path>'` | 比较进程 UID/GID 与目标 numeric ownership 和 mode |
+| 新 Volume 出现旧文件 | `docker container inspect <container> --format '{{json .Mounts}}'` | 确认实际 Volume source/destination，再核对首次挂载是否发生 copy-up |
+| bind mount 空或路径错误 | `docker container inspect <container> --format '{{json .Mounts}}'` | 在 daemon 主机核对 Source/Destination；Docker Desktop 还需检查文件共享 |
+| 数据内容异常 | `docker exec <container> <application-check-command>` | 应用一致性检查区分逻辑损坏与挂载错误；live DB 的直接 tar 不是 application-consistent backup |
 
-## 资源、OOM 与磁盘
+## 资源与 OOM
 
-`docker stats --no-stream` 对比实时使用量和限制；inspect 查看 `Memory`、`NanoCpus`、restart count 与 `OOMKilled`。主机内存压力、kernel OOM 和容器 limit 都可能终止进程，需结合 daemon 与系统日志。
+主机内存压力、kernel OOM 和容器 memory limit 都可能终止进程；先关联容器状态、限制与 daemon 事件，再按平台检查主机日志。
 
-磁盘不足先执行 `docker system df --verbose`，确定空间属于 image、container writable layer、local volume 还是 build cache。`docker system prune`、`docker builder prune` 和 `docker volume rm` 都会删除数据或加速缓存；只有在列出目标、确认无引用并理解恢复成本后才执行。
+| 证据 | 下一条命令 | 如何缩小范围 |
+| --- | --- | --- |
+| 进程疑似被 OOM 终止 | `docker container inspect <container> --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} memory={{.HostConfig.Memory}}'` | OOMKilled、exit code 与 memory limit 区分容器 limit 触发和其他退出 |
+| 实时资源接近限制 | `docker stats --no-stream <container>` | 对比当前 CPU/memory/I/O 使用与 limit，确认是否持续逼近边界 |
+| 容器反复重启 | `docker container inspect <container> --format 'restarts={{.RestartCount}} policy={{json .HostConfig.RestartPolicy}}'` | restart count 与 policy 区分单次失败和被策略持续拉起 |
+| daemon 记录 OOM 事件 | `docker events --since 30m --filter container=<container> --filter event=oom` | 有事件可关联容器 OOM 时间；无事件时继续检查主机 kernel 与平台日志 |
+
+## 磁盘占用
+
+磁盘不足先确定空间属于哪类 Docker 对象，再决定是否需要删除。prune 和 rm 都可能销毁数据或构建 cache，不能作为第一条取证命令。
+
+| 证据 | 下一条命令 | 如何缩小范围 |
+| --- | --- | --- |
+| 对象类型占用未知 | `docker system df --verbose` | 把空间归到 image、container writable layer、local Volume 或 build cache |
+| build cache 占用高 | `docker buildx du --verbose` | 按 cache record、last used 和 reclaimable 状态识别候选；不要先 prune |
+| 容器 writable layer 占用高 | `docker container ls --all --size` | 将 writable size 关联到具体容器，避免误删 Volume |
+| local Volume 占用高 | `docker volume inspect <volume>` | 核对名称、mountpoint、labels 与引用边界，再按应用语义备份和清理 |
 
 ## 收尾记录
 

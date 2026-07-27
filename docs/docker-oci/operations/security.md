@@ -9,10 +9,12 @@ Docker 安全不是某一个开关，而是一组从主机控制面、构建输�
 ```mermaid
 flowchart LR
   U["authorized operator or CI runner"] -->|sends authenticated API request| D["Docker daemon"]
+  D -->|requests authorization decision| Z["authorization plugin"]
+  Z -->|returns allow or deny decision| D
+  Z -->|reads and evaluates| A["authorization policy"]
   D -->|creates configured workload| R["container runtime"]
   R -->|starts constrained process| P["container process"]
   D -->|mounts approved host paths| H["host filesystem"]
-  A["authorization policy"] -->|allows or rejects request| D
 ```
 
 远程 daemon 应使用受控网络、双向身份验证和最小授权；本地 socket 应依靠主机账户与组权限保护。`docker` 组通常不是低权限便利组。审计时同时检查谁能调用 daemon、daemon 能访问哪些主机资源，以及 API authorization plugin 或上层平台是否真正限制了操作。

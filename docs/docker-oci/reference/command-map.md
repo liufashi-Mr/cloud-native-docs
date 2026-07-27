@@ -109,10 +109,14 @@ Volume 删除通常不可恢复。删除前停止写入、按应用语义备份�
 
 | 命令 | 删除范围 | 恢复影响 |
 | --- | --- | --- |
+| `docker rm <container>` | 删除一个 stopped container 及其 writable layer；不自动删除 Volume | 可按原配置重建容器；未持久化数据和未另存的现场证据丢失 |
 | `docker container prune` | 所有 stopped containers | writable layer 与未另存的证据丢失 |
+| `docker image rm <reference>` | 删除指定本地 image 引用；无其他 tag 或容器引用时回收 image 数据 | 可重新 pull/build；未推送且无其他引用的内容可能丢失 |
 | `docker image prune -a` | 所有未被容器引用的镜像 | 需要重新 pull/build，未推送内容可能丢失 |
-| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |
+| `docker network rm demo-net` | 删除指定的无活动 endpoint network；不删除容器 | 可重建 network；自定义 subnet、options 与连接关系需重新配置 |
+| `docker volume rm <volume>` | 删除指定且未被容器使用的 Volume | 持久数据通常不可恢复，只能从已验证备份还原 |
 | `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |
+| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |
 | `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |
 | `docker compose down --volumes` | 当前 Compose project 容器、网络、Compose 创建的命名 Volume 和附着的匿名 Volume；不删除 external Volume | 被删除的 project Volume 数据可能永久丢失 |
 

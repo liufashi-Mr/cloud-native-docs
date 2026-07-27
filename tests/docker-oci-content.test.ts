@@ -652,6 +652,14 @@ function markdownTable(source: string, header: string): string[] {
   return table
 }
 
+function markdownSection(source: string, heading: string): string {
+  const start = source.indexOf(heading)
+  expect(start, `missing section: ${heading}`).toBeGreaterThanOrEqual(0)
+  const remainder = source.slice(start + heading.length)
+  const nextHeading = remainder.search(/\n## /)
+  return nextHeading === -1 ? remainder : remainder.slice(0, nextHeading)
+}
+
 function expectStepsInOrder(source: string, steps: string[], context: string): void {
   let previousPosition = -1
   for (const step of steps) {
@@ -676,7 +684,9 @@ function expectExactStepsInOrder(lines: string[], steps: string[], context: stri
 
 function mermaidEdgeInitiators(diagram: string): string[] {
   return diagram.split('\n').flatMap((line) => {
-    const match = line.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:-->>|->>|-->|-\.->|==>)/)
+    const match = line.match(
+      /^\s*([A-Za-z][A-Za-z0-9_]*)(?:\[[^\]]*\]|\{[^}]*\}|\([^)]*\))?\s*(?:-->>|->>|-->|-\.->|==>)/,
+    )
     return match ? [match[1]] : []
   })
 }
@@ -715,8 +725,11 @@ describe('Docker / OCI content contracts', () => {
 
     const diagram = fenceContents(source, file, 'mermaid')[0] ?? ''
     expect(diagram).toContain('U["authorized operator or CI runner"] -->')
-    expect(diagram).toContain('A["authorization policy"] -->')
-    expect(mermaidEdgeInitiators(diagram)).toEqual(['D', 'R', 'D'])
+    expect(diagram).toContain('D -->|requests authorization decision| Z["authorization plugin"]')
+    expect(diagram).toContain('Z -->|returns allow or deny decision| D')
+    expect(diagram).toContain('Z -->|reads and evaluates| A["authorization policy"]')
+    expect(mermaidEdgeInitiators(diagram)).toEqual(['U', 'D', 'Z', 'Z', 'D', 'R', 'D'])
+    expect(mermaidEdgeInitiators(diagram)).not.toContain('A')
     expect(mermaidEdgeInitiators(diagram)).not.toContain('P')
     expect(mermaidEdgeInitiators(diagram)).not.toContain('H')
   })
@@ -724,31 +737,89 @@ describe('Docker / OCI content contracts', () => {
   it('keeps troubleshooting evidence organized by failure phase', () => {
     const file = 'docs/docker-oci/operations/troubleshooting.md'
     const source = readRequiredPage(file)
+    const evidenceHeader = '| 证据 | 下一条命令 | 如何缩小范围 |'
+    const expectedTables: Array<[string, string[]]> = [
+      ['## Build 失败', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| Dockerfile 解析或某一步失败 | `docker buildx build --progress=plain --no-cache-filter <stage> .` | 显示实际 stage 与失败命令；只绕过指定 stage cache |',
+        '| `COPY` 找不到文件 | `docker buildx build --progress=plain .`，并检查 `.dockerignore` | 区分路径不在 context、被 ignore 与大小写问题 |',
+        '| cache 与预期不符 | `docker buildx du --verbose` | 找到 builder 中的 cache record；不要先 prune |',
+        '| 基础镜像疑似过期 | `docker buildx build --pull --progress=plain .` | `--pull` 刷新基础镜像；`--no-cache` 不等于 pull |',
+      ]],
+      ['## Pull 与 Registry 失败', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| 名称或平台不匹配 | `docker buildx imagetools inspect <reference>` | 查看 index 中的平台 descriptor 与 digest |',
+        '| 认证失败 | `docker pull <reference>` 并检查 challenge/状态码 | 区分无凭据、无 repository 权限和 token scope |',
+        '| digest 不匹配 | `docker image inspect <reference> --format \'{{json .RepoDigests}}\'` | 只读比较本地 RepoDigests 与错误中的预期 digest；不匹配或没有本地对象时保留完整性错误并停止消费 |',
+        '| tag 指向变化 | 比较已记录 digest 与 `docker image inspect <reference>` | tag 可变；确认是否为预期发布 |',
+      ]],
+      ['## Create 与 start 失败', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| create 前参数校验失败 | `docker container inspect <container>`（若对象存在） | 判断对象是否已创建以及最终 HostConfig |',
+        '| 端口已占用 | `docker ps --filter publish=8080` 与主机监听工具 | 区分 Docker 映射冲突和非 Docker 主机进程 |',
+        '| mount 拒绝或路径不存在 | `docker container inspect <container> --format \'{{json .Mounts}}\'` | 核对 source、destination、类型与只读属性 |',
+        '| executable/architecture 错误 | `docker image inspect <image>` 与平台元数据 | 区分 Entrypoint 路径、权限、shebang 和平台 |',
+      ]],
+      ['## 立即退出与信号', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| 容器已经 stopped | `docker container inspect demo-api --format \'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}\'` | exit、OOMKilled、runtime error 与时间戳区分正常退出、信号、OOM 和启动错误 |',
+        '| 主进程可能输出错误 | `docker logs --timestamps --tail 200 demo-api` | 关联退出前 stdout/stderr；无日志不等于进程未失败 |',
+        '| 退出原因与操作时序不明 | `docker events --since 10m --filter container=demo-api` | create/start/die/oom/kill 事件顺序区分进程自行退出、资源终止与外部操作 |',
+      ]],
+      ['## running、health 与 ready', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| health 状态不是 healthy | `docker container inspect demo-api --format \'{{json .State.Health}}\'` | status、failing streak 与探针输出区分 starting、unhealthy 和未配置 healthcheck |',
+        '| 应用仍在启动或报错 | `docker logs --timestamps --tail 200 demo-api` | 启动日志缩小到应用配置、依赖或监听失败 |',
+        '| 容器内回环访问失败 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败指向进程、监听地址或容器端口；成功说明应用路径可用 |',
+        '| 容器内成功但主机访问失败 | `curl --fail http://127.0.0.1:8080/healthz` | 失败转向端口发布、主机监听和防火墙；成功证明本地主机发布路径 |',
+      ]],
+      ['## 网络分层', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| 应用监听未知 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败先查进程、监听地址和端口 |',
+        '| 容器 DNS 或同网通信失败 | `docker network inspect <network>` | 核对双方 endpoint 与别名；默认 bridge 不承诺同样的名称解析体验 |',
+        '| 发布映射未知 | `docker port demo-api 3000` | 核对主机地址、主机端口与容器端口 |',
+        '| 本地主机访问失败 | `curl --fail http://127.0.0.1:8080/healthz` | 只验证 CLI 所在主机路径；远程 context 需在 daemon 主机取证 |',
+        '| 外部客户端访问失败 | `curl --fail http://<daemon-host>:8080/healthz` | 本地主机成功而外部失败时，转向监听地址、主机防火墙和云安全规则 |',
+      ]],
+      ['## 存储与权限', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| permission denied | `docker exec <container> sh -c \'id; ls -lnd <path>\'` | 比较进程 UID/GID 与目标 numeric ownership 和 mode |',
+        '| 新 Volume 出现旧文件 | `docker container inspect <container> --format \'{{json .Mounts}}\'` | 确认实际 Volume source/destination，再核对首次挂载是否发生 copy-up |',
+        '| bind mount 空或路径错误 | `docker container inspect <container> --format \'{{json .Mounts}}\'` | 在 daemon 主机核对 Source/Destination；Docker Desktop 还需检查文件共享 |',
+        '| 数据内容异常 | `docker exec <container> <application-check-command>` | 应用一致性检查区分逻辑损坏与挂载错误；live DB 的直接 tar 不是 application-consistent backup |',
+      ]],
+      ['## 资源与 OOM', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| 进程疑似被 OOM 终止 | `docker container inspect <container> --format \'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} memory={{.HostConfig.Memory}}\'` | OOMKilled、exit code 与 memory limit 区分容器 limit 触发和其他退出 |',
+        '| 实时资源接近限制 | `docker stats --no-stream <container>` | 对比当前 CPU/memory/I/O 使用与 limit，确认是否持续逼近边界 |',
+        '| 容器反复重启 | `docker container inspect <container> --format \'restarts={{.RestartCount}} policy={{json .HostConfig.RestartPolicy}}\'` | restart count 与 policy 区分单次失败和被策略持续拉起 |',
+        '| daemon 记录 OOM 事件 | `docker events --since 30m --filter container=<container> --filter event=oom` | 有事件可关联容器 OOM 时间；无事件时继续检查主机 kernel 与平台日志 |',
+      ]],
+      ['## 磁盘占用', [
+        evidenceHeader,
+        '| --- | --- | --- |',
+        '| 对象类型占用未知 | `docker system df --verbose` | 把空间归到 image、container writable layer、local Volume 或 build cache |',
+        '| build cache 占用高 | `docker buildx du --verbose` | 按 cache record、last used 和 reclaimable 状态识别候选；不要先 prune |',
+        '| 容器 writable layer 占用高 | `docker container ls --all --size` | 将 writable size 关联到具体容器，避免误删 Volume |',
+        '| local Volume 占用高 | `docker volume inspect <volume>` | 核对名称、mountpoint、labels 与引用边界，再按应用语义备份和清理 |',
+      ]],
+    ]
 
-    expectStepsInOrder(source, [
-      '## Build 失败',
-      '## Pull 与 Registry 失败',
-      '## Create 与 start 失败',
-      '## 立即退出与信号',
-      '## running、health 与 ready',
-      '## 网络分层',
-      '## 存储与权限',
-      '## 资源、OOM 与磁盘',
-    ], 'troubleshooting phase evidence')
-    for (const evidence of [
-      'docker buildx build --progress=plain',
-      'docker buildx imagetools inspect',
-      'docker container inspect',
-      'docker logs --timestamps',
-      'docker exec demo-api wget',
-      'docker network inspect',
-      'docker volume inspect',
-      'docker stats --no-stream',
-      'docker system df --verbose',
-    ]) {
-      expect(source).toContain(evidence)
+    expectStepsInOrder(source, expectedTables.map(([heading]) => heading), 'troubleshooting phase evidence')
+    for (const [heading, table] of expectedTables) {
+      expect(markdownTable(markdownSection(source, heading), evidenceHeader)).toEqual(table)
     }
-    expect(source).toContain('live DB 的直接 tar 不是 application-consistent backup')
+    expect(markdownSection(source, '## running、health 与 ready')).toContain(
+      '容器内回环请求成功而本地主机请求失败，说明应用进程大概率可用',
+    )
   })
 
   it('locks the destructive command map scope and recovery consequences', () => {
@@ -759,10 +830,14 @@ describe('Docker / OCI content contracts', () => {
     expect(markdownTable(cleanupSection, '| 命令 | 删除范围 | 恢复影响 |')).toEqual([
       '| 命令 | 删除范围 | 恢复影响 |',
       '| --- | --- | --- |',
+      '| `docker rm <container>` | 删除一个 stopped container 及其 writable layer；不自动删除 Volume | 可按原配置重建容器；未持久化数据和未另存的现场证据丢失 |',
       '| `docker container prune` | 所有 stopped containers | writable layer 与未另存的证据丢失 |',
+      '| `docker image rm <reference>` | 删除指定本地 image 引用；无其他 tag 或容器引用时回收 image 数据 | 可重新 pull/build；未推送且无其他引用的内容可能丢失 |',
       '| `docker image prune -a` | 所有未被容器引用的镜像 | 需要重新 pull/build，未推送内容可能丢失 |',
-      '| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |',
+      '| `docker network rm demo-net` | 删除指定的无活动 endpoint network；不删除容器 | 可重建 network；自定义 subnet、options 与连接关系需重新配置 |',
+      '| `docker volume rm <volume>` | 删除指定且未被容器使用的 Volume | 持久数据通常不可恢复，只能从已验证备份还原 |',
       '| `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |',
+      '| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |',
       '| `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |',
       '| `docker compose down --volumes` | 当前 Compose project 容器、网络、Compose 创建的命名 Volume 和附着的匿名 Volume；不删除 external Volume | 被删除的 project Volume 数据可能永久丢失 |',
     ])
