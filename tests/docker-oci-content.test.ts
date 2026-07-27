@@ -238,6 +238,14 @@ function bashCommands(source: string, file: string): string[] {
   return fenceContents(source, file, 'bash').flatMap(shellCommands)
 }
 
+function normalizedShellCommands(commands: string[]): string[] {
+  return commands.map((command) => command.replace(/\s+/g, ' ').trim())
+}
+
+function normalizedBashCommands(source: string, file: string): string[] {
+  return normalizedShellCommands(bashCommands(source, file))
+}
+
 function dockerfileInstructions(source: string): string[] {
   return continuedLines(source).filter((line) => !line.startsWith('#'))
 }
@@ -622,7 +630,7 @@ describe('Docker / OCI content contracts', () => {
     const file = 'docs/docker-oci/runtime/process-lifecycle.md'
     const source = readRequiredPage(file)
     const diagram = fenceContents(source, file, 'mermaid').join('\n')
-    const commands = bashCommands(source, file).join('\n')
+    const commands = normalizedBashCommands(source, file)
 
     expectStepsInOrder(diagram, [
       'DE->>RT: request configured stop signal',
@@ -650,13 +658,13 @@ describe('Docker / OCI content contracts', () => {
     ])
     expect(source).toMatch(/人工 stop[^。]*不会触发[^。]*非零失败重启/)
 
-    expectStepsInOrder(commands, [
-      'docker run --detach --name demo-api-lifecycle',
-      'docker container inspect demo-api-lifecycle',
+    expectExactStepsInOrder(commands, [
+      "docker run --detach --name demo-api-lifecycle --init --stop-timeout 10 --restart on-failure:3 --memory 128m --cpus 0.50 --health-cmd 'wget -qO- http://127.0.0.1:3000/healthz >/dev/null' --health-interval 5s --health-timeout 2s --health-retries 3 --publish 127.0.0.1:8080:3000 demo-api:dev",
+      "docker container inspect demo-api-lifecycle --format 'status={{.State.Status}} pid={{.State.Pid}} health={{.State.Health.Status}} memory={{.HostConfig.Memory}} nano-cpus={{.HostConfig.NanoCpus}}'",
       'docker logs demo-api-lifecycle',
       'curl --fail http://127.0.0.1:8080/healthz',
       'docker stop demo-api-lifecycle',
-      "--format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}'",
+      "docker container inspect demo-api-lifecycle --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}'",
       'docker rm demo-api-lifecycle',
       'docker container ls --all --filter name=^/demo-api-lifecycle$',
     ], 'lifecycle evidence and cleanup')
@@ -679,10 +687,30 @@ describe('Docker / OCI content contracts', () => {
     }
   })
 
+  it('keeps networking evidence and cleanup as complete commands', () => {
+    const file = 'docs/docker-oci/runtime/networking.md'
+    const source = readRequiredPage(file)
+    const commands = normalizedBashCommands(source, file)
+
+    expectExactStepsInOrder(commands, [
+      'docker network create demo-api-net',
+      'docker run --detach --name demo-api-net --network demo-api-net --publish 127.0.0.1:8080:3000 demo-api:dev',
+      "docker run --detach --name demo-api-probe --network demo-api-net --entrypoint sh curlimages/curl:8.11.1 -c 'sleep 300'",
+      "docker network inspect demo-api-net --format '{{json .Containers}}'",
+      'docker port demo-api-net 3000',
+      'curl --fail http://127.0.0.1:8080/healthz',
+      'docker exec demo-api-probe curl --fail http://demo-api-net:3000/healthz',
+      'docker exec demo-api-probe cat /etc/resolv.conf',
+      'docker rm --force demo-api-probe demo-api-net',
+      'docker network rm demo-api-net',
+      'docker network ls --filter name=^demo-api-net$',
+    ], 'network setup, evidence, and cleanup')
+  })
+
   it('keeps storage backup and bind propagation boundaries explicit', () => {
     const file = 'docs/docker-oci/runtime/storage.md'
     const source = readRequiredPage(file)
-    const commands = bashCommands(source, file).join('\n')
+    const commands = normalizedBashCommands(source, file)
 
     expect(source).toContain('bind propagation 默认为 `rprivate`')
     expect(source).toContain('传播选项只适用于 bind mount')
@@ -699,27 +727,57 @@ describe('Docker / OCI content contracts', () => {
       '直接对 live DB 数据目录运行 tar 不是 application-consistent backup',
     )
 
-    expectStepsInOrder(commands, [
-      'docker container inspect demo-api-storage',
+    expectExactStepsInOrder(commands, [
+      'mkdir demo-api-volume-backup',
+      'docker volume create demo-api-data',
+      'demo_api_uid=$(docker run --rm --entrypoint id demo-api:dev -u)',
+      'demo_api_gid=$(docker run --rm --entrypoint id demo-api:dev -g)',
+      'docker run --rm --user 0 --mount type=volume,src=demo-api-data,dst=/data --entrypoint sh demo-api:dev -c "chown $demo_api_uid:$demo_api_gid /data"',
+      'docker run --detach --name demo-api-storage --mount type=volume,src=demo-api-data,dst=/app/data demo-api:dev',
+      "docker exec demo-api-storage node -e \"require('node:fs').writeFileSync('/app/data/state.txt', 'demo-api:3000 /healthz\\\\n')\"",
+      "docker container inspect demo-api-storage --format 'mounts={{json .Mounts}}'",
+      "docker exec demo-api-storage sh -c 'id; ls -ln /app/data; cat /app/data/state.txt'",
       'docker stop demo-api-storage',
-      'alpine:3.22 tar -C /source -cf /backup/api-data.tar .',
+      'docker run --rm --mount type=volume,src=demo-api-data,dst=/source,readonly --mount "type=bind,src=$(pwd)/demo-api-volume-backup,dst=/backup" alpine:3.22 tar -C /source -cf /backup/api-data.tar .',
       'docker volume create demo-api-data-restored',
-      'alpine:3.22 tar -C /restore -xf /backup/api-data.tar',
-      "readFileSync('/app/data/state.txt')",
+      'docker run --rm --mount type=volume,src=demo-api-data-restored,dst=/restore --mount "type=bind,src=$(pwd)/demo-api-volume-backup,dst=/backup,readonly" alpine:3.22 tar -C /restore -xf /backup/api-data.tar',
+      'docker run --rm --mount type=volume,src=demo-api-data-restored,dst=/app/data,readonly --entrypoint node demo-api:dev -e "process.stdout.write(require(\'node:fs\').readFileSync(\'/app/data/state.txt\'))"',
       'docker rm demo-api-storage',
       'docker volume rm demo-api-data demo-api-data-restored',
       'rm demo-api-volume-backup/api-data.tar',
       'rmdir demo-api-volume-backup',
       'docker volume ls --filter name=demo-api-data',
     ], 'offline backup, restore, evidence, and cleanup')
+
+    const stopPosition = commands.indexOf('docker stop demo-api-storage')
+    const backupPositions = commands
+      .map((command, index) => command.includes('tar -C /source -cf') ? index : -1)
+      .filter((index) => index >= 0)
+    expect(backupPositions).toHaveLength(1)
+    expect(backupPositions[0], 'tar backup must occur after docker stop').toBeGreaterThan(
+      stopPosition,
+    )
+  })
+
+  it('rejects incomplete or split lifecycle run commands', () => {
+    const expected = [
+      'docker run --detach --name demo-api-lifecycle --init --stop-timeout 10 --restart on-failure:3 --memory 128m --cpus 0.50 demo-api:dev',
+    ]
+
+    expect(() => expectExactStepsInOrder(normalizedShellCommands([
+      'docker run --detach --name demo-api-lifecycle --stop-timeout 10 --restart on-failure:3 --memory 128m --cpus 0.50 demo-api:dev',
+    ]), expected, 'missing --init fixture')).toThrow()
+    expect(() => expectExactStepsInOrder(normalizedShellCommands([
+      'docker run --detach --name demo-api-lifecycle',
+      '--init --stop-timeout 10 --restart on-failure:3 --memory 128m --cpus 0.50 demo-api:dev',
+    ]), expected, 'split command fixture')).toThrow()
   })
 
   it('models Compose as two requests and separates environment precedence', () => {
     const file = 'docs/docker-oci/runtime/compose.md'
     const source = readRequiredPage(file)
     const diagram = fenceContents(source, file, 'mermaid').join('\n')
-    const commands = bashCommands(source, file)
-      .map((command) => command.replace(/\s+/g, ' '))
+    const commands = normalizedBashCommands(source, file)
 
     expectStepsInOrder(diagram, [
       'DEV->>CLI: docker compose up --build --wait api',
