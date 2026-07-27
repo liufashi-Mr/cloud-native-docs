@@ -3,13 +3,14 @@ import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { dockerOciRouteManifest } from './support/docker-oci-routes'
 import { kubernetesRouteManifest } from './support/kubernetes-routes'
 
 const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'docs/.vitepress/dist')
 
-function builtKubernetesRoutes(): string[] {
-  return readdirSync(resolve(dist, 'kubernetes'), {
+function builtTopicRoutes(topic: string): string[] {
+  return readdirSync(resolve(dist, topic), {
     encoding: 'utf8',
     recursive: true,
   })
@@ -59,8 +60,18 @@ describe('production build', () => {
     expect(kubernetesHome).toContain('Kubernetes 概念总览')
   })
 
-  it('publishes exactly the Kubernetes HTML route inventory', () => {
-    expect(builtKubernetesRoutes()).toEqual([...kubernetesRouteManifest].sort())
+  it('publishes exactly the Kubernetes and Docker / OCI HTML inventories', () => {
+    expect(builtTopicRoutes('kubernetes')).toEqual([...kubernetesRouteManifest].sort())
+    expect(builtTopicRoutes('docker-oci')).toEqual([...dockerOciRouteManifest].sort())
+  })
+
+  it('publishes the Docker / OCI homepage entry and module home', () => {
+    const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
+    const dockerOciHome = readFileSync(resolve(dist, 'docker-oci/index.html'), 'utf8')
+
+    expect(home).toContain('href="/docker-oci/"')
+    expect(home).toContain('Docker / OCI')
+    expect(dockerOciHome).toContain('Docker / OCI 总览')
   })
 
   it('does not publish internal superpowers pages', () => {

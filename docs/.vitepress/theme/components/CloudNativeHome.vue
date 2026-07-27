@@ -79,6 +79,11 @@ const topicIcons = {
 function topicIconFor(topic: TechnologyTopic): Component {
   return topicIcons[topic.icon]
 }
+
+const topicCount = technologyDomains.flatMap((domain) => domain.topics).length
+const availableTopicCount = technologyDomains
+  .flatMap((domain) => domain.topics)
+  .filter((topic) => topic.status === 'available').length
 </script>
 
 <template>
@@ -91,8 +96,8 @@ function topicIconFor(topic: TechnologyTopic): Component {
       </p>
       <div class="cloud-native-home__summary" aria-label="内容概览">
         <span>5 条开发路径</span>
-        <span>24 个技术主题</span>
-        <span>1 个已完成</span>
+        <span>{{ topicCount }} 个技术主题</span>
+        <span>{{ availableTopicCount }} 个已完成</span>
       </div>
     </header>
 

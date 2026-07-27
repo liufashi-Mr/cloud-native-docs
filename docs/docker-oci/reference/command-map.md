@@ -82,7 +82,7 @@ tag 可变，image ID 只描述本地对象，Registry digest 才适合跨环境
 | --- | --- | --- |
 | 列出 Volume | driver 与名称 | `docker volume ls` |
 | 查看 Volume | mountpoint、labels、scope | `docker volume inspect <volume>` |
-| 查看容器挂载 | type、source、destination、RW | `docker container inspect <container> --format '{{json .Mounts}}'` |
+| 查看容器挂载 | type、source、destination、RW | `docker container inspect <container> --format '&#123;&#123;json .Mounts&#125;&#125;'` |
 | 创建命名 Volume | volume name | `docker volume create <volume>` |
 | 删除已确认 Volume | volume 删除结果 | `docker volume rm <volume>` |
 | 查看整体磁盘 | image/container/volume/cache 占用 | `docker system df --verbose` |

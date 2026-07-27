@@ -126,7 +126,7 @@ docker image rm demo-api:dev
 
 - **构建在 `FROM` 失败：** 先检查 Registry 网络、DNS、代理和拉取限制；这尚不是应用源码错误。
 - **`COPY` 报文件不存在：** 确认当前目录有 `server.mjs`，构建命令末尾是 `.`，且 `.dockerignore` 没有排除所需文件。
-- **容器启动后立即退出：** 用 `docker container ls --all --filter name=demo-api`、`docker logs demo-api` 和 `docker container inspect demo-api --format '{{json .State}}'` 查看退出码与错误。
+- **容器启动后立即退出：** 用 `docker container ls --all --filter name=demo-api`、`docker logs demo-api` 和 `docker container inspect demo-api --format '&#123;&#123;json .State&#125;&#125;'` 查看退出码与错误。
 - **端口已被占用：** `docker run` 会在发布阶段报错，但可能已留下名为 `demo-api` 的已创建容器。先用 `docker container ls --all --filter name=^/demo-api$` 确认状态。如果仍使用主机端口 `8080`，停止占用者后执行 `docker start demo-api`；如果要改用其他主机端口，先用 `docker rm demo-api` 删除这个失败容器，再用新的 `--publish` 参数重新创建，并同步更改 `curl` URL。
 - **`curl` 连接被拒绝：** 按顺序检查容器是否 `Up`、日志是否显示监听 `3000`、应用是否监听 `0.0.0.0`，以及 inspect 的 `HostConfig.PortBindings`。
 - **能访问根路径但健康检查错误：** 核对 URL 是 `/healthz`，并直接查看 `curl --verbose http://localhost:8080/healthz` 的状态码和响应体。

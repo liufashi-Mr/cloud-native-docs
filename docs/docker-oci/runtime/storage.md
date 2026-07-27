@@ -103,4 +103,4 @@ docker volume ls --filter name=demo-api-data
 - **“只读 mount 保证应用一致。”** `readonly` 只约束该挂载消费者；其他进程可能仍在写后端。
 - **“tmpfs 不占资源且绝不会落盘。”** 它没有持久化后端，但仍消耗主机内存，内存页也可能进入 host swap，并受平台实现限制。
 
-Docker 的存储行为见 [Storage overview](https://docs.docker.com/engine/storage/)、[Volumes](https://docs.docker.com/engine/storage/volumes/)、[Bind mounts](https://docs.docker.com/engine/storage/bind-mounts/) 和 [tmpfs mounts](https://docs.docker.com/engine/storage/tmpfs/)。下一步可用 [Compose](/docker-oci/runtime/compose)把 Volume、网络和健康依赖组合成一个 project。
+Docker 的存储行为见 [Storage overview](https://docs.docker.com/engine/storage/)、[Volumes](https://docs.docker.com/engine/storage/volumes/)、[Bind mounts](https://docs.docker.com/engine/storage/bind-mounts/) 和 [tmpfs mounts](https://docs.docker.com/engine/storage/tmpfs/)。Kubernetes 如何把 PVC 解析为 Pod mount 见[配置与存储](/kubernetes/concepts/config-storage)。下一步可用 [Compose](/docker-oci/runtime/compose)把 Volume、网络和健康依赖组合成一个 project。

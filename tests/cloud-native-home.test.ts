@@ -146,12 +146,17 @@ describe('CloudNativeHome', () => {
     expect(topics).toHaveLength(24)
     expect(topics.filter((topic) => topic.status === 'available')).toEqual([
       expect.objectContaining({
+        title: 'Docker / OCI',
+        href: '/docker-oci/',
+        icon: 'container',
+      }),
+      expect.objectContaining({
         title: 'Kubernetes',
         href: '/kubernetes/',
         icon: 'ship-wheel',
       }),
     ])
-    expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(23)
+    expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(22)
   })
 
   it('assigns one recognizable linear icon to each topic', () => {
@@ -176,7 +181,7 @@ describe('CloudNativeHome', () => {
     expect(wrapper.get('h1').text()).toBe('应用开发者的云原生技术工作台')
     expect(wrapper.text()).toContain('5 条开发路径')
     expect(wrapper.text()).toContain('24 个技术主题')
-    expect(wrapper.text()).toContain('1 个已完成')
+    expect(wrapper.text()).toContain('2 个已完成')
     expect(wrapper.findAll('[data-path]')).toHaveLength(5)
     expect(wrapper.findAll('[data-domain]')).toHaveLength(6)
     expect(wrapper.findAll('[data-topic]')).toHaveLength(24)
@@ -184,15 +189,22 @@ describe('CloudNativeHome', () => {
       expect(wrapper.findAll('[data-path]')[index].text()).toContain(sequence)
     }
 
-    const kubernetes = wrapper.get('[data-topic][data-status="available"]')
-    expect(kubernetes.element.tagName).toBe('A')
-    expect(kubernetes.attributes('href')).toBe('/project/kubernetes/')
-    expect(kubernetes.text()).toContain('Kubernetes')
-    expect(kubernetes.text()).not.toContain('已完成')
-    expect(kubernetes.find('.cloud-native-home__completion').exists()).toBe(false)
-    expect(kubernetes.find('.cloud-native-home__status').exists()).toBe(false)
-    expect(kubernetes.find('img').exists()).toBe(false)
-    expect(kubernetes.findAll('svg[aria-hidden="true"]')).toHaveLength(2)
+    const available = wrapper.findAll('[data-topic][data-status="available"]')
+    expect(available).toHaveLength(2)
+
+    const dockerOci = available.find((topic) => topic.text().includes('Docker / OCI'))
+    const kubernetes = available.find((topic) => topic.text().includes('Kubernetes'))
+    expect(dockerOci?.element.tagName).toBe('A')
+    expect(dockerOci?.attributes('href')).toBe('/project/docker-oci/')
+    expect(kubernetes?.element.tagName).toBe('A')
+    expect(kubernetes?.attributes('href')).toBe('/project/kubernetes/')
+    for (const topic of available) {
+      expect(topic.text()).not.toContain('已完成')
+      expect(topic.find('.cloud-native-home__completion').exists()).toBe(false)
+      expect(topic.find('.cloud-native-home__status').exists()).toBe(false)
+      expect(topic.find('img').exists()).toBe(false)
+      expect(topic.findAll('svg[aria-hidden="true"]')).toHaveLength(2)
+    }
 
     const visuals = wrapper.findAll('[data-topic-visual]')
     expect(visuals).toHaveLength(24)
@@ -203,7 +215,7 @@ describe('CloudNativeHome', () => {
     }
 
     const planned = wrapper.findAll('[data-topic][data-status="planned"]')
-    expect(planned).toHaveLength(23)
+    expect(planned).toHaveLength(22)
     for (const topic of planned) {
       expect(topic.element.tagName).toBe('DIV')
       expect(topic.attributes('tabindex')).toBeUndefined()

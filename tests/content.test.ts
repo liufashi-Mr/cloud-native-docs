@@ -5,6 +5,7 @@ import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parseAllDocuments } from 'yaml'
 
+import { dockerOciRouteManifest } from './support/docker-oci-routes'
 import { markdownFences } from './support/markdown'
 
 const root = resolve(import.meta.dirname, '..')
@@ -24,6 +25,9 @@ const contentFiles = [
   'docs/kubernetes/operations/troubleshooting.md',
   'docs/kubernetes/reference/concept-map.md',
 ]
+const dockerOciContentFiles = dockerOciRouteManifest.map(
+  (route) => `docs/docker-oci/${route}.md`,
+)
 
 const docsRoot = resolve(root, 'docs')
 const coreConceptFiles = [
@@ -673,7 +677,7 @@ describe('content contract', () => {
 
   it('lists operations and reference chapters after core concepts', () => {
     const config = readFileSync(resolve(root, 'docs/.vitepress/config.mts'), 'utf8')
-    const sidebar = config.slice(config.indexOf('sidebar:'))
+    const sidebar = config.slice(config.indexOf("'/kubernetes/': ["))
     const operations = sidebar.match(/text: '运行实践',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
     const reference = sidebar.match(/text: '速查',[\s\S]*?items: \[([\s\S]*?)\n\s*\],/)
 
@@ -904,7 +908,7 @@ describe('content contract', () => {
 
   it('keeps relative Markdown links valid', () => {
     const markdownLink = /\[[^\]]*\]\(([^)]+)\)/g
-    for (const file of contentFiles) {
+    for (const file of [...contentFiles, ...dockerOciContentFiles]) {
       const absoluteFile = resolve(root, file)
       if (!existsSync(absoluteFile)) continue
 

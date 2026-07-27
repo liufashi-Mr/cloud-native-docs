@@ -135,6 +135,60 @@ export default defineConfig({
     logo: '/logo.png',
     siteTitle: '云原生开发手册',
     sidebar: {
+      '/docker-oci/': [
+        {
+          text: '开始',
+          items: [
+            { text: 'Docker / OCI 总览', link: '/docker-oci/' },
+            { text: '从源码到容器', link: '/docker-oci/guide/source-to-container' },
+            { text: '从容器到 Kubernetes', link: '/docker-oci/guide/container-to-kubernetes' },
+          ],
+        },
+        {
+          text: '核心模型',
+          items: [
+            { text: 'Docker 架构与边界', link: '/docker-oci/concepts/docker-architecture' },
+            { text: '镜像模型', link: '/docker-oci/concepts/image-model' },
+            { text: '容器模型', link: '/docker-oci/concepts/container-model' },
+          ],
+        },
+        {
+          text: '构建',
+          items: [
+            { text: 'Dockerfile', link: '/docker-oci/build/dockerfile' },
+            { text: 'BuildKit 缓存', link: '/docker-oci/build/buildkit-cache' },
+            { text: '多平台构建', link: '/docker-oci/build/multi-platform-builds' },
+          ],
+        },
+        {
+          text: '运行',
+          items: [
+            { text: '进程与生命周期', link: '/docker-oci/runtime/process-lifecycle' },
+            { text: '容器网络', link: '/docker-oci/runtime/networking' },
+            { text: '容器存储', link: '/docker-oci/runtime/storage' },
+            { text: 'Compose', link: '/docker-oci/runtime/compose' },
+          ],
+        },
+        {
+          text: 'OCI',
+          items: [
+            { text: 'OCI 规范关系', link: '/docker-oci/oci/specifications' },
+          ],
+        },
+        {
+          text: '运行实践',
+          items: [
+            { text: '安全边界', link: '/docker-oci/operations/security' },
+            { text: '系统化排障', link: '/docker-oci/operations/troubleshooting' },
+          ],
+        },
+        {
+          text: '速查',
+          items: [
+            { text: '命令与证据速查', link: '/docker-oci/reference/command-map' },
+          ],
+        },
+      ],
       '/kubernetes/': [
         {
           text: '开始',

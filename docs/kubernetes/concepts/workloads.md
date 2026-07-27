@@ -105,4 +105,4 @@ spec:
 
 ## 继续阅读
 
-前置：[集群与节点](/kubernetes/concepts/cluster-nodes)。下一篇：[网络与流量](/kubernetes/concepts/networking)，把 Pod 接入稳定的服务发现与请求路径。
+前置：[集群与节点](/kubernetes/concepts/cluster-nodes)。下一篇：[网络与流量](/kubernetes/concepts/networking)，把 Pod 接入稳定的服务发现与请求路径。镜像配置与 PodSpec `command`、`args` 的覆盖关系见 [从容器到 Kubernetes](/docker-oci/guide/container-to-kubernetes)。

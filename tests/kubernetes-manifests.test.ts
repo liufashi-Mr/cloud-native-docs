@@ -32,11 +32,16 @@ describe(`Kubernetes ${KUBERNETES_SCHEMA_TARGET} YAML examples`, () => {
             document.warnings,
             `${fence.location} document ${index + 1} has YAML warnings`,
           ).toEqual([])
-          validateKubernetesManifest(
-            document.toJS(),
-            `${fence.location} document ${index + 1}`,
-          )
-          manifestCount += 1
+          const value = document.toJS()
+          const isKubernetesManifest = value !== null && typeof value === 'object' &&
+            !Array.isArray(value) && ('apiVersion' in value || 'kind' in value)
+          if (isKubernetesManifest) {
+            validateKubernetesManifest(
+              value,
+              `${fence.location} document ${index + 1}`,
+            )
+            manifestCount += 1
+          }
         }
       }
     }

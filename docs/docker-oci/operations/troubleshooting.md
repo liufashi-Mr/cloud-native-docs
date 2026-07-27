@@ -59,7 +59,7 @@ docker system df --verbose
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
 | Registry digest、platform 或认证状态未知 | `docker buildx imagetools inspect <reference>` | 只读查询 Registry index；descriptor 给出远端 digest/platform，认证错误区分 credential、repository permission 和 token scope |
-| digest 不匹配或 tag 疑似移动 | `docker image inspect <reference> --format '{{json .RepoDigests}}'` | RepoDigests 仅代表本地对象；与远端 `imagetools inspect` 的 descriptor digest 比较，区分本地旧对象、tag 移动和完整性错误 |
+| digest 不匹配或 tag 疑似移动 | `docker image inspect <reference> --format '&#123;&#123;json .RepoDigests&#125;&#125;'` | RepoDigests 仅代表本地对象；与远端 `imagetools inspect` 的 descriptor digest 比较，区分本地旧对象、tag 移动和完整性错误 |
 | 必须复现 pull 错误 | `docker pull <reference>` | 该命令会改变本地 image/tag 状态，不是只读取证；先记录原 digest，再用错误中的网络、证书、认证或 digest 结果缩小范围 |
 
 代理、DNS、证书和 Registry 服务端错误属于不同边界。先确认 Docker daemon 所在主机的网络路径，而不只是 CLI 主机的 `curl`。
@@ -70,7 +70,7 @@ docker system df --verbose
 | --- | --- | --- |
 | create 前参数校验失败 | `docker container inspect <container>`（若对象存在） | 判断对象是否已创建以及最终 HostConfig |
 | 端口已占用 | `docker ps --filter publish=8080` 与主机监听工具 | 区分 Docker 映射冲突和非 Docker 主机进程 |
-| mount 拒绝或路径不存在 | `docker container inspect <container> --format '{{json .Mounts}}'` | 核对 source、destination、类型与只读属性 |
+| mount 拒绝或路径不存在 | `docker container inspect <container> --format '&#123;&#123;json .Mounts&#125;&#125;'` | 核对 source、destination、类型与只读属性 |
 | executable/architecture 错误 | `docker image inspect <image>` 与平台元数据 | 区分 Entrypoint 路径、权限、shebang 和平台 |
 
 create 成功不表示 start 成功；start 成功也不表示主进程持续运行。
@@ -81,7 +81,7 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| 容器已经 stopped | `docker container inspect demo-api --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}'` | exit、OOMKilled、runtime error 与时间戳区分正常退出、信号、OOM 和启动错误 |
+| 容器已经 stopped | `docker container inspect demo-api --format 'status=&#123;&#123;.State.Status&#125;&#125; exit=&#123;&#123;.State.ExitCode&#125;&#125; oom=&#123;&#123;.State.OOMKilled&#125;&#125; error=&#123;&#123;json .State.Error&#125;&#125; started=&#123;&#123;.State.StartedAt&#125;&#125; finished=&#123;&#123;.State.FinishedAt&#125;&#125;'` | exit、OOMKilled、runtime error 与时间戳区分正常退出、信号、OOM 和启动错误 |
 | 主进程可能输出错误 | `docker logs --timestamps --tail 200 demo-api` | 关联退出前 stdout/stderr；无日志不等于进程未失败 |
 | 退出原因与操作时序不明 | `docker events --since 10m --until 0s --filter container=demo-api` | create/start/die/oom/kill 事件顺序区分进程自行退出、资源终止与外部操作 |
 
@@ -93,7 +93,7 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| health 状态不是 healthy | `docker container inspect demo-api --format '{{json .State.Health}}'` | status、failing streak 与探针输出区分 starting、unhealthy 和未配置 healthcheck |
+| health 状态不是 healthy | `docker container inspect demo-api --format '&#123;&#123;json .State.Health&#125;&#125;'` | status、failing streak 与探针输出区分 starting、unhealthy 和未配置 healthcheck |
 | 应用仍在启动或报错 | `docker logs --timestamps --tail 200 demo-api` | 启动日志缩小到应用配置、依赖或监听失败 |
 | 容器内回环访问失败 | `docker exec demo-api wget -qO- http://127.0.0.1:3000/healthz` | 失败指向进程、监听地址或容器端口；成功说明应用路径可用 |
 | 容器内成功但主机访问失败 | `curl --fail http://127.0.0.1:8080/healthz` | 失败转向端口发布、主机监听和防火墙；成功证明本地主机发布路径 |
@@ -121,8 +121,8 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
 | permission denied | `docker exec <container> sh -c 'id; ls -lnd <path>'` | 比较进程 UID/GID 与目标 numeric ownership 和 mode |
-| 新 Volume 出现旧文件 | `docker container inspect <container> --format '{{json .Mounts}}'` | 确认实际 Volume source/destination，再核对首次挂载是否发生 copy-up |
-| bind mount 空或路径错误 | `docker container inspect <container> --format '{{json .Mounts}}'` | 在 daemon 主机核对 Source/Destination；Docker Desktop 还需检查文件共享 |
+| 新 Volume 出现旧文件 | `docker container inspect <container> --format '&#123;&#123;json .Mounts&#125;&#125;'` | 确认实际 Volume source/destination，再核对首次挂载是否发生 copy-up |
+| bind mount 空或路径错误 | `docker container inspect <container> --format '&#123;&#123;json .Mounts&#125;&#125;'` | 在 daemon 主机核对 Source/Destination；Docker Desktop 还需检查文件共享 |
 | 数据内容异常 | `docker exec <container> <application-check-command>` | 应用一致性检查区分逻辑损坏与挂载错误；live DB 的直接 tar 不是 application-consistent backup |
 
 ## 资源与 OOM
@@ -131,9 +131,9 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| 进程疑似被 OOM 终止 | `docker container inspect <container> --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} memory={{.HostConfig.Memory}}'` | `OOMKilled=true` 标记 OOM 相关退出，Memory 只显示配置 limit；这些字段不能区分 container limit 与 host-wide memory pressure |
+| 进程疑似被 OOM 终止 | `docker container inspect <container> --format 'oom=&#123;&#123;.State.OOMKilled&#125;&#125; exit=&#123;&#123;.State.ExitCode&#125;&#125; memory=&#123;&#123;.HostConfig.Memory&#125;&#125;'` | `OOMKilled=true` 标记 OOM 相关退出，Memory 只显示配置 limit；这些字段不能区分 container limit 与 host-wide memory pressure |
 | 实时资源接近限制 | `docker stats --no-stream <container>` | 结果只是当前单次 snapshot，不能证明退出前趋势；需要重复采样或历史 telemetry 才能判断是否持续逼近 limit |
-| 容器反复重启 | `docker container inspect <container> --format 'restarts={{.RestartCount}} policy={{json .HostConfig.RestartPolicy}}'` | restart count 与 policy 区分单次失败和被策略持续拉起 |
+| 容器反复重启 | `docker container inspect <container> --format 'restarts=&#123;&#123;.RestartCount&#125;&#125; policy=&#123;&#123;json .HostConfig.RestartPolicy&#125;&#125;'` | restart count 与 policy 区分单次失败和被策略持续拉起 |
 | daemon 记录 OOM 事件 | `docker events --since 30m --until 0s --filter container=<container> --filter event=oom` | 有事件可关联容器 OOM 时间；无事件时继续检查主机 kernel 与平台日志 |
 | OOM 来源仍不明 | 在 Linux daemon host 运行 `journalctl --kernel --since '-30 min' --grep 'out of memory'` | 用时间戳、进程和 cgroup 记录判断 container limit 或 host-wide pressure；Docker Desktop 与托管环境改查对应 platform telemetry |
 
