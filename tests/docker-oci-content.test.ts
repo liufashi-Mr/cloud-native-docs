@@ -168,6 +168,46 @@ const pageContracts: Record<string, PageContract> = {
       '--push',
     ],
   },
+  'docs/docker-oci/runtime/process-lifecycle.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '容器的主进程退出，容器就进入 stopped 状态',
+      'shell form 可能让 shell 成为 PID 1',
+      'docker stop 先发送停止信号，超时后再强制终止',
+      'HEALTHCHECK 结果不会阻止主进程退出，也不会自动修复应用',
+    ],
+    terms: ['PID 1', 'SIGTERM', 'SIGKILL', 'STOPSIGNAL', 'exit code', 'HEALTHCHECK', 'restart policy', 'memory'],
+  },
+  'docs/docker-oci/runtime/networking.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '发布端口是在主机地址和容器端口之间建立转发',
+      'EXPOSE 不会发布主机端口',
+      '同一 user-defined bridge 中的容器可以按名称解析',
+      '容器中的 127.0.0.1 指向容器自己的网络命名空间',
+    ],
+    terms: ['bridge', 'user-defined bridge', 'port publishing', '127.0.0.1:8080:3000', 'DNS', 'host', 'none'],
+  },
+  'docs/docker-oci/runtime/storage.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '容器可写层随容器删除',
+      'named volume 的生命周期独立于单个容器',
+      'bind mount 直接暴露主机路径',
+      'tmpfs 数据只保存在主机内存中',
+    ],
+    terms: ['writable layer', 'named volume', 'bind mount', 'tmpfs', 'UID', 'GID', 'copy-up', 'volume-nocopy'],
+  },
+  'docs/docker-oci/runtime/compose.md': {
+    fences: ['yaml', 'bash', 'mermaid'],
+    phrases: [
+      'Compose service 是容器配置模板，不是正在运行的容器',
+      'depends_on 的启动顺序不等于应用已经可用',
+      'service_healthy 依赖被依赖服务的 healthcheck',
+      'docker compose down --volumes 会额外删除声明的命名 Volume',
+    ],
+    terms: ['project', 'services', 'default network', 'healthcheck', 'depends_on', 'environment', 'volumes', 'docker compose config'],
+  },
 }
 
 function readRequiredPage(file: string): string {
