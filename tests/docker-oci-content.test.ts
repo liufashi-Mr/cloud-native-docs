@@ -34,6 +34,61 @@ const pageContracts: Record<string, PageContract> = {
     ],
     terms: ['build context', '.dockerignore', 'image ID', 'container ID', 'localhost:8080'],
   },
+  'docs/docker-oci/concepts/docker-architecture.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      'Docker CLI 是客户端，不直接创建 Linux 进程',
+      'Docker Engine 把构建工作委托给 BuildKit',
+      'Docker Engine 通过 containerd 管理容器生命周期',
+      'runc 按 OCI Runtime Specification 创建容器进程后退出',
+    ],
+    terms: [
+      'Docker context',
+      'dockerd',
+      'BuildKit',
+      'containerd',
+      'shim',
+      'runc',
+      'Distribution API',
+    ],
+  },
+  'docs/docker-oci/concepts/image-model.md': {
+    fences: ['mermaid', 'bash', 'json'],
+    phrases: [
+      'tag 是可变引用，digest 是内容寻址标识',
+      'manifest 引用 config 和 layer descriptors',
+      'OCI index 按 platform 引用一个或多个 manifest',
+      '压缩 layer digest 与解压后的 DiffID 不是同一个值',
+    ],
+    terms: [
+      'descriptor',
+      'mediaType',
+      'digest',
+      'size',
+      'manifest',
+      'index',
+      'config',
+      'layer',
+      'DiffID',
+    ],
+  },
+  'docs/docker-oci/concepts/container-model.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '容器首先是受隔离和约束的主机进程',
+      '镜像层保持只读，容器增加自己的可写层',
+      '删除容器会删除它的可写层，但不会自动删除命名 Volume',
+      'namespace 改变进程能看到什么，cgroup 约束或统计资源',
+    ],
+    terms: [
+      'namespaces',
+      'cgroups',
+      'mount namespace',
+      'PID namespace',
+      'writable layer',
+      'copy-on-write',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {
