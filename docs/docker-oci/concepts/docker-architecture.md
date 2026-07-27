@@ -44,7 +44,7 @@ docker context inspect "$(docker context show)"
 
 ## Docker Engine 与 dockerd
 
-Docker Engine 是提供 Docker API 和容器产品能力的服务端，`dockerd` 是典型 Linux 安装中的 daemon 进程。它负责认证 API 请求，维护 Docker 层的镜像、容器、网络和 Volume 元数据，并协调下游组件。CLI 与 Engine 是客户端和服务端关系，即使两者安装在同一台机器上也不是一个进程。
+Docker Engine 是提供 Docker API 和容器产品能力的服务端，`dockerd` 是典型 Linux 安装中的 daemon 进程。Docker API 的访问保护取决于传输方式和部署：本地 Unix socket 通常依靠主机文件系统权限控制谁能连接，TCP 可以配置 TLS 客户端证书认证，而细粒度 authorization 需要另行配置，而且是可选能力。dockerd 维护 Docker 层的镜像、容器、网络和 Volume 元数据，并协调下游组件。CLI 与 Engine 是客户端和服务端关系，即使两者安装在同一台机器上也不是一个进程。
 
 Engine 是协调者，不应被描述为亲自完成每个底层步骤。Docker Engine 把构建工作委托给 BuildKit；创建和启动容器时则把低层生命周期操作交给 containerd。Docker Desktop 可能隐藏 daemon 所在的 Linux VM，rootless mode 也会改变权限与 socket 位置，所以宿主进程树和路径要以当前安装为准。
 

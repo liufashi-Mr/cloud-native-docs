@@ -129,7 +129,15 @@ docker run --rm --mount type=volume,src=container-model-data,dst=/data alpine:3.
 docker volume rm container-model-data
 ```
 
-停止后 inspect 应显示 `exited` 且没有运行中的 host PID，diff 仍可读；删除后容器本身不可再 inspect，但 Volume 仍存在，临时验证容器应输出 `persistent`。最后一条是本实验的数据清理步骤，只有在确认该 Volume 就是示例资源时才执行。
+停止后 inspect 应显示 `exited` 且没有运行中的 host PID，diff 仍可读；删除后容器本身不可再 inspect，但 Volume 仍存在，临时验证容器应输出 `persistent`。最后一条是本实验的 Volume 数据清理步骤，只有在确认该 Volume 就是示例资源时才执行。
+
+如果 `alpine:3.22` 也是此次实验才拉取的，并且已确认没有其他本地容器或引用需要它，可以选择清理镜像 tag：
+
+```bash
+docker image rm alpine:3.22
+```
+
+镜像清理是可选步骤。不要为了完成实验清理而删除原本已存在或仍被其他工作使用的本地镜像。
 
 ## 常见误区
 

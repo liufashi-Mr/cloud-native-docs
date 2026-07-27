@@ -1,24 +1,31 @@
 # Docker 镜像模型
 
-镜像不是压缩后的虚拟机磁盘，也不是一个会运行的对象。它是一张由 descriptor 连接的内容图：名称先解析到 manifest 或 index，manifest 再引用 config 和有序 layer；客户端校验内容后，runtime 才能把这些只读输入用于创建容器。
+镜像不是压缩后的虚拟机磁盘，也不是一个会运行的对象。它是一张由 descriptor 连接的内容图：名称先解析到 manifest 或 index，manifest 再引用 config 和有序 layer。低层 runtime 不能直接使用这张远端内容图；镜像客户端或容器管理器必须先解析引用、校验并获取内容，再让 snapshotter 解包 layer 和准备 root filesystem。
 
 ## 从名称走到内容图
 
-先区分便于人类使用的引用与内容对象之间的关系：
+下面把内容图的结构关系放进实际检索路径。index、manifest、config 和 layer 只作为消息中的数据传递，不会主动请求下一个对象：
 
 ```mermaid
-flowchart LR
-  CLIENT["Registry client"] -->|requests repository:tag or repository@digest| REG["Registry service"]
-  REG -->|returns top-level content| TOP["manifest or OCI index"]
-  TOP -->|may be| IDX["OCI index"]
-  TOP -->|may be| MAN["image manifest"]
-  IDX -->|platform descriptor| MAN
-  MAN -->|config descriptor| CFG["image config blob"]
-  MAN -->|ordered layer descriptors| LAY["compressed layer blobs"]
-  CFG -->|ordered rootfs.diff_ids| DIFF["uncompressed layer DiffIDs"]
+sequenceDiagram
+  participant CLIENT as Image client / container manager
+  participant REG as Registry service
+  participant SNAP as Snapshotter
+  participant RT as OCI runtime
+  CLIENT->>REG: request index or manifest
+  REG-->>CLIENT: return index or manifest
+  CLIENT->>CLIENT: select platform and verify digest and size
+  CLIENT->>REG: request config and layer blobs
+  REG-->>CLIENT: return config and layer blobs
+  CLIENT->>CLIENT: verify digest and size
+  CLIENT->>SNAP: provide verified layer blobs
+  SNAP->>SNAP: unpack layers and prepare snapshot/rootfs
+  SNAP-->>CLIENT: return prepared rootfs
+  CLIENT->>CLIENT: assemble runtime bundle from config and rootfs
+  CLIENT->>RT: invoke with runtime bundle
 ```
 
-这是一张引用关系图，不是执行流程。tag、index、manifest、config 和 layer 都是数据；Registry 客户端负责解析引用、下载和校验，builder 负责生成内容，runtime 负责消费准备好的文件系统与配置。
+这张图描述职责顺序，不承诺每个实现都使用独立进程。Image client / container manager 可以由 Docker Engine、containerd 或其他实现承担，snapshotter 也可能嵌入其存储路径。OCI runtime 不直接解析 Registry 引用，也不直接拉取或解包镜像 layer。准备 snapshot/rootfs 和 runtime bundle 后，容器管理器才调用 OCI runtime；runtime 消费的是 runtime bundle 中的配置和 root filesystem，而不是 OCI image manifest。
 
 ## descriptor 是引用的共同形状
 
@@ -73,7 +80,9 @@ Docker 的本地 image ID、远端 `RepoDigests` 与用户输入的 tag 是不�
 
 ## 压缩 digest 与 DiffID
 
-压缩 layer digest 与解压后的 DiffID 不是同一个值。manifest layer descriptor 的 `digest` 对 Registry 传输的 blob 字节计算，通常包含 gzip 压缩结果；config 中 `rootfs.diff_ids` 的 DiffID 对解压后的 layer tar 字节流计算。两者校验的是两个不同阶段：传输内容与未压缩变更集。
+压缩 layer digest 与解压后的 DiffID 不是同一个值。这个结论以 layer descriptor 的 `mediaType` 表示 gzip、zstd 等压缩格式为前提：descriptor 的 `digest` 对 Registry 传输的压缩 blob 字节计算，config 中 `rootfs.diff_ids` 的 DiffID 则对解压后的 layer tar 字节流计算。两者校验的是两个不同阶段：传输内容与未压缩变更集。
+
+media-type 边界不能省略。未压缩 mediaType 的 descriptor 如果使用与 DiffID 相同的算法，会因为散列同一份未压缩 tar 字节而得到与 DiffID 相同的值。例如 `application/vnd.oci.image.layer.v1.tar` 表示未压缩 layer，此时不能机械套用“descriptor digest 一定不同于 DiffID”。
 
 改变压缩级别或 gzip 元数据，可能让压缩 digest 改变，而未压缩 tar 字节相同、DiffID 不变。反过来，文件内容、tar header 或条目顺序变化通常会改变 DiffID。DiffID 也不是对最终合并目录逐文件计算的哈希，不能拿普通目录校验和替代。
 
