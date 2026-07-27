@@ -55,6 +55,28 @@ const pageContracts: Record<string, PageContract> = {
     ],
     terms: ['build context', '.dockerignore', 'image ID', 'container ID', 'localhost:8080'],
   },
+  'docs/docker-oci/guide/container-to-kubernetes.md': {
+    fences: ['yaml', 'dockerfile', 'mermaid'],
+    phrases: [
+      'PodSpec 的 command 覆盖镜像 Entrypoint',
+      'PodSpec 的 args 覆盖镜像 Cmd',
+      'EXPOSE 不会自动创建 Service 或 containerPort',
+      'Dockerfile HEALTHCHECK 不会自动转换为 Kubernetes probe',
+      'Dockerfile VOLUME 不会自动创建 Kubernetes Volume',
+    ],
+    terms: [
+      'image config',
+      'Entrypoint',
+      'Cmd',
+      'PodSpec',
+      'command',
+      'args',
+      'CRI',
+      'kubelet',
+      'containerd',
+      'securityContext',
+    ],
+  },
   'docs/docker-oci/concepts/docker-architecture.md': {
     fences: ['mermaid', 'bash'],
     phrases: [
@@ -207,6 +229,25 @@ const pageContracts: Record<string, PageContract> = {
       'docker compose down --volumes 会额外删除声明的命名 Volume',
     ],
     terms: ['project', 'services', 'default network', 'healthcheck', 'depends_on', 'environment', 'volumes', 'docker compose config'],
+  },
+  'docs/docker-oci/oci/specifications.md': {
+    fences: ['mermaid', 'json', 'bash'],
+    phrases: [
+      'Image Specification 定义镜像内容对象和 descriptor 关系',
+      'Image Layout 定义这些内容如何放在本地目录中',
+      'Distribution Specification 定义客户端如何通过 Registry API 传输内容',
+      'Runtime Specification 定义 runtime 接收 bundle 后如何创建容器',
+    ],
+    terms: [
+      'OCI Image Specification',
+      'Image Layout',
+      'Distribution Specification',
+      'Runtime Specification',
+      'descriptor',
+      'content store',
+      'bundle',
+      'config.json',
+    ],
   },
 }
 
