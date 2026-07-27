@@ -89,6 +89,64 @@ const pageContracts: Record<string, PageContract> = {
       'copy-on-write',
     ],
   },
+  'docs/docker-oci/build/dockerfile.md': {
+    fences: ['dockerfile', 'bash'],
+    phrases: [
+      '构建只能读取 build context 中的文件',
+      'exec form 不经过 shell 展开参数',
+      'ENTRYPOINT 定义可执行入口，CMD 提供默认参数',
+      '秘密不能通过 ARG、ENV 或 COPY 固化进镜像',
+    ],
+    terms: [
+      'FROM',
+      'WORKDIR',
+      'COPY',
+      'RUN',
+      'USER',
+      'ARG',
+      'ENV',
+      'ENTRYPOINT',
+      'CMD',
+      'multi-stage',
+    ],
+  },
+  'docs/docker-oci/build/buildkit-cache.md': {
+    fences: ['dockerfile', 'bash', 'mermaid'],
+    phrases: [
+      '缓存键不仅由 Dockerfile 指令文本决定',
+      'secret mount 的内容不会进入镜像层',
+      'cache mount 的目录内容不会成为当前层的文件系统输出',
+      '`--no-cache` 不等于重新拉取基础镜像',
+    ],
+    terms: [
+      'cache key',
+      'bind mount',
+      'cache mount',
+      'secret mount',
+      '--no-cache',
+      '--pull',
+      'cache-to',
+      'cache-from',
+    ],
+  },
+  'docs/docker-oci/build/multi-platform-builds.md': {
+    fences: ['dockerfile', 'bash', 'mermaid'],
+    phrases: [
+      '一个多平台 tag 通常指向 OCI index',
+      'QEMU 模拟、原生多节点和交叉编译是三种不同策略',
+      '`--load` 通常只能把单平台结果载入本地 image store',
+      '目标平台必须与最终二进制和基础镜像同时匹配',
+    ],
+    terms: [
+      'BUILDPLATFORM',
+      'TARGETPLATFORM',
+      '--platform',
+      'QEMU',
+      'cross-compilation',
+      'OCI index',
+      '--push',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {
