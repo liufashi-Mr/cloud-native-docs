@@ -46,9 +46,17 @@ Linux 文件权限最终比较数值 UID 和 GID，而不是用户名字符串�
 
 bind mount 的 source 路径属于 Docker daemon 主机。远程 Docker context 下，CLI 当前目录不是远端主机目录；把本地路径传给远端 daemon 通常会找不到或挂到意外位置。Docker Desktop 的 daemon 位于 Linux VM，Desktop 负责把获准的 macOS/Windows 路径共享进 VM；文件共享设置、大小写、事件通知、owner 映射和 I/O 性能可能与原生 Linux 不同。不要把本机 bind mount 的测试结果直接当作生产 Linux 的性能或权限保证。
 
+## bind propagation 的权限边界
+
+Docker 的 bind propagation 默认为 `rprivate`：原 source 与容器内 replica 之间不会传播后续创建的 submount。传播选项只适用于 bind mount，不能给 named volume 或 tmpfs 配置这一语义。
+
+`rshared` 递归地允许 original mount 与 replica 之间双向传播 submount；`rslave` 递归地只允许从 original mount 向 replica 单向传播，容器内新增 submount 不回传主机。还有非递归的 `shared`、`slave` 与 `private` 变体，但应用通常不需要主动改变默认值。
+
+在 Linux host 上，source mount 自身和父级必须先具备兼容的 mount propagation 配置，Docker 参数才可能产生预期结果；这还扩大了容器影响宿主 mount 视图的边界。Docker Desktop 不支持 bind mount 传播，因此不能把 Linux 上的 `rshared`/`rslave` 行为移植到 Desktop。除非工作负载明确需要在 namespace 间传播动态 submount，并且已审查宿主配置与写权限，否则不要授予不必要的传播权限。
+
 ## 检查、备份、恢复与清理
 
-下面流程只演示 named volume 的文件级离线备份。前置条件：已构建 `demo-api:dev`，当前 Docker context 指向本机可用的 Linux Engine；当前目录可创建新的 `demo-api-volume-backup` 目录；示例容器、Volume 和目录名称均未占用。`alpine:3.22` tag 可变，受控环境应改用经批准的 digest。生产数据库必须先使用数据库原生的快照/导出、复制或停写协议获得 application-consistent 状态；绝不要把“对 live DB 目录直接 tar”描述为 application-consistent backup。
+下面流程只演示 named volume 的文件级离线备份。前置条件：已构建 `demo-api:dev`，当前 Docker context 指向本机可用的 Linux Engine；当前目录可创建新的 `demo-api-volume-backup` 目录；示例容器、Volume 和目录名称均未占用。`alpine:3.22` tag 可变，受控环境应改用经批准的 digest。直接对 live DB 数据目录运行 tar 不是 application-consistent backup。生产数据库必须先使用数据库原生的快照/导出、复制或停写协议获得一致状态，再备份对应输出或静止数据。
 
 ```bash
 mkdir demo-api-volume-backup

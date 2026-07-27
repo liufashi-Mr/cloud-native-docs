@@ -46,7 +46,7 @@ Docker 的默认行为是：未指定 `--network` 的 Linux 容器连接默认 b
 
 ## 观察名称解析和端口发布
 
-前置条件：已经构建 `demo-api:dev`，当前 Docker context 指向可创建 Linux 容器和网络的 Engine，主机端口 `8080` 空闲，并且示例名称尚未被占用。探测镜像 `curlimages/curl:8.11.1` 使用明确版本但 tag 仍可变；不可变生产输入必须锁定组织批准的 digest。
+前置条件：已经构建 `demo-api:dev`，当前 context 必须是 local Docker Engine 或 Docker Desktop context，主机端口 `8080` 空闲，并且示例名称尚未被占用；remote context 下必须在 daemon 主机验证 curl，或将 URL 改为可路由的 daemon host 地址，不能把 CLI 主机的 loopback 当成 daemon loopback。探测镜像 `curlimages/curl:8.11.1` 使用明确版本但 tag 仍可变；不可变生产输入必须锁定组织批准的 digest。
 
 ```bash
 docker network create demo-api-net

@@ -26,28 +26,30 @@ describe('Docker / OCI continuous examples', () => {
     })
     expect(document.errors).toEqual([])
 
-    const compose = document.toJS() as {
+    expect(document.toJS()).toEqual({
       services: {
         api: {
-          build: string
-          ports: string[]
-        }
+          build: '.',
+          ports: ['127.0.0.1:8080:3000'],
+          environment: { PORT: '3000' },
+          healthcheck: {
+            test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/healthz'],
+            interval: '5s',
+            timeout: '2s',
+            retries: 12,
+          },
+          volumes: ['api-data:/app/data'],
+        },
         probe: {
-          depends_on: Record<string, { condition: string }>
-        }
-      }
-      volumes: Record<string, unknown>
-    }
-
-    expect(Object.keys(compose.services)).toEqual(['api', 'probe'])
-    expect(compose.services.api).toMatchObject({
-      build: '.',
-      ports: ['127.0.0.1:8080:3000'],
+          image: 'curlimages/curl:8.11.1',
+          depends_on: {
+            api: { condition: 'service_healthy' },
+          },
+          command: ['http://api:3000/healthz'],
+        },
+      },
+      volumes: { 'api-data': null },
     })
-    expect(compose.services.probe.depends_on).toEqual({
-      api: { condition: 'service_healthy' },
-    })
-    expect(Object.keys(compose.volumes)).toEqual(['api-data'])
   })
 
   it('carries the demo API identity across source, lifecycle, and Compose', () => {

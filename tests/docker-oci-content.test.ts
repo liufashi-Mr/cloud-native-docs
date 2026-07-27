@@ -364,6 +364,17 @@ function expectStepsInOrder(source: string, steps: string[], context: string): v
   }
 }
 
+function expectExactStepsInOrder(lines: string[], steps: string[], context: string): void {
+  let previousPosition = -1
+  for (const step of steps) {
+    const position = lines.indexOf(step, previousPosition + 1)
+    expect(position, `${context} is missing or misorders: ${step}`).toBeGreaterThan(
+      previousPosition,
+    )
+    previousPosition = position
+  }
+}
+
 function mermaidEdgeInitiators(diagram: string): string[] {
   return diagram.split('\n').flatMap((line) => {
     const match = line.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:-->>|->>|-->|-\.->|==>)/)
@@ -605,6 +616,157 @@ describe('Docker / OCI content contracts', () => {
     expect(source).toContain('host binfmt')
     expect(source).toContain('先用 `docker buildx inspect --bootstrap` 检查 builder capability')
 
+  })
+
+  it('keeps lifecycle signals, exit evidence, and restart behavior coherent', () => {
+    const file = 'docs/docker-oci/runtime/process-lifecycle.md'
+    const source = readRequiredPage(file)
+    const diagram = fenceContents(source, file, 'mermaid').join('\n')
+    const commands = bashCommands(source, file).join('\n')
+
+    expectStepsInOrder(diagram, [
+      'DE->>RT: request configured stop signal',
+      'RT->>APP: deliver configured stop signal',
+      'APP-->>RT: exit with status',
+      'RT-->>DE: report exit status',
+    ], 'graceful stop actor path')
+    expect(diagram).toContain('RT->>APP: deliver SIGKILL after timeout')
+    expect(diagram).not.toMatch(/DE->>APP:|APP-->>DE:/)
+
+    expect(source).toMatch(/Node\.js 24[^。]*没有安装 `SIGTERM` handler[^。]*143[^。]*128 \+ 15/)
+    expect(source).toMatch(
+      /只有应用主动处理 `SIGTERM`[^。]*停止接收新请求[^。]*`server\.close`[^。]*exit code 0/,
+    )
+    expect(source).toMatch(
+      /人工执行 `docker stop`[^。]*忽略 restart policy[^。]*手工 `docker start`/,
+    )
+    expect(markdownTable(source, '| policy | Docker 行为边界 | 适用判断 |')).toEqual([
+      '| policy | Docker 行为边界 | 适用判断 |',
+      '| --- | --- | --- |',
+      '| `no` | 默认，不自动重启 | 调试或由外部系统管理 |',
+      '| `on-failure[:max-retries]` | 仅非零 exit code 时重启，可限制次数；不会因 daemon restart 恢复 | 可由退出码表达瞬时失败的任务 |',
+      '| `always` | 退出后重启；人工 stop 后保持停止，直到手工 start 或 daemon restart 时恢复 | 需要持续运行且接受该语义 |',
+      '| `unless-stopped` | 类似 `always`，但 daemon restart 后仍保持人工停止 | 希望人工停止跨 daemon restart 保留 |',
+    ])
+    expect(source).toMatch(/人工 stop[^。]*不会触发[^。]*非零失败重启/)
+
+    expectStepsInOrder(commands, [
+      'docker run --detach --name demo-api-lifecycle',
+      'docker container inspect demo-api-lifecycle',
+      'docker logs demo-api-lifecycle',
+      'curl --fail http://127.0.0.1:8080/healthz',
+      'docker stop demo-api-lifecycle',
+      "--format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}}'",
+      'docker rm demo-api-lifecycle',
+      'docker container ls --all --filter name=^/demo-api-lifecycle$',
+    ], 'lifecycle evidence and cleanup')
+  })
+
+  it('limits host-loopback checks to a local Docker context', () => {
+    for (const file of [
+      'docs/docker-oci/runtime/process-lifecycle.md',
+      'docs/docker-oci/runtime/networking.md',
+      'docs/docker-oci/runtime/compose.md',
+    ]) {
+      const source = readRequiredPage(file)
+      const prerequisite = source.split('\n').find((line) => line.startsWith('前置条件：')) ?? ''
+      expect(prerequisite, `${file} must require a local context`).toMatch(
+        /local Docker Engine 或 Docker Desktop context/,
+      )
+      expect(prerequisite, `${file} must explain remote loopback`).toMatch(
+        /remote context[^。]*(?:daemon 主机|可路由的 daemon host 地址)/,
+      )
+    }
+  })
+
+  it('keeps storage backup and bind propagation boundaries explicit', () => {
+    const file = 'docs/docker-oci/runtime/storage.md'
+    const source = readRequiredPage(file)
+    const commands = bashCommands(source, file).join('\n')
+
+    expect(source).toContain('bind propagation 默认为 `rprivate`')
+    expect(source).toContain('传播选项只适用于 bind mount')
+    expect(source).toContain(
+      '`rshared` 递归地允许 original mount 与 replica 之间双向传播 submount',
+    )
+    expect(source).toContain(
+      '`rslave` 递归地只允许从 original mount 向 replica 单向传播',
+    )
+    expect(source).toMatch(/Linux host[^。]*mount propagation/)
+    expect(source).toMatch(/Docker Desktop[^。]*传播/)
+    expect(source).toMatch(/不要[^。]*不必要[^。]*传播权限/)
+    expect(source).toContain(
+      '直接对 live DB 数据目录运行 tar 不是 application-consistent backup',
+    )
+
+    expectStepsInOrder(commands, [
+      'docker container inspect demo-api-storage',
+      'docker stop demo-api-storage',
+      'alpine:3.22 tar -C /source -cf /backup/api-data.tar .',
+      'docker volume create demo-api-data-restored',
+      'alpine:3.22 tar -C /restore -xf /backup/api-data.tar',
+      "readFileSync('/app/data/state.txt')",
+      'docker rm demo-api-storage',
+      'docker volume rm demo-api-data demo-api-data-restored',
+      'rm demo-api-volume-backup/api-data.tar',
+      'rmdir demo-api-volume-backup',
+      'docker volume ls --filter name=demo-api-data',
+    ], 'offline backup, restore, evidence, and cleanup')
+  })
+
+  it('models Compose as two requests and separates environment precedence', () => {
+    const file = 'docs/docker-oci/runtime/compose.md'
+    const source = readRequiredPage(file)
+    const diagram = fenceContents(source, file, 'mermaid').join('\n')
+    const commands = bashCommands(source, file)
+      .map((command) => command.replace(/\s+/g, ' '))
+
+    expectStepsInOrder(diagram, [
+      'DEV->>CLI: docker compose up --build --wait api',
+      'DE->>API: start demo-api on port 3000',
+      'CLI-->>DEV: return after api is healthy',
+      'DEV->>CLI: docker compose run --rm probe',
+      'DE->>PROBE: start one-off curl command',
+      'PROBE->>API: GET http://api:3000/healthz',
+      'PROBE-->>DE: exit after response',
+      'DE-->>CLI: report probe exit',
+      'CLI->>DE: remove one-off probe container',
+      'CLI-->>DEV: return probe exit code',
+    ], 'Compose up and run requests')
+
+    expect(source).toContain(
+      'https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/',
+    )
+    expect(source).toContain(
+      'https://docs.docker.com/compose/how-tos/environment-variables/envvars-precedence/',
+    )
+    expectStepsInOrder(source, [
+      '插值来源从高到低是：当前 shell environment',
+      '显式 `--env-file` 指定的文件',
+      '未指定 `--env-file` 时 project directory 的 `.env`',
+      'project directory 由 `--project-directory`、第一个 `-f` 文件所在目录、当前工作目录依次确定',
+    ], 'Compose interpolation precedence')
+    expectStepsInOrder(source, [
+      '`docker compose run -e`',
+      '`environment` 或 `env_file` 中由 shell 或环境文件插值的值',
+      'Compose 文件中 `environment` 的字面值',
+      '`env_file` 的字面值',
+      '镜像中的 `ENV`',
+    ], 'container environment precedence')
+    expectExactStepsInOrder(commands, [
+      'docker compose config --environment',
+      'docker compose config',
+      'docker compose up --build --wait api',
+      'docker compose run --rm probe',
+      'docker compose ps --all',
+      'docker compose logs api',
+      'docker compose exec api wget -qO- http://127.0.0.1:3000/healthz',
+      'curl --fail http://127.0.0.1:8080/healthz',
+      'docker compose down',
+      'docker volume ls --filter label=com.docker.compose.project=demo-api --filter label=com.docker.compose.volume=api-data',
+      'docker compose down --volumes',
+      'docker volume ls --filter label=com.docker.compose.project=demo-api --filter label=com.docker.compose.volume=api-data',
+    ], 'Compose evidence and cleanup')
   })
 
   it('executes the documented OCI validator against binary layers and corrupt content', () => {

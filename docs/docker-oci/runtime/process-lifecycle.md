@@ -19,13 +19,17 @@ sequenceDiagram
   RT->>APP: execute configured entrypoint
   APP->>APP: serve port 3000 and /healthz
   OP->>DE: docker stop demo-api
-  DE->>APP: deliver configured stop signal
+  DE->>RT: request configured stop signal
+  RT->>APP: deliver configured stop signal
   DE->>DE: wait through grace period
   alt process exits during grace period
-    APP-->>DE: report exit code
+    APP-->>RT: exit with status
+    RT-->>DE: report exit status
   else timeout expires
-    DE->>APP: deliver SIGKILL
-    APP-->>DE: report forced exit
+    DE->>RT: request forced termination
+    RT->>APP: deliver SIGKILL after timeout
+    APP-->>RT: exit after SIGKILL
+    RT-->>DE: report forced exit status
   end
   DE-->>OP: report stopped container state
 ```
@@ -38,7 +42,9 @@ OCI Runtime Specification 定义 `create`、`start`、`kill`、`delete` 等低�
 
 容器初始进程在自己的 PID namespace 中通常是 PID 1。Linux 对 PID 1 的默认信号处理有特殊规则，它还应回收孤儿子进程。应用若会派生子进程，应明确处理终止信号和回收；不能只因为进程在容器里就假定这些问题消失。
 
-Dockerfile 的 exec form，例如 `ENTRYPOINT ["node", "server.mjs"]`，直接执行应用。shell form 可能让 shell 成为 PID 1；如果 shell 没有 `exec` 应用或正确转发信号，应用可能收不到预期的 `SIGTERM`。对无法自行回收子进程的应用，可在 `docker run` 使用 `--init`，让一个小型 init 位于 PID 1 并转发信号、回收子进程；这不替代应用自己的优雅关闭逻辑。
+Dockerfile 的 exec form，例如 `ENTRYPOINT ["node", "server.mjs"]`，直接执行应用。shell form 可能让 shell 成为 PID 1；如果 shell 没有 `exec` 应用或正确转发信号，应用可能收不到预期的 `SIGTERM`。对无法自行回收子进程的应用，可在 `docker run` 使用 `--init`，让一个小型 init 位于 PID 1 并转发信号、回收子进程；它不会替应用改变信号退出状态，也不会让 exit code 自动变成 0。
+
+对 Node.js 24 的 Unix 进程，本例应用没有安装 `SIGTERM` handler；Node 的默认信号行为终止进程，因此正常收到该信号时通常观察到 exit code `143`，即 `128 + 15`。只有应用主动处理 `SIGTERM`，停止接收新请求，等待 `server.close` 完成并正常退出，才应预期 exit code 0。canonical `server.mjs` 为了保持最小示例没有加入该 handler，所以本页只解释这个差异，不改写源码。
 
 镜像可以用 Dockerfile `STOPSIGNAL` 设置停止信号，运行时也可用 `--stop-signal` 覆盖。Docker 默认通常使用 `SIGTERM`。docker stop 先发送停止信号，超时后再强制终止；Linux 容器超时后会收到 `SIGKILL`。`--stop-timeout` 配置容器的停止等待秒数，`docker stop --timeout` 可以为一次操作覆盖等待时间。建议让等待时间覆盖应用停止接收请求、完成在途工作和刷新持久状态所需的实测上界。
 
@@ -55,9 +61,11 @@ Docker 的 restart policy 决定容器退出后 Engine 是否尝试再启动它�
 | policy | Docker 行为边界 | 适用判断 |
 | --- | --- | --- |
 | `no` | 默认，不自动重启 | 调试或由外部系统管理 |
-| `on-failure[:max-retries]` | 仅非零 exit code 时重启，可限制次数 | 可由退出码表达瞬时失败的任务 |
-| `always` | 退出后重启；daemon 重启后也恢复 | 需要持续运行且接受该语义 |
-| `unless-stopped` | 类似 `always`，但人工停止会抑制后续自动恢复 | 希望人工停止跨 daemon 重启保留 |
+| `on-failure[:max-retries]` | 仅非零 exit code 时重启，可限制次数；不会因 daemon restart 恢复 | 可由退出码表达瞬时失败的任务 |
+| `always` | 退出后重启；人工 stop 后保持停止，直到手工 start 或 daemon restart 时恢复 | 需要持续运行且接受该语义 |
+| `unless-stopped` | 类似 `always`，但 daemon restart 后仍保持人工停止 | 希望人工停止跨 daemon restart 保留 |
+
+统一的 manual-stop 规则是：人工执行 `docker stop` 后，Docker 会忽略 restart policy，至少直到手工 `docker start`；`always` 还会在 daemon restart 后恢复，而 `unless-stopped` 在 daemon restart 后保持人工停止。`on-failure` 不会因 daemon restart 恢复，而且人工 stop 是管理动作，不会触发它所要求的非零失败重启。
 
 restart policy 不是进程监督器、健康修复或数据恢复方案。快速崩溃循环会反复产生日志和负载；应先读取 exit code、错误日志和资源证据。不要把 `--restart always` 当作掩盖启动失败的默认补丁。
 
@@ -69,7 +77,7 @@ restart policy 不是进程监督器、健康修复或数据恢复方案。快�
 
 ## 可复制的观察流程
 
-前置条件：已按[从源码到第一个容器](/docker-oci/guide/source-to-container)构建 `demo-api:dev`，当前 Docker context 可连接 Linux Engine，主机 `8080` 未被占用，并且没有名为 `demo-api-lifecycle` 的容器。这个版本 tag 便于练习但仍可变；生产输入应使用经批准的 digest。
+前置条件：已按[从源码到第一个容器](/docker-oci/guide/source-to-container)构建 `demo-api:dev`，当前 context 必须是 local Docker Engine 或 Docker Desktop context，主机 `8080` 未被占用，并且没有名为 `demo-api-lifecycle` 的容器；remote context 下必须在 daemon 主机验证 curl，或改用可路由的 daemon host 地址，不能把 CLI 主机的 loopback 当成 daemon loopback。这个版本 tag 便于练习但仍可变；生产输入应使用经批准的 digest。
 
 ```bash
 docker run --detach --name demo-api-lifecycle \
@@ -95,7 +103,7 @@ docker rm demo-api-lifecycle
 docker container ls --all --filter name=^/demo-api-lifecycle$
 ```
 
-成功证据依次是：inspect 显示 `running`、非零 PID、最终为 `healthy`，`curl` 返回 `ok`；停止后显示 `exited`、正常示例通常为 exit code 0 且 `oom=false`；删除后的最后一条列表为空。最后两条是本流程的清理与清理验证。若启动或停止不符合预期，先保留 stopped 容器，用 `docker logs demo-api-lifecycle` 和 inspect 取证，再执行删除；不要先强制删除证据。
+成功证据依次是：inspect 显示 `running`、非零 PID、最终为 `healthy`，日志显示 listener，`curl` 返回 `ok`；停止后显示 `exited`，这个未安装 SIGTERM handler 的 Node.js 24 示例通常为 exit code 143 且 `oom=false`，不能把它误写成 0；删除后的最后一条列表为空。最后两条是本流程的清理与清理验证。若启动或停止不符合预期，先保留 stopped 容器，用 `docker logs demo-api-lifecycle` 和 inspect 取证，再执行删除；不要先强制删除证据。
 
 ## 常见误区与边界
 
