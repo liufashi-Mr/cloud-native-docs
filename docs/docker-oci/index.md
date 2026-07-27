@@ -9,7 +9,8 @@ flowchart LR
   CLI["Docker CLI"] -->|requests build 请求构建| DE["Docker Engine"]
   DE -->|delegates build 委托构建| BK["BuildKit"]
   BK -->|produces content 生成内容| IMG["OCI image content"]
-  DE -->|pushes and pulls 推送与拉取| REG["Registry"]
+  DE -->|pushes content 推送内容| REG["Registry"]
+  REG -->|serves pull response 返回拉取内容| DE
   DE -->|asks lifecycle operations 请求生命周期操作| CD["containerd"]
   CD -->|invokes 调用| RT["OCI runtime such as runc"]
   RT -->|creates 创建| PROC["isolated container process"]
@@ -69,4 +70,4 @@ docker context show
 
 构建路径依次是 [Dockerfile](/docker-oci/build/dockerfile)、[BuildKit 缓存](/docker-oci/build/buildkit-cache) 和[多平台构建](/docker-oci/build/multi-platform-builds)。运行路径依次是[进程生命周期](/docker-oci/runtime/process-lifecycle)、[网络与端口](/docker-oci/runtime/networking)、[存储与挂载](/docker-oci/runtime/storage) 和 [Compose](/docker-oci/runtime/compose)。
 
-最后阅读 [OCI 规范关系](/docker-oci/oci/specifications)、[安全边界](/docker-oci/operations/security)、[故障排查](/docker-oci/operations/troubleshooting) 和[命令速查](/docker-oci/reference/command-map)。当镜像要交给集群时，用[从容器到 Kubernetes](/docker-oci/guide/container-to-kubernetes)对照镜像配置和 PodSpec 的职责。
+最后阅读 [OCI 规范关系](/docker-oci/oci/specifications)、[安全边界](/docker-oci/operations/security)、[故障排查](/docker-oci/operations/troubleshooting) 和[命令速查](/docker-oci/reference/command-map)。当镜像要交给集群时，用[从容器到 Kubernetes](/docker-oci/guide/container-to-kubernetes)对照镜像配置和 PodSpec 的职责。完成任一分支后，可以[返回本模块总览](/docker-oci/)重新选择路径。
