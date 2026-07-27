@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -37,6 +39,15 @@ interface SyntheticOciLayout {
   config: string
   index: string
   ociLayout: string
+}
+
+interface KubernetesWorkflowResult {
+  calls: string[]
+  curlCalls: string[]
+  remainingRunDirectories: string[]
+  status: number | null
+  stderr: string
+  stdout: string
 }
 
 const root = resolve(import.meta.dirname, '..')
@@ -417,17 +428,164 @@ function createSyntheticOciLayout(layout: string): SyntheticOciLayout {
   }
 }
 
-function wrapSyntheticLayoutInIndex(layout: string, fixture: SyntheticOciLayout): void {
+function wrapSyntheticLayoutInIndex(
+  layout: string,
+  fixture: SyntheticOciLayout,
+  references = 1,
+): void {
   const nestedIndex = writeOciBlob(
     layout,
     'application/vnd.oci.image.index.v1+json',
     readFileSync(fixture.index),
   )
   writeFileSync(fixture.index, JSON.stringify({
-    manifests: [nestedIndex],
+    manifests: Array.from({ length: references }, () => nestedIndex),
     mediaType: 'application/vnd.oci.image.index.v1+json',
     schemaVersion: 2,
   }))
+}
+
+function replaceFirstSyntheticConfig(
+  layout: string,
+  fixture: SyntheticOciLayout,
+  mediaType: string,
+  content: string | Buffer,
+): string {
+  const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+  const descriptor = index.manifests.find(
+    (candidate: OciDescriptor) =>
+      candidate.mediaType === 'application/vnd.oci.image.manifest.v1+json',
+  ) as OciDescriptor
+  const [, manifestEncoded] = descriptor.digest.split(':', 2)
+  const manifest = JSON.parse(
+    readFileSync(resolve(layout, 'blobs', 'sha256', manifestEncoded), 'utf8'),
+  )
+  const config = writeOciBlob(layout, mediaType, content)
+  manifest.config = config
+  const replacement = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.manifest.v1+json',
+    JSON.stringify(manifest),
+  )
+  Object.assign(descriptor, replacement)
+  writeFileSync(fixture.index, JSON.stringify(index))
+  return resolve(layout, 'blobs', 'sha256', config.digest.slice('sha256:'.length))
+}
+
+function appendUnknownSyntheticDescriptor(
+  layout: string,
+  fixture: SyntheticOciLayout,
+): string {
+  const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+  const descriptor = writeOciBlob(
+    layout,
+    'application/vnd.example.binary',
+    Buffer.from([0x00, 0xff, 0x7f, 0x42]),
+  )
+  index.manifests.push(descriptor)
+  writeFileSync(fixture.index, JSON.stringify(index))
+  return resolve(layout, 'blobs', 'sha256', descriptor.digest.slice('sha256:'.length))
+}
+
+function kubernetesWorkflow(source: string, file: string): string {
+  const workflow = fenceContents(source, file, 'bash')
+    .find((content) => content.includes('kubectl apply'))
+  expect(workflow, `${file} must contain an executable kubectl workflow`).toBeDefined()
+  return workflow ?? ''
+}
+
+function writeExecutable(file: string, lines: string[]): void {
+  writeFileSync(file, `${lines.join('\n')}\n`)
+  chmodSync(file, 0o755)
+}
+
+function runKubernetesWorkflow(
+  workflow: string,
+  manifest: string,
+  options: {
+    createExit?: number
+    deleteExit?: number
+    portForwardExit?: number
+  } = {},
+): KubernetesWorkflowResult {
+  const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-kubectl-workflow-'))
+  const bin = resolve(temporaryRoot, 'bin')
+  const callsFile = resolve(temporaryRoot, 'kubectl-calls.txt')
+  const curlCallsFile = resolve(temporaryRoot, 'curl-calls.txt')
+  mkdirSync(bin)
+  writeFileSync(resolve(temporaryRoot, 'demo-api-pod.template.yaml'), manifest)
+  writeExecutable(resolve(bin, 'kubectl'), [
+    '#!/usr/bin/env bash',
+    'set -u',
+    'printf \'%s\\n\' "$*" >> "$KUBECTL_CALLS"',
+    'if [[ "${1:-}" == "create" && "${2:-}" == "namespace" ]]; then',
+    '  exit "${STUB_CREATE_EXIT:-0}"',
+    'fi',
+    'if [[ " $* " == *" port-forward "* ]]; then',
+    '  if [[ "${STUB_PORT_FORWARD_EXIT:-0}" -ne 0 ]]; then',
+    '    echo "stub port-forward failure" >&2',
+    '    exit "$STUB_PORT_FORWARD_EXIT"',
+    '  fi',
+    '  echo "Forwarding from 127.0.0.1:18080 -> 80"',
+    '  trap \'exit 0\' TERM INT',
+    '  while :; do sleep 1; done',
+    'fi',
+    'if [[ "${1:-}" == "delete" ]]; then',
+    '  exit "${STUB_DELETE_EXIT:-0}"',
+    'fi',
+    'exit 0',
+  ])
+  writeExecutable(resolve(bin, 'curl'), [
+    '#!/usr/bin/env bash',
+    'set -u',
+    'printf \'%s\\n\' "$*" >> "$CURL_CALLS"',
+    'output=""',
+    'while [[ "$#" -gt 0 ]]; do',
+    '  if [[ "$1" == "--output" ]]; then',
+    '    output="$2"',
+    '    shift 2',
+    '  else',
+    '    shift',
+    '  fi',
+    'done',
+    '[[ -n "$output" ]] && printf \'ok\\n\' > "$output"',
+    'exit 0',
+  ])
+
+  try {
+    const result = spawnSync('/bin/bash', [], {
+      cwd: temporaryRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CURL_CALLS: curlCallsFile,
+        DEMO_API_IMAGE: `registry.example.com/team/demo-api@sha256:${'a'.repeat(64)}`,
+        KUBECTL_CALLS: callsFile,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        STUB_CREATE_EXIT: String(options.createExit ?? 0),
+        STUB_DELETE_EXIT: String(options.deleteExit ?? 0),
+        STUB_PORT_FORWARD_EXIT: String(options.portForwardExit ?? 0),
+        TMPDIR: temporaryRoot,
+      },
+      input: workflow,
+      timeout: 15_000,
+    })
+    return {
+      calls: existsSync(callsFile)
+        ? readFileSync(callsFile, 'utf8').trim().split('\n').filter(Boolean)
+        : [],
+      curlCalls: existsSync(curlCallsFile)
+        ? readFileSync(curlCallsFile, 'utf8').trim().split('\n').filter(Boolean)
+        : [],
+      remainingRunDirectories: readdirSync(temporaryRoot)
+        .filter((entry) => entry.startsWith('demo-api-handoff.')),
+      status: result.status,
+      stderr: result.stderr,
+      stdout: result.stdout,
+    }
+  } finally {
+    rmSync(temporaryRoot, { force: true, recursive: true })
+  }
 }
 
 function markdownTable(source: string, header: string): string[] {
@@ -635,32 +793,107 @@ describe('Docker / OCI content contracts', () => {
     expect(source).toContain('kind load docker-image')
     expect(source).toContain('minikube image load')
     expect(source).toContain('不具备跨集群通用性')
-    expectExactStepsInOrder(commands, [
+    expect(source).toContain('本次唯一 namespace')
+    expect(source).toContain('Forwarding from 127.0.0.1:18080')
+    expect(source.match(/kill -0 "\$demo_api_port_forward_pid"/g)).toHaveLength(2)
+    expect(source.match(/if require_port_forward_alive; then/g)).toHaveLength(3)
+    expectStepsInOrder(source, [
       'set -euo pipefail',
-      ': "${DEMO_API_IMAGE:?set DEMO_API_IMAGE to an approved registry/repository@sha256:digest}"',
-      'trap cleanup EXIT INT TERM',
+      'demo_api_namespace="demo-api-$(date +%s)-$$"',
+      'demo_api_run_dir=$(mktemp -d "${TMPDIR:-/tmp}/demo-api-handoff.XXXXXX")',
+      'trap cleanup EXIT',
       'kubectl config current-context',
       'kubectl cluster-info',
-      'sed "s|image: demo-api:dev|image: ${DEMO_API_IMAGE}|" demo-api-pod.template.yaml > demo-api-pod.yaml',
-      'kubectl apply -f demo-api-pod.yaml',
-      'kubectl wait --for=condition=Ready pod/demo-api --timeout=120s',
-      'kubectl get pod/demo-api -o wide',
-      'kubectl get service/demo-api',
-      'kubectl port-forward service/demo-api 18080:80 >demo-api-port-forward.log 2>&1 &',
-      'demo_api_port_forward_pid=$!',
-      'if curl --fail --silent --show-error --output demo-api-healthz.txt http://127.0.0.1:18080/healthz; then',
-      'test "$(cat demo-api-healthz.txt)" = "ok"',
-      'cleanup',
-      'trap - EXIT INT TERM',
-    ], 'Kubernetes apply, evidence, and cleanup')
+      'kubectl create namespace "$demo_api_namespace"',
+      'kubectl apply -n "$demo_api_namespace" -f "$demo_api_manifest"',
+      'kubectl wait -n "$demo_api_namespace" --for=condition=Ready pod/demo-api --timeout=120s',
+      'kubectl port-forward -n "$demo_api_namespace" service/demo-api 18080:80',
+      'grep -Fq \'Forwarding from 127.0.0.1:18080\' "$demo_api_port_forward_log"',
+      'curl --fail --silent --show-error --output "$demo_api_healthz" http://127.0.0.1:18080/healthz',
+      'test "$(cat "$demo_api_healthz")" = "ok"',
+    ], 'Kubernetes apply, forwarding evidence, and request')
     for (const cleanupCommand of [
       'kill "$demo_api_port_forward_pid"',
       'wait "$demo_api_port_forward_pid"',
-      'kubectl delete --ignore-not-found -f demo-api-pod.yaml',
-      'rm -f demo-api-healthz.txt demo-api-port-forward.log demo-api-pod.yaml demo-api-pod.template.yaml',
+      'kubectl delete -n "$demo_api_namespace" --ignore-not-found -f "$demo_api_manifest" --wait=true --timeout=120s',
+      'kubectl delete namespace "$demo_api_namespace" --wait=true --timeout=120s',
+      'rm -r "$demo_api_run_dir"',
     ]) {
       expect(commands).toContain(cleanupCommand)
     }
+    expect(source).toContain('原始失败码')
+    expect(source).toContain('成功路径的 cleanup 失败仍保持非零退出')
+  })
+
+  it('executes the Kubernetes workflow with namespace ownership and cleanup', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const manifest = fenceContents(source, file, 'yaml').join('\n---\n')
+    const result = runKubernetesWorkflow(kubernetesWorkflow(source, file), manifest)
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.curlCalls).toHaveLength(1)
+    expect(result.remainingRunDirectories).toEqual([])
+    const create = result.calls.find((call) => call.startsWith('create namespace ')) ?? ''
+    const namespace = create.slice('create namespace '.length)
+    expect(namespace).toMatch(/^demo-api-[0-9]+-[0-9]+$/)
+    expectStepsInOrder(result.calls.join('\n'), [
+      `create namespace ${namespace}`,
+      `apply -n ${namespace}`,
+      `wait -n ${namespace} --for=condition=Ready pod/demo-api`,
+      `get -n ${namespace} pod/demo-api -o wide`,
+      `get -n ${namespace} service/demo-api`,
+      `port-forward -n ${namespace} service/demo-api 18080:80`,
+      `delete -n ${namespace}`,
+      `delete namespace ${namespace} --wait=true --timeout=120s`,
+    ], 'stubbed Kubernetes ownership lifecycle')
+  })
+
+  it('propagates an early port-forward exit even when curl would return ok', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const manifest = fenceContents(source, file, 'yaml').join('\n---\n')
+    const result = runKubernetesWorkflow(
+      kubernetesWorkflow(source, file),
+      manifest,
+      { portForwardExit: 42 },
+    )
+
+    expect(result.status).toBe(42)
+    expect(result.stderr).toContain('stub port-forward failure')
+    expect(result.curlCalls).toEqual([])
+    expect(result.remainingRunDirectories).toEqual([])
+  })
+
+  it('fails immediately when its unique namespace cannot be created', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const manifest = fenceContents(source, file, 'yaml').join('\n---\n')
+    const result = runKubernetesWorkflow(
+      kubernetesWorkflow(source, file),
+      manifest,
+      { createExit: 43 },
+    )
+
+    expect(result.status).toBe(43)
+    expect(result.calls.some((call) => call.startsWith('apply '))).toBe(false)
+    expect(result.calls.some((call) => call.startsWith('delete '))).toBe(false)
+    expect(result.remainingRunDirectories).toEqual([])
+  })
+
+  it('turns successful-workflow namespace cleanup failure into failure', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const manifest = fenceContents(source, file, 'yaml').join('\n---\n')
+    const result = runKubernetesWorkflow(
+      kubernetesWorkflow(source, file),
+      manifest,
+      { deleteExit: 44 },
+    )
+
+    expect(result.status).toBe(44)
+    expect(result.calls.filter((call) => call.startsWith('delete '))).toHaveLength(2)
+    expect(result.remainingRunDirectories).toEqual([])
   })
 
   it('preserves failed OCI evidence and cleans only after recursive verification', () => {
@@ -1113,7 +1346,7 @@ describe('Docker / OCI content contracts', () => {
 
     try {
       const fixture = createSyntheticOciLayout(layout)
-      wrapSyntheticLayoutInIndex(layout, fixture)
+      wrapSyntheticLayoutInIndex(layout, fixture, 2)
       const result = spawnSync(process.execPath, ['--input-type=module'], {
         encoding: 'utf8',
         env: { ...process.env, DEMO_API_OCI_DIR: layout },
@@ -1122,11 +1355,125 @@ describe('Docker / OCI content contracts', () => {
 
       expect(result.status, result.stderr).toBe(0)
       expect(result.stdout).toContain(
-        'verified recursive OCI layout: manifests=3 configs=3 layers=3',
+        'verified unique OCI blobs: 9; manifests=3 configs=3 layers=2 skipped=0',
       )
       expect(result.stdout).toContain(
         'verified runnable platforms: linux/amd64, linux/arm64',
       )
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it('accepts a verified binary config without parsing it as JSON', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-binary-config-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      replaceFirstSyntheticConfig(
+        layout,
+        fixture,
+        'application/vnd.example.binary.config',
+        Buffer.from([0x00, 0xff, 0x10, 0x80]),
+      )
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain(
+        'verified unique OCI blobs: 8; manifests=3 configs=3 layers=2 skipped=0',
+      )
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it('verifies and skips an unknown index descriptor without parsing its bytes', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-unknown-descriptor-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      appendUnknownSyntheticDescriptor(layout, fixture)
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain(
+        'verified unique OCI blobs: 9; manifests=3 configs=3 layers=2 skipped=1',
+      )
+      expect(result.stdout).toContain(
+        'skipped unsupported descriptor mediaTypes: application/vnd.example.binary',
+      )
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it('rejects corrupted bytes behind binary config and unknown descriptors', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+
+    for (const fixtureType of ['binary config', 'unknown descriptor'] as const) {
+      const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-corrupt-unknown-'))
+      const layout = resolve(temporaryRoot, 'layout')
+      try {
+        const fixture = createSyntheticOciLayout(layout)
+        const blob = fixtureType === 'binary config'
+          ? replaceFirstSyntheticConfig(
+              layout,
+              fixture,
+              'application/vnd.example.binary.config',
+              Buffer.from([0x00, 0xff, 0x10, 0x80]),
+            )
+          : appendUnknownSyntheticDescriptor(layout, fixture)
+        const bytes = readFileSync(blob)
+        bytes[0] ^= 0xff
+        writeFileSync(blob, bytes)
+
+        const result = spawnSync(process.execPath, ['--input-type=module'], {
+          encoding: 'utf8',
+          env: { ...process.env, DEMO_API_OCI_DIR: layout },
+          input: script,
+        })
+        expect(result.status, fixtureType).not.toBe(0)
+        expect(result.stderr, fixtureType).toContain('digest mismatch')
+      } finally {
+        rmSync(temporaryRoot, { force: true, recursive: true })
+      }
+    }
+  })
+
+  it('rejects OCI index nesting beyond the documented maximum depth', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-deep-index-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      for (let depth = 0; depth < 34; depth += 1) {
+        wrapSyntheticLayoutInIndex(layout, fixture)
+      }
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('maximum OCI index depth exceeded')
     } finally {
       rmSync(temporaryRoot, { force: true, recursive: true })
     }
@@ -1164,6 +1511,18 @@ describe('Docker / OCI content contracts', () => {
         writeFileSync(fixture.index, JSON.stringify(index))
       },
       name: 'an incorrect descriptor size',
+    },
+    {
+      expected: 'size mismatch',
+      mutate: (fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        index.manifests.push({
+          ...index.manifests[0],
+          size: index.manifests[0].size + 1,
+        })
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'one digest reused with an inconsistent descriptor size',
     },
     {
       expected: 'digest mismatch',

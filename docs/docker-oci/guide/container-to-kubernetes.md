@@ -133,47 +133,108 @@ set -euo pipefail
 : "${DEMO_API_IMAGE:?set DEMO_API_IMAGE to an approved registry/repository@sha256:digest}"
 [[ "$DEMO_API_IMAGE" =~ @sha256:[a-f0-9]{64}$ ]] || { echo 'DEMO_API_IMAGE must use an approved SHA-256 digest' >&2; exit 2; }
 test -f demo-api-pod.template.yaml
-test ! -e demo-api-pod.yaml
-
+demo_api_namespace="demo-api-$(date +%s)-$$"
+demo_api_run_dir=$(mktemp -d "${TMPDIR:-/tmp}/demo-api-handoff.XXXXXX")
+demo_api_manifest="$demo_api_run_dir/demo-api-pod.yaml"
+demo_api_port_forward_log="$demo_api_run_dir/port-forward.log"
+demo_api_healthz="$demo_api_run_dir/healthz.txt"
 demo_api_port_forward_pid=''
+demo_api_namespace_created=0
+
+record_cleanup_failure() {
+  local status="$1"
+  if [[ "$status" -ne 0 && "$demo_api_cleanup_status" -eq 0 ]]; then
+    demo_api_cleanup_status="$status"
+  fi
+}
+
 cleanup() {
+  local original_status=$?
+  local demo_api_cleanup_status=0
+  local status=0
+  trap - EXIT INT TERM
   set +e
   if [[ -n "$demo_api_port_forward_pid" ]]; then
-    kill "$demo_api_port_forward_pid"
-    wait "$demo_api_port_forward_pid"
+    if kill -0 "$demo_api_port_forward_pid" 2>/dev/null; then
+      kill "$demo_api_port_forward_pid"
+      status=$?
+      record_cleanup_failure "$status"
+      wait "$demo_api_port_forward_pid"
+    else
+      if wait "$demo_api_port_forward_pid"; then status=1; else status=$?; fi
+      record_cleanup_failure "$status"
+    fi
   fi
-  kubectl delete --ignore-not-found -f demo-api-pod.yaml
-  rm -f demo-api-healthz.txt demo-api-port-forward.log demo-api-pod.yaml demo-api-pod.template.yaml
+  if [[ "$demo_api_namespace_created" -eq 1 ]]; then
+    kubectl delete -n "$demo_api_namespace" --ignore-not-found -f "$demo_api_manifest" --wait=true --timeout=120s
+    status=$?
+    record_cleanup_failure "$status"
+    kubectl delete namespace "$demo_api_namespace" --wait=true --timeout=120s
+    status=$?
+    record_cleanup_failure "$status"
+  fi
+  rm -r "$demo_api_run_dir"
+  status=$?
+  record_cleanup_failure "$status"
+
+  if [[ "$original_status" -ne 0 ]]; then exit "$original_status"; fi
+  exit "$demo_api_cleanup_status"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 kubectl config current-context
 kubectl cluster-info
-sed "s|image: demo-api:dev|image: ${DEMO_API_IMAGE}|" demo-api-pod.template.yaml > demo-api-pod.yaml
-kubectl apply -f demo-api-pod.yaml
-kubectl wait --for=condition=Ready pod/demo-api --timeout=120s
-kubectl get pod/demo-api -o wide
-kubectl get service/demo-api
+if kubectl create namespace "$demo_api_namespace"; then
+  demo_api_namespace_created=1
+else
+  status=$?
+  exit "$status"
+fi
 
-kubectl port-forward service/demo-api 18080:80 >demo-api-port-forward.log 2>&1 &
+sed "s|image: demo-api:dev|image: ${DEMO_API_IMAGE}|" demo-api-pod.template.yaml > "$demo_api_manifest"
+kubectl apply -n "$demo_api_namespace" -f "$demo_api_manifest"
+kubectl wait -n "$demo_api_namespace" --for=condition=Ready pod/demo-api --timeout=120s
+kubectl get -n "$demo_api_namespace" pod/demo-api -o wide
+kubectl get -n "$demo_api_namespace" service/demo-api
+
+kubectl port-forward -n "$demo_api_namespace" service/demo-api 18080:80 >"$demo_api_port_forward_log" 2>&1 &
 demo_api_port_forward_pid=$!
+
+require_port_forward_alive() {
+  local status=0
+  if kill -0 "$demo_api_port_forward_pid" 2>/dev/null; then return 0; fi
+  if wait "$demo_api_port_forward_pid"; then status=1; else status=$?; fi
+  cat "$demo_api_port_forward_log" >&2
+  return "$status"
+}
+
+demo_api_forwarding_ready=0
 for attempt in {1..30}; do
-  if curl --fail --silent --show-error --output demo-api-healthz.txt http://127.0.0.1:18080/healthz; then
+  if require_port_forward_alive; then :; else status=$?; exit "$status"; fi
+  if grep -Fq 'Forwarding from 127.0.0.1:18080' "$demo_api_port_forward_log"; then
+    demo_api_forwarding_ready=1
     break
   fi
   if [[ "$attempt" -eq 30 ]]; then
-    cat demo-api-port-forward.log >&2
+    cat "$demo_api_port_forward_log" >&2
     exit 1
   fi
   sleep 1
 done
-test "$(cat demo-api-healthz.txt)" = "ok"
-
-cleanup
-trap - EXIT INT TERM
+test "$demo_api_forwarding_ready" -eq 1
+if require_port_forward_alive; then :; else status=$?; exit "$status"; fi
+curl --fail --silent --show-error --output "$demo_api_healthz" http://127.0.0.1:18080/healthz
+if require_port_forward_alive; then :; else status=$?; exit "$status"; fi
+test "$(cat "$demo_api_healthz")" = "ok"
 ```
 
-`kubectl wait` 返回零状态表示 Pod 已满足 Ready condition，不代表永久健康。后续 `get` 输出固化 Pod/Service 对象证据；受控的后台 port-forward 将 Service 映射到本机 `127.0.0.1:18080`，循环最多等待 30 秒，`demo-api-healthz.txt` 必须精确包含 `ok`。`trap` 在成功或失败时都尝试停止 port-forward、删除 API 对象与本地文件。本页不声称该流程已在项目 CI 或任何特定集群执行。
+namespace 名包含 timestamp 和 shell PID，是本次唯一 namespace；只有 `kubectl create namespace` 成功后，脚本才会在其中 apply、wait、get、port-forward 和 delete。因此它不会接管 default namespace 中同名的 Pod 或 Service。`kubectl wait` 返回零状态表示 Pod 已满足 Ready condition，不代表永久健康。
+
+受控的后台 port-forward 将 Service 映射到本机 `127.0.0.1:18080`。脚本把日志写入本次 `mktemp` 目录，每轮先用 `kill -0` 确认 PID 存活，再等待 `Forwarding from 127.0.0.1:18080` 证据；curl 前后也都重新检查 PID。进程提前退出时，`wait` 的真实非零状态会传递给整个脚本，而不会因本机其他端点恰好返回 `ok` 而被掩盖。
+
+EXIT trap 先记住原始失败码，然后只停止本次记录的 port-forward PID，显式以 `-n "$demo_api_namespace"` 删除本次 manifest，再用 `--wait=true` 删除 namespace，最后删除本次唯一临时目录。原始操作失败时保留原始状态；原始操作全部成功时，成功路径的 cleanup 失败仍保持非零退出。脚本不删除作为读者输入的 `demo-api-pod.template.yaml`；如果它仅为本次练习创建，读者可在确认无需保留后手动删除。本页不声称该流程已在项目 CI 或任何特定集群执行。
 
 ## kubelet、CRI 与 OCI runtime 的责任链
 

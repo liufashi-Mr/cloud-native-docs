@@ -107,7 +107,14 @@ if (!root) throw new Error('DEMO_API_OCI_DIR is required')
 
 const imageIndexMediaType = 'application/vnd.oci.image.index.v1+json'
 const imageManifestMediaType = 'application/vnd.oci.image.manifest.v1+json'
-const counts = { configs: 0, layers: 0, manifests: 0 }
+const imageConfigMediaType = 'application/vnd.oci.image.config.v1+json'
+const maxIndexDepth = 32
+const verifiedBlobs = new Map()
+const traversedObjects = new Set()
+const manifestDigests = new Set()
+const configDigests = new Set()
+const layerDigests = new Set()
+const skippedDescriptors = new Map()
 const runnablePlatforms = new Set()
 
 function parseJson(bytes, role) {
@@ -142,6 +149,14 @@ function verifyBlob(descriptor, role) {
     throw new Error(`invalid descriptor digest: ${descriptor.digest}`)
   }
 
+  const cached = verifiedBlobs.get(descriptor.digest)
+  if (cached) {
+    if (cached.size !== descriptor.size) {
+      throw new Error(`size mismatch: ${descriptor.digest} (${role})`)
+    }
+    return cached.bytes
+  }
+
   let bytes
   try {
     bytes = readFileSync(join(root, 'blobs', algorithm, encoded))
@@ -155,6 +170,7 @@ function verifyBlob(descriptor, role) {
   if (actual !== descriptor.digest) {
     throw new Error(`digest mismatch: ${descriptor.digest} (${role})`)
   }
+  verifiedBlobs.set(descriptor.digest, { bytes, size: bytes.length })
   return bytes
 }
 
@@ -166,14 +182,18 @@ function verifyManifest(descriptor, bytes, role) {
   }
 
   const configBytes = verifyBlob(manifest.config, `${role} config`)
-  parseJson(configBytes, `${role} config`)
-  counts.configs += 1
+  configDigests.add(manifest.config.digest)
+  if (manifest.config.mediaType === imageConfigMediaType) {
+    parseJson(configBytes, `${role} config`)
+  }
   for (const [position, layer] of manifest.layers.entries()) {
     verifyBlob(layer, `${role} layer[${position}]`)
-    counts.layers += 1
+    layerDigests.add(layer.digest)
   }
-  counts.manifests += 1
+  manifestDigests.add(descriptor.digest)
+}
 
+function recordRunnablePlatform(descriptor) {
   const platform = descriptor.platform
   const referenceType = descriptor.annotations?.['vnd.docker.reference.type']
   if (
@@ -187,7 +207,10 @@ function verifyManifest(descriptor, bytes, role) {
   }
 }
 
-function verifyIndex(index, role) {
+function verifyIndex(index, role, depth) {
+  if (depth > maxIndexDepth) {
+    throw new Error(`maximum OCI index depth exceeded: ${depth} > ${maxIndexDepth}`)
+  }
   if (index.schemaVersion !== 2 || !Array.isArray(index.manifests)) {
     throw new Error(`invalid image index: ${role}`)
   }
@@ -195,11 +218,23 @@ function verifyIndex(index, role) {
     const descriptorRole = `${role} manifests[${position}]`
     const bytes = verifyBlob(descriptor, descriptorRole)
     if (descriptor.mediaType === imageManifestMediaType) {
-      verifyManifest(descriptor, bytes, descriptorRole)
+      recordRunnablePlatform(descriptor)
+      const traversalKey = `manifest:${descriptor.digest}`
+      if (!traversedObjects.has(traversalKey)) {
+        traversedObjects.add(traversalKey)
+        verifyManifest(descriptor, bytes, descriptorRole)
+      }
     } else if (descriptor.mediaType === imageIndexMediaType) {
-      verifyIndex(parseJson(bytes, descriptorRole), descriptorRole)
+      const traversalKey = `index:${descriptor.digest}`
+      if (!traversedObjects.has(traversalKey)) {
+        traversedObjects.add(traversalKey)
+        verifyIndex(parseJson(bytes, descriptorRole), descriptorRole, depth + 1)
+      }
     } else {
-      throw new Error(`unsupported top-level mediaType: ${descriptor.mediaType}`)
+      const mediaType = typeof descriptor.mediaType === 'string'
+        ? descriptor.mediaType
+        : '<missing>'
+      skippedDescriptors.set(`${descriptor.digest}|${mediaType}`, mediaType)
     }
   }
 }
@@ -208,21 +243,30 @@ const layoutMetadata = readJsonFile('oci-layout')
 if (layoutMetadata.imageLayoutVersion !== '1.0.0') {
   throw new Error(`unsupported imageLayoutVersion: ${layoutMetadata.imageLayoutVersion}`)
 }
-verifyIndex(readJsonFile('index.json'), 'index.json')
+verifyIndex(readJsonFile('index.json'), 'index.json', 0)
 console.log(
-  `verified recursive OCI layout: manifests=${counts.manifests} configs=${counts.configs} layers=${counts.layers}`,
+  `verified unique OCI blobs: ${verifiedBlobs.size}; manifests=${manifestDigests.size} configs=${configDigests.size} layers=${layerDigests.size} skipped=${skippedDescriptors.size}`,
 )
 console.log(
   `verified runnable platforms: ${[...runnablePlatforms].sort().join(', ') || 'none declared'}`,
 )
+if (skippedDescriptors.size > 0) {
+  console.log(
+    `skipped unsupported descriptor mediaTypes: ${[...new Set(skippedDescriptors.values())].sort().join(', ')}`,
+  )
+}
 NODE
 rm -r demo-api-oci-layout
 rm demo-api.oci.tar
 ```
 
-build 成功时会生成 OCI archive，两条 `test` 以零状态确认布局入口。验证器首先解析 `oci-layout` 并要求当前 `imageLayoutVersion` 为 `1.0.0`，再从 `index.json` 递归跟随 index/manifest descriptor，对每个 manifest、config 和 layer blob 重算 size 与 digest。index、manifest 和 config 作为 JSON 解析；layer 一律只按原始 bytes 校验，因此 gzip binary layer 不会被误当成 JSON。用 image manifest 表示的 attestation 辅助对象仍会校验 config 与所有 layer，但 `unknown/unknown` 或标记为 attestation 的 descriptor 不计入 runnable platform。
+build 成功时会生成 OCI archive，两条 `test` 以零状态确认布局入口。验证器首先解析 `oci-layout` 并要求当前 `imageLayoutVersion` 为 `1.0.0`，再从 `index.json` 递归跟随已识别的 index/manifest descriptor，对它们及所引用的 config 和 layer blob 重算 size 与 digest。index 和 manifest 必须作为 JSON 解析；只有 config descriptor 的 `mediaType` 明确为 `application/vnd.oci.image.config.v1+json` 时才解析 config JSON，普通或未知 config mediaType 只校验原始 bytes。layer 同样一律只按 bytes 校验，因此 binary config 和 gzip layer 不会被误当成 JSON。
 
-`verified recursive OCI layout: manifests=M configs=C layers=L` 是完整递归范围的成功证据，第二行列出 descriptor 明确声明的可运行平台。单平台 export 可以没有 descriptor `platform`，此时显示 `none declared` 不影响内容完整性校验，但不能把它当成平台匹配证明。
+index 中未识别的 descriptor mediaType 仍必须先通过 digest 和 size 校验，之后才作为 unsupported/out-of-scope 记录到 skipped 计数，验证器不把未知 bytes 猜成 JSON，也不仅因未知 mediaType 拒绝整个布局。用 image manifest 表示的 attestation 辅助对象仍会校验 config 与所有 layer，但 `unknown/unknown` 或标记为 attestation 的 descriptor 不计入 runnable platform。
+
+`verified unique OCI blobs: N; manifests=M configs=C layers=L skipped=S` 是完整递归范围的成功证据。验证器按 digest 缓存已校验 bytes，命中缓存时仍要求 descriptor size 与已知 bytes 一致；已遍历的 index 和 manifest 不重复递归，共享 layer 也只计入一次 unique layer。这使 duplicate nested-index DAG 不会指数展开。index 最多递归 32 层，超限会以 `maximum OCI index depth exceeded` 明确失败，而不是依赖几乎无法构造的 digest cycle。
+
+第二行列出 descriptor 明确声明的可运行平台；存在 skipped descriptor 时，第三行列出其 mediaType，提醒读者这些 bytes 已验证但内容未深入解释。单平台 export 可以没有 descriptor `platform`，此时显示 `none declared` 不影响内容完整性校验，但不能把它当成平台匹配证明。
 
 `set -euo pipefail` 保证任一步或 verifier 失败时整个流程保持非零退出，且不会继续执行末尾清理，便于保留 archive 和 layout 诊断。调查完成后，手动执行 `rm -r demo-api-oci-layout` 和 `rm demo-api.oci.tar`。这两条命令只针对本流程创建的明确相对路径。
 
