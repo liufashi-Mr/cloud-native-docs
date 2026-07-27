@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parseAllDocuments } from 'yaml'
 
 import { markdownFences } from './support/markdown'
 
@@ -29,6 +30,13 @@ interface OciDescriptor {
     os: string
   }
   size: number
+}
+
+interface SyntheticOciLayout {
+  binaryLayer: string
+  config: string
+  index: string
+  ociLayout: string
 }
 
 const root = resolve(import.meta.dirname, '..')
@@ -56,7 +64,7 @@ const pageContracts: Record<string, PageContract> = {
     terms: ['build context', '.dockerignore', 'image ID', 'container ID', 'localhost:8080'],
   },
   'docs/docker-oci/guide/container-to-kubernetes.md': {
-    fences: ['yaml', 'dockerfile', 'mermaid'],
+    fences: ['yaml', 'dockerfile', 'mermaid', 'bash'],
     phrases: [
       'PodSpec 的 command 覆盖镜像 Entrypoint',
       'PodSpec 的 args 覆盖镜像 Cmd',
@@ -287,6 +295,15 @@ function normalizedBashCommands(source: string, file: string): string[] {
   return normalizedShellCommands(bashCommands(source, file))
 }
 
+function yamlDocuments(source: string, file: string): unknown[] {
+  const yaml = fenceContents(source, file, 'yaml').join('\n---\n')
+  const documents = parseAllDocuments(yaml)
+  for (const document of documents) {
+    expect(document.errors, `${file} contains invalid YAML`).toEqual([])
+  }
+  return documents.map((document) => document.toJS())
+}
+
 function dockerfileInstructions(source: string): string[] {
   return continuedLines(source).filter((line) => !line.startsWith('#'))
 }
@@ -321,9 +338,10 @@ function writeOciBlob(
   }
 }
 
-function createSyntheticOciLayout(layout: string): { binaryLayer: string } {
+function createSyntheticOciLayout(layout: string): SyntheticOciLayout {
   mkdirSync(resolve(layout, 'blobs', 'sha256'), { recursive: true })
-  writeFileSync(resolve(layout, 'oci-layout'), JSON.stringify({ imageLayoutVersion: '1.0.0' }))
+  const ociLayout = resolve(layout, 'oci-layout')
+  writeFileSync(ociLayout, JSON.stringify({ imageLayoutVersion: '1.0.0' }))
 
   const binaryLayerBytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad, 0xbe, 0xef])
   const binaryLayer = writeOciBlob(
@@ -332,12 +350,16 @@ function createSyntheticOciLayout(layout: string): { binaryLayer: string } {
     binaryLayerBytes,
   )
 
+  let firstConfig = ''
   const runnableDescriptors = ['amd64', 'arm64'].map((architecture) => {
     const config = writeOciBlob(
       layout,
       'application/vnd.oci.image.config.v1+json',
       JSON.stringify({ architecture, os: 'linux', rootfs: { diff_ids: [], type: 'layers' } }),
     )
+    if (!firstConfig) {
+      firstConfig = resolve(layout, 'blobs', 'sha256', config.digest.slice('sha256:'.length))
+    }
     const manifest = writeOciBlob(
       layout,
       'application/vnd.oci.image.manifest.v1+json',
@@ -380,7 +402,8 @@ function createSyntheticOciLayout(layout: string): { binaryLayer: string } {
     platform: { architecture: 'unknown', os: 'unknown' },
   }
 
-  writeFileSync(resolve(layout, 'index.json'), JSON.stringify({
+  const index = resolve(layout, 'index.json')
+  writeFileSync(index, JSON.stringify({
     manifests: [...runnableDescriptors, attestationDescriptor],
     mediaType: 'application/vnd.oci.image.index.v1+json',
     schemaVersion: 2,
@@ -388,7 +411,23 @@ function createSyntheticOciLayout(layout: string): { binaryLayer: string } {
 
   return {
     binaryLayer: resolve(layout, 'blobs', 'sha256', binaryLayer.digest.slice('sha256:'.length)),
+    config: firstConfig,
+    index,
+    ociLayout,
   }
+}
+
+function wrapSyntheticLayoutInIndex(layout: string, fixture: SyntheticOciLayout): void {
+  const nestedIndex = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.index.v1+json',
+    readFileSync(fixture.index),
+  )
+  writeFileSync(fixture.index, JSON.stringify({
+    manifests: [nestedIndex],
+    mediaType: 'application/vnd.oci.image.index.v1+json',
+    schemaVersion: 2,
+  }))
 }
 
 function markdownTable(source: string, header: string): string[] {
@@ -448,6 +487,203 @@ describe('Docker / OCI content contracts', () => {
     }
     expect(source).toMatch(/(?:误区|注意|不要|并不|不能|边界)/)
     expect(source).toMatch(/\]\(\/docker-oci\//)
+  })
+
+  it('keeps the image-to-Pod mapping table exact and complete', () => {
+    const source = readRequiredPage('docs/docker-oci/guide/container-to-kubernetes.md')
+
+    expect(markdownTable(
+      source,
+      '| Image/Docker source | Kubernetes field or behavior | Boundary |',
+    )).toEqual([
+      '| Image/Docker source | Kubernetes field or behavior | Boundary |',
+      '| --- | --- | --- |',
+      '| image reference | `containers[].image` | kubelet asks CRI runtime to resolve and pull |',
+      '| image `Entrypoint` | `containers[].command` | Pod field overrides when present |',
+      '| image `Cmd` | `containers[].args` | Pod field overrides when present |',
+      '| image `Env` | `env` / `envFrom` | Pod values add or override runtime environment |',
+      '| image `User` | `securityContext.runAsUser` | policy/runtime validation may override or reject |',
+      '| `EXPOSE` | `containerPort` / Service | no automatic conversion |',
+      '| `HEALTHCHECK` | startup/liveness/readiness probes | no automatic conversion |',
+      '| `VOLUME` | Pod Volume and `volumeMounts` | no automatic storage provisioning |',
+    ])
+  })
+
+  it('keeps all four Pod command and args combinations explicit', () => {
+    const source = readRequiredPage('docs/docker-oci/guide/container-to-kubernetes.md')
+
+    expect(markdownTable(
+      source,
+      '| PodSpec `command` | PodSpec `args` | final argv source |',
+    )).toEqual([
+      '| PodSpec `command` | PodSpec `args` | final argv source |',
+      '| --- | --- | --- |',
+      '| omitted | omitted | image Entrypoint + image Cmd |',
+      '| omitted | present | image Entrypoint + PodSpec args |',
+      '| present | omitted | PodSpec command only; image Cmd is dropped |',
+      '| present | present | PodSpec command + PodSpec args |',
+    ])
+    expect(source).toContain('args-only retains image Entrypoint')
+    expect(source).toContain('command-only drops image Cmd')
+  })
+
+  it('parses and locks the documented Pod and Service manifests', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const documents = yamlDocuments(source, file) as Array<Record<string, any>>
+    const [pod, service] = documents
+
+    expect(documents).toHaveLength(2)
+    expect(pod).toMatchObject({
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: {
+        labels: { app: 'demo-api' },
+        name: 'demo-api',
+      },
+      spec: {
+        containers: [{
+          args: ['--mode=http'],
+          command: ['node', 'server.mjs'],
+          env: [{ name: 'PORT', value: '3000' }],
+          image: 'demo-api:dev',
+          livenessProbe: {
+            httpGet: { path: '/healthz', port: 'http' },
+          },
+          ports: [{ containerPort: 3000, name: 'http' }],
+          readinessProbe: {
+            httpGet: { path: '/healthz', port: 'http' },
+          },
+          resources: {
+            limits: { memory: '128Mi' },
+            requests: { cpu: '50m', memory: '64Mi' },
+          },
+          securityContext: {
+            allowPrivilegeEscalation: false,
+            runAsNonRoot: true,
+            runAsUser: 1000,
+          },
+          startupProbe: {
+            httpGet: { path: '/healthz', port: 'http' },
+          },
+          volumeMounts: [{ mountPath: '/app/data', name: 'data' }],
+        }],
+        volumes: [{ emptyDir: {}, name: 'data' }],
+      },
+    })
+    expect(service).toEqual({
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name: 'demo-api' },
+      spec: {
+        ports: [{ name: 'http', port: 80, targetPort: 'http' }],
+        selector: { app: 'demo-api' },
+      },
+    })
+  })
+
+  it('keeps OCI and Kubernetes handoff diagrams actor-driven', () => {
+    const specificationFile = 'docs/docker-oci/oci/specifications.md'
+    const specificationSource = readRequiredPage(specificationFile)
+    const specificationDiagram = fenceContents(
+      specificationSource,
+      specificationFile,
+      'mermaid',
+    ).join('\n')
+    const handoffFile = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const handoffSource = readRequiredPage(handoffFile)
+    const handoffDiagram = fenceContents(handoffSource, handoffFile, 'mermaid').join('\n')
+
+    expectStepsInOrder(specificationDiagram, [
+      'B["BuildKit / image builder"] -->|writes descriptors and blobs| CS',
+      'RC["Registry client"] -->|pushes and pulls through Distribution API| REG',
+      'RC -->|verifies descriptor digest and size| RC',
+      'RC -->|stores verified blobs by digest| CS',
+      'PREP["container manager"] -->|verifies layout descriptor digest and size| PREP',
+      'PREP -->|creates rootfs and runtime bundle| BUNDLE',
+      'PREP -->|invokes runtime with bundle| RT',
+      'RT -->|creates| PROC',
+    ], 'OCI specification handoff')
+    expect(new Set(mermaidEdgeInitiators(specificationDiagram))).not.toContain('CS')
+    expect(new Set(mermaidEdgeInitiators(specificationDiagram))).not.toContain('BUNDLE')
+    expect(specificationSource).toContain(
+      'Registry client 或 Image Layout 消费者负责校验每个 descriptor 的 digest 和 size',
+    )
+
+    expectStepsInOrder(handoffDiagram, [
+      'DEV["Developer / controller"] -->|submits Pod manifest| API',
+      'API -->|stores desired state| POD',
+      'API -->|makes desired Pod observable| KUBE',
+      'KUBE -->|requests image and container lifecycle through CRI| CR',
+      'CR -->|prepares rootfs and OCI bundle| BUNDLE',
+      'CR -->|invokes runtime with bundle| RT',
+      'RT -->|creates| PROC',
+    ], 'Kubernetes to OCI handoff')
+    expect(new Set(mermaidEdgeInitiators(handoffDiagram))).not.toContain('POD')
+    expect(new Set(mermaidEdgeInitiators(handoffDiagram))).not.toContain('BUNDLE')
+    expect(handoffSource).toContain('CRI 不是 OCI Runtime Specification 的别名')
+    expect(handoffSource).toContain('OCI runtime 只消费准备好的 bundle，不负责 CRI 镜像拉取或 Pod sandbox')
+  })
+
+  it('keeps the bounded Kubernetes workflow and cleanup ordered', () => {
+    const file = 'docs/docker-oci/guide/container-to-kubernetes.md'
+    const source = readRequiredPage(file)
+    const commands = normalizedBashCommands(source, file)
+
+    expect(source).toContain('可用的测试集群')
+    expect(source).toContain('确认 kubectl context')
+    expect(source).toContain('kind load docker-image')
+    expect(source).toContain('minikube image load')
+    expect(source).toContain('不具备跨集群通用性')
+    expectExactStepsInOrder(commands, [
+      'set -euo pipefail',
+      ': "${DEMO_API_IMAGE:?set DEMO_API_IMAGE to an approved registry/repository@sha256:digest}"',
+      'trap cleanup EXIT INT TERM',
+      'kubectl config current-context',
+      'kubectl cluster-info',
+      'sed "s|image: demo-api:dev|image: ${DEMO_API_IMAGE}|" demo-api-pod.template.yaml > demo-api-pod.yaml',
+      'kubectl apply -f demo-api-pod.yaml',
+      'kubectl wait --for=condition=Ready pod/demo-api --timeout=120s',
+      'kubectl get pod/demo-api -o wide',
+      'kubectl get service/demo-api',
+      'kubectl port-forward service/demo-api 18080:80 >demo-api-port-forward.log 2>&1 &',
+      'demo_api_port_forward_pid=$!',
+      'if curl --fail --silent --show-error --output demo-api-healthz.txt http://127.0.0.1:18080/healthz; then',
+      'test "$(cat demo-api-healthz.txt)" = "ok"',
+      'cleanup',
+      'trap - EXIT INT TERM',
+    ], 'Kubernetes apply, evidence, and cleanup')
+    for (const cleanupCommand of [
+      'kill "$demo_api_port_forward_pid"',
+      'wait "$demo_api_port_forward_pid"',
+      'kubectl delete --ignore-not-found -f demo-api-pod.yaml',
+      'rm -f demo-api-healthz.txt demo-api-port-forward.log demo-api-pod.yaml demo-api-pod.template.yaml',
+    ]) {
+      expect(commands).toContain(cleanupCommand)
+    }
+  })
+
+  it('preserves failed OCI evidence and cleans only after recursive verification', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const source = readRequiredPage(file)
+    const commands = normalizedBashCommands(source, file)
+
+    expectExactStepsInOrder(commands, [
+      'set -euo pipefail',
+      'docker buildx build --platform linux/amd64 --tag demo-api:dev --output type=oci,dest=demo-api.oci.tar .',
+      'mkdir demo-api-oci-layout',
+      'tar -xf demo-api.oci.tar -C demo-api-oci-layout',
+      'test -f demo-api-oci-layout/oci-layout',
+      'test -f demo-api-oci-layout/index.json',
+      "DEMO_API_OCI_DIR=demo-api-oci-layout node --input-type=module <<'NODE'",
+      'NODE',
+      'rm -r demo-api-oci-layout',
+      'rm demo-api.oci.tar',
+    ], 'OCI export, recursive verification, and success cleanup')
+    expect(source).toContain('verifier 失败时整个流程保持非零退出')
+    expect(source).toContain(
+      '手动执行 `rm -r demo-api-oci-layout` 和 `rm demo-api.oci.tar`',
+    )
   })
 
   it('models image retrieval and runtime preparation as actor-driven work', () => {
@@ -866,6 +1102,112 @@ describe('Docker / OCI content contracts', () => {
       'docker compose down --volumes',
       'docker volume ls --filter label=com.docker.compose.project=demo-api --filter label=com.docker.compose.volume=api-data',
     ], 'Compose evidence and cleanup')
+  })
+
+  it('executes the OCI specification verifier recursively without a Docker daemon', () => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const source = readRequiredPage(file)
+    const script = nodeHeredoc(source, file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-spec-layout-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      wrapSyntheticLayoutInIndex(layout, fixture)
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toContain(
+        'verified recursive OCI layout: manifests=3 configs=3 layers=3',
+      )
+      expect(result.stdout).toContain(
+        'verified runnable platforms: linux/amd64, linux/arm64',
+      )
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it.each([
+    {
+      expected: 'missing blob',
+      mutate: (fixture: SyntheticOciLayout) => rmSync(fixture.config),
+      name: 'a missing config blob',
+    },
+    {
+      expected: 'digest mismatch',
+      mutate: (fixture: SyntheticOciLayout) => {
+        const bytes = readFileSync(fixture.config)
+        bytes[0] ^= 0xff
+        writeFileSync(fixture.config, bytes)
+      },
+      name: 'a corrupted config blob',
+    },
+    {
+      expected: 'digest mismatch',
+      mutate: (fixture: SyntheticOciLayout) => {
+        const bytes = readFileSync(fixture.binaryLayer)
+        bytes[0] ^= 0xff
+        writeFileSync(fixture.binaryLayer, bytes)
+      },
+      name: 'a corrupted binary layer',
+    },
+    {
+      expected: 'size mismatch',
+      mutate: (fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        index.manifests[0].size += 1
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'an incorrect descriptor size',
+    },
+    {
+      expected: 'digest mismatch',
+      mutate: (fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        const descriptor = index.manifests[0]
+        const [, encoded] = descriptor.digest.split(':', 2)
+        const layout = resolve(fixture.index, '..')
+        const bytes = readFileSync(resolve(layout, 'blobs', 'sha256', encoded))
+        const incorrectEncoded = '0'.repeat(64)
+        writeFileSync(resolve(layout, 'blobs', 'sha256', incorrectEncoded), bytes)
+        descriptor.digest = `sha256:${incorrectEncoded}`
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'an incorrect descriptor digest',
+    },
+    {
+      expected: 'unsupported imageLayoutVersion',
+      mutate: (fixture: SyntheticOciLayout) => {
+        writeFileSync(fixture.ociLayout, JSON.stringify({ imageLayoutVersion: '2.0.0' }))
+      },
+      name: 'an unsupported OCI layout version',
+    },
+  ])('rejects $name in the documented recursive verifier', ({ expected, mutate }) => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const source = readRequiredPage(file)
+    const script = nodeHeredoc(source, file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-spec-invalid-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      mutate(fixture)
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain(expected)
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
   })
 
   it('executes the documented OCI validator against binary layers and corrupt content', () => {

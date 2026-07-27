@@ -6,13 +6,15 @@ Open Container Initiative（OCI）用几份独立规范连接镜像内容、本�
 flowchart LR
   B["BuildKit / image builder"] -->|writes descriptors and blobs| CS["content store or OCI image layout"]
   RC["Registry client"] -->|pushes and pulls through Distribution API| REG["Registry"]
+  RC -->|verifies descriptor digest and size| RC
   RC -->|stores verified blobs by digest| CS
-  PREP["container manager"] -->|creates rootfs and runtime bundle| BUNDLE["OCI runtime bundle"]
+  PREP["container manager"] -->|verifies layout descriptor digest and size| PREP
+  PREP -->|creates rootfs and runtime bundle| BUNDLE["OCI runtime bundle"]
   PREP -->|invokes runtime with bundle| RT["OCI runtime"]
   RT -->|creates| PROC["container process"]
 ```
 
-图中 builder、Registry client、container manager 和 OCI runtime 是动作发起者。content store、OCI image layout 与 bundle 是被写入或消费的数据，不会自己构建、推送或启动进程。实现可以把多个 actor 放在同一进程内，但责任顺序不因此改变。
+图中 builder、Registry client、container manager 和 OCI runtime 是动作发起者。content store、OCI image layout 与 bundle 是被写入或消费的数据，不会自己构建、推送或启动进程。Registry client 或 Image Layout 消费者负责校验每个 descriptor 的 digest 和 size，Registry、descriptor 或 content store 不会替消费者完成这一信任决策。实现可以把多个 actor 放在同一进程内，但责任顺序不因此改变。
 
 ## OCI Image Specification：镜像内容图
 
@@ -89,6 +91,7 @@ OCI runtime 消费 bundle，但它不必理解 image manifest、Registry tag 或
 前置条件：当前目录已按[从源码到第一个容器](/docker-oci/guide/source-to-container)准备 `Dockerfile`、`server.mjs` 和 `.dockerignore`；本地明确安装了 Docker CLI、可连接的 BuildKit builder、Node.js 20+ 和 `tar`；目录中不存在 `demo-api.oci.tar` 或 `demo-api-oci-layout`。以下是需要读者在自己环境显式执行的本地证据流程，不表示本项目 CI 曾运行 Docker daemon：
 
 ```bash
+set -euo pipefail
 docker buildx build --platform linux/amd64 --tag demo-api:dev --output type=oci,dest=demo-api.oci.tar .
 mkdir demo-api-oci-layout
 tar -xf demo-api.oci.tar -C demo-api-oci-layout
@@ -100,21 +103,128 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = process.env.DEMO_API_OCI_DIR
-const index = JSON.parse(readFileSync(join(root, 'index.json'), 'utf8'))
-for (const descriptor of index.manifests) {
-  const [algorithm, encoded] = descriptor.digest.split(':', 2)
-  const bytes = readFileSync(join(root, 'blobs', algorithm, encoded))
-  if (bytes.length !== descriptor.size) throw new Error(`size mismatch: ${descriptor.digest}`)
-  const actual = `${algorithm}:${createHash(algorithm).update(bytes).digest('hex')}`
-  if (actual !== descriptor.digest) throw new Error(`digest mismatch: ${descriptor.digest}`)
+if (!root) throw new Error('DEMO_API_OCI_DIR is required')
+
+const imageIndexMediaType = 'application/vnd.oci.image.index.v1+json'
+const imageManifestMediaType = 'application/vnd.oci.image.manifest.v1+json'
+const counts = { configs: 0, layers: 0, manifests: 0 }
+const runnablePlatforms = new Set()
+
+function parseJson(bytes, role) {
+  try {
+    return JSON.parse(Buffer.isBuffer(bytes) ? bytes.toString('utf8') : bytes)
+  } catch {
+    throw new Error(`invalid JSON: ${role}`)
+  }
 }
-console.log(`verified top-level descriptors: ${index.manifests.length}`)
+
+function readJsonFile(name) {
+  try {
+    return parseJson(readFileSync(join(root, name)), name)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('invalid JSON:')) throw error
+    throw new Error(`missing file: ${name}`)
+  }
+}
+
+function verifyBlob(descriptor, role) {
+  if (!descriptor || typeof descriptor !== 'object') throw new Error(`invalid descriptor: ${role}`)
+  if (!Number.isSafeInteger(descriptor.size) || descriptor.size < 0) {
+    throw new Error(`invalid descriptor size: ${role}`)
+  }
+  const separator = typeof descriptor.digest === 'string'
+    ? descriptor.digest.indexOf(':')
+    : -1
+  if (separator < 1) throw new Error(`invalid descriptor digest: ${role}`)
+  const algorithm = descriptor.digest.slice(0, separator)
+  const encoded = descriptor.digest.slice(separator + 1)
+  if (!/^[a-z0-9_+.-]+$/.test(algorithm) || !/^[a-f0-9]+$/.test(encoded)) {
+    throw new Error(`invalid descriptor digest: ${descriptor.digest}`)
+  }
+
+  let bytes
+  try {
+    bytes = readFileSync(join(root, 'blobs', algorithm, encoded))
+  } catch {
+    throw new Error(`missing blob: ${descriptor.digest} (${role})`)
+  }
+  if (bytes.length !== descriptor.size) {
+    throw new Error(`size mismatch: ${descriptor.digest} (${role})`)
+  }
+  const actual = `${algorithm}:${createHash(algorithm).update(bytes).digest('hex')}`
+  if (actual !== descriptor.digest) {
+    throw new Error(`digest mismatch: ${descriptor.digest} (${role})`)
+  }
+  return bytes
+}
+
+function verifyManifest(descriptor, bytes, role) {
+  const manifest = parseJson(bytes, role)
+  if (manifest.schemaVersion !== 2) throw new Error(`unsupported schemaVersion: ${role}`)
+  if (!manifest.config || !Array.isArray(manifest.layers)) {
+    throw new Error(`invalid image manifest: ${role}`)
+  }
+
+  const configBytes = verifyBlob(manifest.config, `${role} config`)
+  parseJson(configBytes, `${role} config`)
+  counts.configs += 1
+  for (const [position, layer] of manifest.layers.entries()) {
+    verifyBlob(layer, `${role} layer[${position}]`)
+    counts.layers += 1
+  }
+  counts.manifests += 1
+
+  const platform = descriptor.platform
+  const referenceType = descriptor.annotations?.['vnd.docker.reference.type']
+  if (
+    platform?.os
+    && platform?.architecture
+    && platform.os !== 'unknown'
+    && platform.architecture !== 'unknown'
+    && referenceType !== 'attestation-manifest'
+  ) {
+    runnablePlatforms.add(`${platform.os}/${platform.architecture}`)
+  }
+}
+
+function verifyIndex(index, role) {
+  if (index.schemaVersion !== 2 || !Array.isArray(index.manifests)) {
+    throw new Error(`invalid image index: ${role}`)
+  }
+  for (const [position, descriptor] of index.manifests.entries()) {
+    const descriptorRole = `${role} manifests[${position}]`
+    const bytes = verifyBlob(descriptor, descriptorRole)
+    if (descriptor.mediaType === imageManifestMediaType) {
+      verifyManifest(descriptor, bytes, descriptorRole)
+    } else if (descriptor.mediaType === imageIndexMediaType) {
+      verifyIndex(parseJson(bytes, descriptorRole), descriptorRole)
+    } else {
+      throw new Error(`unsupported top-level mediaType: ${descriptor.mediaType}`)
+    }
+  }
+}
+
+const layoutMetadata = readJsonFile('oci-layout')
+if (layoutMetadata.imageLayoutVersion !== '1.0.0') {
+  throw new Error(`unsupported imageLayoutVersion: ${layoutMetadata.imageLayoutVersion}`)
+}
+verifyIndex(readJsonFile('index.json'), 'index.json')
+console.log(
+  `verified recursive OCI layout: manifests=${counts.manifests} configs=${counts.configs} layers=${counts.layers}`,
+)
+console.log(
+  `verified runnable platforms: ${[...runnablePlatforms].sort().join(', ') || 'none declared'}`,
+)
 NODE
 rm -r demo-api-oci-layout
 rm demo-api.oci.tar
 ```
 
-build 成功时会生成 OCI archive，两条 `test` 以零状态确认布局入口，Node.js 验证器会读取实际 descriptor，对顶层 manifest 字节重算 size 和 digest，并输出 `verified top-level descriptors: N`。任一检查失败都不应继续消费该布局。末尾两条命令只删除本流程创建的明确相对路径；如需排查失败，先保留它们检查，再手动执行同样的清理命令。
+build 成功时会生成 OCI archive，两条 `test` 以零状态确认布局入口。验证器首先解析 `oci-layout` 并要求当前 `imageLayoutVersion` 为 `1.0.0`，再从 `index.json` 递归跟随 index/manifest descriptor，对每个 manifest、config 和 layer blob 重算 size 与 digest。index、manifest 和 config 作为 JSON 解析；layer 一律只按原始 bytes 校验，因此 gzip binary layer 不会被误当成 JSON。用 image manifest 表示的 attestation 辅助对象仍会校验 config 与所有 layer，但 `unknown/unknown` 或标记为 attestation 的 descriptor 不计入 runnable platform。
+
+`verified recursive OCI layout: manifests=M configs=C layers=L` 是完整递归范围的成功证据，第二行列出 descriptor 明确声明的可运行平台。单平台 export 可以没有 descriptor `platform`，此时显示 `none declared` 不影响内容完整性校验，但不能把它当成平台匹配证明。
+
+`set -euo pipefail` 保证任一步或 verifier 失败时整个流程保持非零退出，且不会继续执行末尾清理，便于保留 archive 和 layout 诊断。调查完成后，手动执行 `rm -r demo-api-oci-layout` 和 `rm demo-api.oci.tar`。这两条命令只针对本流程创建的明确相对路径。
 
 ## 继续阅读
 

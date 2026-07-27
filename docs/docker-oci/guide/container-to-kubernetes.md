@@ -17,6 +17,15 @@ Kubernetes 不是把 `docker run` 参数逐项翻译成 Pod。开发者提交 Po
 
 PodSpec 的 command 覆盖镜像 Entrypoint，PodSpec 的 args 覆盖镜像 Cmd。它们是 Kubernetes API 字段名，不是要在容器内执行的 shell 字符串；数组元素会组成最终 argv，且创建 Pod 后不能就地修改。只提供 `args` 时保留镜像 Entrypoint；只提供 `command` 时不会自动拼接镜像 Cmd，所需参数应显式写入 `args`。因此要检查实际 image config，不要靠 Dockerfile 文本猜测。官方行为见 Kubernetes [Define a Command and Arguments for a Container](https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/)。
 
+| PodSpec `command` | PodSpec `args` | final argv source |
+| --- | --- | --- |
+| omitted | omitted | image Entrypoint + image Cmd |
+| omitted | present | image Entrypoint + PodSpec args |
+| present | omitted | PodSpec command only; image Cmd is dropped |
+| present | present | PodSpec command + PodSpec args |
+
+换句话说，args-only retains image Entrypoint，而 command-only drops image Cmd。这是 Kubernetes 对镜像默认 argv 的覆盖语义，不是 shell 拼接规则。
+
 `env` 和 `envFrom` 把 Pod 配置加入运行环境，同名键可覆盖镜像 `Env` 默认值。`securityContext.runAsUser` 可以显式覆盖 image `User`，而 Pod Security 或其他 admission policy 也可因 UID、root 身份或其他属性拒绝 Pod。这是 API 与策略边界，不是 OCI 强制 Dockerfile 中必须使用某个 UID。
 
 ## 不会自动迁移的 Dockerfile 元数据
@@ -113,6 +122,59 @@ spec:
 
 这份 YAML 是声明式配置，不是已经运行的 Pod 或 Service。在真实集群提交前，需要先让节点能够解析 `demo-api:dev`，或把镜像推送到受信 Registry 并替换为经批准的 digest。`runAsUser: 1000` 也必须与实际镜像文件所有权和集群策略一起验证，不能因为官方 Node 镜像常用 `node` 用户就把 UID 当成 OCI 固定值。
 
+## 在测试集群中验证
+
+前置条件：有一个可用的测试集群，已安装 `kubectl` 和 `curl`，有权创建 Pod 与 Service，主机端口 `18080` 未被占用，且当前目录没有 `demo-api-pod.yaml`。先把上一节的 YAML 原样落盘为 `demo-api-pod.template.yaml`，再在当前 shell 中把 `DEMO_API_IMAGE` 设为节点可拉取、组织已批准的 `registry/repository@sha256:digest`。不要把占位 digest 直接执行。
+
+本地 `demo-api:dev` 不会自动出现在集群节点上。`kind load docker-image`、`minikube image load` 或特定容器 runtime 的 import 流程都是本地集群实现选择，不具备跨集群通用性。本流程使用已批准 digest，并先显示 context 与 API 端点；读者必须确认 kubectl context 确实指向允许测试的集群，否则应在 `kubectl apply` 前停止。
+
+```bash
+set -euo pipefail
+: "${DEMO_API_IMAGE:?set DEMO_API_IMAGE to an approved registry/repository@sha256:digest}"
+[[ "$DEMO_API_IMAGE" =~ @sha256:[a-f0-9]{64}$ ]] || { echo 'DEMO_API_IMAGE must use an approved SHA-256 digest' >&2; exit 2; }
+test -f demo-api-pod.template.yaml
+test ! -e demo-api-pod.yaml
+
+demo_api_port_forward_pid=''
+cleanup() {
+  set +e
+  if [[ -n "$demo_api_port_forward_pid" ]]; then
+    kill "$demo_api_port_forward_pid"
+    wait "$demo_api_port_forward_pid"
+  fi
+  kubectl delete --ignore-not-found -f demo-api-pod.yaml
+  rm -f demo-api-healthz.txt demo-api-port-forward.log demo-api-pod.yaml demo-api-pod.template.yaml
+}
+trap cleanup EXIT INT TERM
+
+kubectl config current-context
+kubectl cluster-info
+sed "s|image: demo-api:dev|image: ${DEMO_API_IMAGE}|" demo-api-pod.template.yaml > demo-api-pod.yaml
+kubectl apply -f demo-api-pod.yaml
+kubectl wait --for=condition=Ready pod/demo-api --timeout=120s
+kubectl get pod/demo-api -o wide
+kubectl get service/demo-api
+
+kubectl port-forward service/demo-api 18080:80 >demo-api-port-forward.log 2>&1 &
+demo_api_port_forward_pid=$!
+for attempt in {1..30}; do
+  if curl --fail --silent --show-error --output demo-api-healthz.txt http://127.0.0.1:18080/healthz; then
+    break
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    cat demo-api-port-forward.log >&2
+    exit 1
+  fi
+  sleep 1
+done
+test "$(cat demo-api-healthz.txt)" = "ok"
+
+cleanup
+trap - EXIT INT TERM
+```
+
+`kubectl wait` 返回零状态表示 Pod 已满足 Ready condition，不代表永久健康。后续 `get` 输出固化 Pod/Service 对象证据；受控的后台 port-forward 将 Service 映射到本机 `127.0.0.1:18080`，循环最多等待 30 秒，`demo-api-healthz.txt` 必须精确包含 `ok`。`trap` 在成功或失败时都尝试停止 port-forward、删除 API 对象与本地文件。本页不声称该流程已在项目 CI 或任何特定集群执行。
+
 ## kubelet、CRI 与 OCI runtime 的责任链
 
 ```mermaid
@@ -129,6 +191,8 @@ flowchart LR
 Developer 或 controller 向 API Server 提交对象，API Server 保存期望状态，节点上的 kubelet 观察到已调度的 Pod 后调用 CRI。CRI runtime 解析可变 tag 或固定 digest、拉取与校验镜像内容、准备 rootfs，并把合成后的 OCI bundle 交给低层 OCI runtime。具体调用可由 containerd CRI plugin、shim 和 runtime 组合完成，这是实现细节，不是 PodSpec 要求某个特定产品。
 
 Pod object 是被 actor 创建、存储和观察的被动数据，不会自己调用 kubelet、CRI 或 OCI runtime。同样，image config 和 bundle 也不会主动启动进程。Kubernetes 官方 [Container Runtime Interface](https://kubernetes.io/docs/concepts/architecture/cri/) 定义 kubelet 与 runtime 的接线；OCI [Runtime Specification](https://github.com/opencontainers/runtime-spec/blob/main/spec.md) 则描述 bundle 之后的低层生命周期。CRI 不是 OCI Runtime Specification 的别名。
+
+OCI runtime 只消费准备好的 bundle，不负责 CRI 镜像拉取或 Pod sandbox；kubelet 也不直接把 PodSpec 作为 OCI `config.json` 交给低层 runtime。
 
 ## 迁移时的判断顺序
 
