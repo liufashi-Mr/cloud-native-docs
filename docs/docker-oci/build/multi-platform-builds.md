@@ -183,7 +183,7 @@ docker buildx rm demo-api-multi
 
 ## 导出多平台 OCI 归档
 
-需要审查多平台内容但暂不发布时，可以导出 OCI layout。前置条件仍是 builder 支持两个目标，当前目录可写且不存在需要保留的 `demo-api.oci.tar`，并且安装了带内置 `node:fs` 与 `node:crypto` 的 Node.js 20+ 以及 `tar`。以下校验脚本不依赖 npm 包：它递归验证每个 descriptor 的 size/digest、继续检查 manifest 的 config/layers，并单独统计可运行平台。
+需要审查多平台内容但暂不发布时，可以导出 OCI layout。前置条件仍是 builder 支持两个目标，当前目录可写且不存在需要保留的 `demo-api.oci.tar`，并且安装了带内置 `node:fs` 与 `node:crypto` 的 Node.js 20+ 以及 `tar`。以下校验脚本不依赖 npm 包：它递归验证每个 descriptor 的 size/digest、继续检查 manifest 的 config/layers，并单独统计可运行平台。只有 index 与 manifest descriptor 的内容按 JSON 解析；config 和 layer 在这个流程中只校验原始 bytes，二进制 layer 绝不会传给 `JSON.parse`。
 
 ```bash
 set -eu
@@ -213,12 +213,17 @@ async function verifyDescriptor(descriptor) {
   if (actual !== descriptor.digest) {
     throw new Error(`digest mismatch for ${descriptor.digest}`)
   }
+  return bytes
+}
+
+async function readJsonDescriptor(descriptor) {
+  const bytes = await verifyDescriptor(descriptor)
   return JSON.parse(bytes.toString('utf8'))
 }
 
 async function walkIndex(index) {
   for (const descriptor of index.manifests) {
-    const document = await verifyDescriptor(descriptor)
+    const document = await readJsonDescriptor(descriptor)
     if (descriptor.mediaType.endsWith('.image.index.v1+json')) {
       await walkIndex(document)
       continue

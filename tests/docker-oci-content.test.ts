@@ -1,4 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -8,6 +18,17 @@ interface PageContract {
   fences: string[]
   phrases: string[]
   terms: string[]
+}
+
+interface OciDescriptor {
+  annotations?: Record<string, string>
+  digest: string
+  mediaType: string
+  platform?: {
+    architecture: string
+    os: string
+  }
+  size: number
 }
 
 const root = resolve(import.meta.dirname, '..')
@@ -165,6 +186,112 @@ function compactWhitespace(source: string): string {
   return source.replace(/\s+/g, ' ').trim()
 }
 
+function shellCommands(source: string): string[] {
+  return source
+    .replace(/\\\r?\n\s*/g, ' ')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function bashCommands(source: string, file: string): string[] {
+  return fenceContents(source, file, 'bash').flatMap(shellCommands)
+}
+
+function nodeHeredoc(source: string, file: string): string {
+  const fence = fenceContents(source, file, 'bash')
+    .find((content) => content.includes("node --input-type=module <<'NODE'"))
+  expect(fence, `${file} must contain an executable Node heredoc`).toBeDefined()
+  const match = fence?.match(/node --input-type=module <<'NODE'\n([\s\S]*?)\nNODE/)
+  expect(match, `${file} has a malformed Node heredoc`).not.toBeNull()
+  return match?.[1] ?? ''
+}
+
+function writeOciBlob(
+  layout: string,
+  mediaType: string,
+  content: string | Buffer,
+): OciDescriptor {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content)
+  const encoded = createHash('sha256').update(bytes).digest('hex')
+  writeFileSync(resolve(layout, 'blobs', 'sha256', encoded), bytes)
+  return {
+    digest: `sha256:${encoded}`,
+    mediaType,
+    size: bytes.length,
+  }
+}
+
+function createSyntheticOciLayout(layout: string): { binaryLayer: string } {
+  mkdirSync(resolve(layout, 'blobs', 'sha256'), { recursive: true })
+  writeFileSync(resolve(layout, 'oci-layout'), JSON.stringify({ imageLayoutVersion: '1.0.0' }))
+
+  const binaryLayerBytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xde, 0xad, 0xbe, 0xef])
+  const binaryLayer = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.layer.v1.tar+gzip',
+    binaryLayerBytes,
+  )
+
+  const runnableDescriptors = ['amd64', 'arm64'].map((architecture) => {
+    const config = writeOciBlob(
+      layout,
+      'application/vnd.oci.image.config.v1+json',
+      JSON.stringify({ architecture, os: 'linux', rootfs: { diff_ids: [], type: 'layers' } }),
+    )
+    const manifest = writeOciBlob(
+      layout,
+      'application/vnd.oci.image.manifest.v1+json',
+      JSON.stringify({
+        config,
+        layers: [binaryLayer],
+        mediaType: 'application/vnd.oci.image.manifest.v1+json',
+        schemaVersion: 2,
+      }),
+    )
+    return {
+      ...manifest,
+      platform: { architecture, os: 'linux' },
+    }
+  })
+
+  const attestationConfig = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.config.v1+json',
+    JSON.stringify({ architecture: 'unknown', os: 'unknown' }),
+  )
+  const attestationLayer = writeOciBlob(
+    layout,
+    'application/vnd.in-toto+json',
+    JSON.stringify({ predicateType: 'urn:example:test' }),
+  )
+  const attestationManifest = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.manifest.v1+json',
+    JSON.stringify({
+      config: attestationConfig,
+      layers: [attestationLayer],
+      mediaType: 'application/vnd.oci.image.manifest.v1+json',
+      schemaVersion: 2,
+    }),
+  )
+  const attestationDescriptor: OciDescriptor = {
+    ...attestationManifest,
+    annotations: { 'vnd.docker.reference.type': 'attestation-manifest' },
+    platform: { architecture: 'unknown', os: 'unknown' },
+  }
+
+  writeFileSync(resolve(layout, 'index.json'), JSON.stringify({
+    manifests: [...runnableDescriptors, attestationDescriptor],
+    mediaType: 'application/vnd.oci.image.index.v1+json',
+    schemaVersion: 2,
+  }))
+
+  return {
+    binaryLayer: resolve(layout, 'blobs', 'sha256', binaryLayer.digest.slice('sha256:'.length)),
+  }
+}
+
 function markdownTable(source: string, header: string): string[] {
   const lines = source.split('\n')
   const start = lines.indexOf(header)
@@ -315,7 +442,7 @@ describe('Docker / OCI content contracts', () => {
     const file = 'docs/docker-oci/build/buildkit-cache.md'
     const source = readRequiredPage(file)
     const dockerfiles = fenceContents(source, file, 'dockerfile').map(compactWhitespace)
-    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
+    const commands = bashCommands(source, file)
 
     expect(
       dockerfiles.some((fence) =>
@@ -331,7 +458,10 @@ describe('Docker / OCI content contracts', () => {
     ).toBe(true)
 
     const remoteCache = commands.find((command) =>
-      command.includes('--cache-from type=registry'),
+      command.startsWith('docker buildx build ')
+      && command.includes('--cache-from type=registry')
+      && command.includes('--cache-to type=registry')
+      && command.includes('--push'),
     )
     expect(remoteCache).toBeDefined()
     expect(remoteCache).toMatch(
@@ -342,15 +472,21 @@ describe('Docker / OCI content contracts', () => {
   it('separates single-platform load from two-platform push', () => {
     const file = 'docs/docker-oci/build/multi-platform-builds.md'
     const source = readRequiredPage(file)
-    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
+    const commands = bashCommands(source, file)
 
-    const localLoad = commands.find((command) => command.includes('--load --tag demo-api:dev'))
+    const localLoad = commands.find((command) =>
+      command.startsWith('docker buildx build ')
+      && command.includes('--load')
+      && command.includes('--tag demo-api:dev'),
+    )
     expect(localLoad).toMatch(
       /docker buildx build --platform "\$DEMO_API_PLATFORM" --load --tag demo-api:dev \./,
     )
 
     const multiPush = commands.find((command) =>
-      command.includes('--platform linux/amd64,linux/arm64'),
+      command.startsWith('docker buildx build ')
+      && command.includes('--platform linux/amd64,linux/arm64')
+      && command.includes('--push'),
     )
     expect(multiPush).toMatch(
       /docker buildx build .*--platform linux\/amd64,linux\/arm64 .*--tag registry\.example\.com\/team\/demo-api:dev .*--push \./,
@@ -396,7 +532,6 @@ describe('Docker / OCI content contracts', () => {
   it('qualifies platform fields, emulation setup, and OCI archive validation', () => {
     const file = 'docs/docker-oci/build/multi-platform-builds.md'
     const source = readRequiredPage(file)
-    const commands = fenceContents(source, file, 'bash').map(compactWhitespace)
 
     expect(source).toContain('BUILDPLATFORM 表示执行构建的 builder node 平台')
     expect(source).toContain('stage 的基础镜像与用户空间平台由 `FROM --platform` 决定')
@@ -409,17 +544,40 @@ describe('Docker / OCI content contracts', () => {
     expect(source).toContain('host binfmt')
     expect(source).toContain('先用 `docker buildx inspect --bootstrap` 检查 builder capability')
 
-    const archiveInspection = commands.find((command) =>
-      command.includes('node --input-type=module'),
-    )
-    expect(archiveInspection).toBeDefined()
-    expect(archiveInspection).toContain('createHash')
-    expect(archiveInspection).toContain('descriptor.size')
-    expect(archiveInspection).toContain('verifyDescriptor')
-    expect(archiveInspection).toContain('walkIndex')
-    expect(archiveInspection).toContain('platform?.os')
-    expect(archiveInspection).toContain('platform?.architecture')
-    expect(archiveInspection).toContain('linux/amd64')
-    expect(archiveInspection).toContain('linux/arm64')
+  })
+
+  it('executes the documented OCI validator against binary layers and corrupt content', () => {
+    const file = 'docs/docker-oci/build/multi-platform-builds.md'
+    const source = readRequiredPage(file)
+    const script = nodeHeredoc(source, file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-layout-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      const valid = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+      expect(valid.status, valid.stderr).toBe(0)
+      expect(valid.stdout.trim()).toBe(
+        'verified runnable platforms: linux/amd64, linux/arm64',
+      )
+
+      const corruptedLayer = readFileSync(fixture.binaryLayer)
+      corruptedLayer[0] ^= 0xff
+      writeFileSync(fixture.binaryLayer, corruptedLayer)
+
+      const invalid = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+      expect(invalid.status).not.toBe(0)
+      expect(invalid.stderr).toContain('digest mismatch')
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
   })
 })
