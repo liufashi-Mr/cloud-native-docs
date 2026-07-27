@@ -41,10 +41,14 @@ docker system df --verbose
 
 ## Build 失败
 
+前置条件：已安装可用的 Docker Buildx plugin；`--check` 不受支持时先核对并更新 Buildx 版本，不要把未知选项误判成 Dockerfile 错误。
+
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| Dockerfile 解析或某一步失败 | `docker buildx build --progress=plain --no-cache-filter <stage> .` | 显示实际 stage 与失败命令；只绕过指定 stage cache |
+| Dockerfile 解析或静态检查失败 | `docker buildx build --check .` | 不执行 build stages，先暴露 Dockerfile/build check 的错误与警告 |
+| 首次复现某一步失败 | `docker buildx build --progress=plain .` | 执行一次 build 并展开 stage、指令与原始错误，先保留未经 cache 调整的基线 |
 | `COPY` 找不到文件 | `docker buildx build --progress=plain .`，并检查 `.dockerignore` | 区分路径不在 context、被 ignore 与大小写问题 |
+| 已知 named stage 疑似命中坏 cache | `docker buildx build --progress=plain --no-cache-filter <named-stage> .` | 只对已知 named stage 绕过 cache；该命令仍执行 build，可能重复下载、发布或其他 external side effects |
 | cache 与预期不符 | `docker buildx du --verbose` | 找到 builder 中的 cache record；不要先 prune |
 | 基础镜像疑似过期 | `docker buildx build --pull --progress=plain .` | `--pull` 刷新基础镜像；`--no-cache` 不等于 pull |
 
@@ -54,10 +58,9 @@ docker system df --verbose
 
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| 名称或平台不匹配 | `docker buildx imagetools inspect <reference>` | 查看 index 中的平台 descriptor 与 digest |
-| 认证失败 | `docker pull <reference>` 并检查 challenge/状态码 | 区分无凭据、无 repository 权限和 token scope |
-| digest 不匹配 | `docker image inspect <reference> --format '{{json .RepoDigests}}'` | 只读比较本地 RepoDigests 与错误中的预期 digest；不匹配或没有本地对象时保留完整性错误并停止消费 |
-| tag 指向变化 | 比较已记录 digest 与 `docker image inspect <reference>` | tag 可变；确认是否为预期发布 |
+| Registry digest、platform 或认证状态未知 | `docker buildx imagetools inspect <reference>` | 只读查询 Registry index；descriptor 给出远端 digest/platform，认证错误区分 credential、repository permission 和 token scope |
+| digest 不匹配或 tag 疑似移动 | `docker image inspect <reference> --format '{{json .RepoDigests}}'` | RepoDigests 仅代表本地对象；与远端 `imagetools inspect` 的 descriptor digest 比较，区分本地旧对象、tag 移动和完整性错误 |
+| 必须复现 pull 错误 | `docker pull <reference>` | 该命令会改变本地 image/tag 状态，不是只读取证；先记录原 digest，再用错误中的网络、证书、认证或 digest 结果缩小范围 |
 
 代理、DNS、证书和 Registry 服务端错误属于不同边界。先确认 Docker daemon 所在主机的网络路径，而不只是 CLI 主机的 `curl`。
 
@@ -80,7 +83,7 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 | --- | --- | --- |
 | 容器已经 stopped | `docker container inspect demo-api --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{json .State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}'` | exit、OOMKilled、runtime error 与时间戳区分正常退出、信号、OOM 和启动错误 |
 | 主进程可能输出错误 | `docker logs --timestamps --tail 200 demo-api` | 关联退出前 stdout/stderr；无日志不等于进程未失败 |
-| 退出原因与操作时序不明 | `docker events --since 10m --filter container=demo-api` | create/start/die/oom/kill 事件顺序区分进程自行退出、资源终止与外部操作 |
+| 退出原因与操作时序不明 | `docker events --since 10m --until 0s --filter container=demo-api` | create/start/die/oom/kill 事件顺序区分进程自行退出、资源终止与外部操作 |
 
 本项目连续示例未注册 `SIGTERM` handler，正常 `docker stop` 后在 Unix 上常见 exit code 143；exit code 0 需要应用主动处理信号并完成关闭。`OOMKilled=true` 是强信号，但还应结合 memory limit、主机日志和 `docker stats` 判断。
 
@@ -128,10 +131,11 @@ create 成功不表示 start 成功；start 成功也不表示主进程持续运
 
 | 证据 | 下一条命令 | 如何缩小范围 |
 | --- | --- | --- |
-| 进程疑似被 OOM 终止 | `docker container inspect <container> --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} memory={{.HostConfig.Memory}}'` | OOMKilled、exit code 与 memory limit 区分容器 limit 触发和其他退出 |
-| 实时资源接近限制 | `docker stats --no-stream <container>` | 对比当前 CPU/memory/I/O 使用与 limit，确认是否持续逼近边界 |
+| 进程疑似被 OOM 终止 | `docker container inspect <container> --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}} memory={{.HostConfig.Memory}}'` | `OOMKilled=true` 标记 OOM 相关退出，Memory 只显示配置 limit；这些字段不能区分 container limit 与 host-wide memory pressure |
+| 实时资源接近限制 | `docker stats --no-stream <container>` | 结果只是当前单次 snapshot，不能证明退出前趋势；需要重复采样或历史 telemetry 才能判断是否持续逼近 limit |
 | 容器反复重启 | `docker container inspect <container> --format 'restarts={{.RestartCount}} policy={{json .HostConfig.RestartPolicy}}'` | restart count 与 policy 区分单次失败和被策略持续拉起 |
-| daemon 记录 OOM 事件 | `docker events --since 30m --filter container=<container> --filter event=oom` | 有事件可关联容器 OOM 时间；无事件时继续检查主机 kernel 与平台日志 |
+| daemon 记录 OOM 事件 | `docker events --since 30m --until 0s --filter container=<container> --filter event=oom` | 有事件可关联容器 OOM 时间；无事件时继续检查主机 kernel 与平台日志 |
+| OOM 来源仍不明 | 在 Linux daemon host 运行 `journalctl --kernel --since '-30 min' --grep 'out of memory'` | 用时间戳、进程和 cgroup 记录判断 container limit 或 host-wide pressure；Docker Desktop 与托管环境改查对应 platform telemetry |
 
 ## 磁盘占用
 

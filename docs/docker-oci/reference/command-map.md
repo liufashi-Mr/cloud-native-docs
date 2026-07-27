@@ -20,7 +20,7 @@ docker system df --verbose
 | 比较 context | endpoint 与 TLS 配置 | `docker context inspect <name>` |
 | 建立时间线 | create/start/die/oom 事件 | `docker events --since 30m --until 0s` |
 
-远程 context 的 `127.0.0.1` 属于 daemon 主机这一事实不会因 CLI 在本地运行而改变。
+远程 context 下，publish 绑定中的 `127.0.0.1` 属于 daemon host；本地 `curl` 中的 `127.0.0.1` 属于 CLI host。两条回环路径可能位于不同主机，不能互相代替。
 
 ## 镜像与 Registry
 
@@ -101,7 +101,7 @@ Volume 删除通常不可恢复。删除前停止写入、按应用语义备份�
 | 删除项目容器与网络 | removed objects | `docker compose down` |
 | 同时删除声明 Volume | removed volumes | `docker compose down --volumes` |
 
-`down --volumes` 比普通 `down` 多删除 Compose 创建的命名 Volume 和附着的匿名 Volume，可能永久删除数据；声明为 `external` 的 Volume 不由 Compose 删除。
+`down --volumes` 比普通 `down` 多删除 Compose 文件声明的 named volumes 和附着于 containers 的 anonymous volumes，可能永久删除数据；external volumes 不由 Compose 删除。
 
 ## 清理与破坏性操作
 
@@ -115,10 +115,10 @@ Volume 删除通常不可恢复。删除前停止写入、按应用语义备份�
 | `docker image prune -a` | 所有未被容器引用的镜像 | 需要重新 pull/build，未推送内容可能丢失 |
 | `docker network rm demo-net` | 删除指定的无活动 endpoint network；不删除容器 | 可重建 network；自定义 subnet、options 与连接关系需重新配置 |
 | `docker volume rm <volume>` | 删除指定且未被容器使用的 Volume | 持久数据通常不可恢复，只能从已验证备份还原 |
-| `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |
+| `docker volume prune` | 默认删除未被任何 container 使用的 anonymous local volumes；`--all` 才扩入未使用的 named volumes | 被删除的 Volume 数据通常不可恢复 |
 | `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |
-| `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |
-| `docker compose down --volumes` | 当前 Compose project 容器、网络、Compose 创建的命名 Volume 和附着的匿名 Volume；不删除 external Volume | 被删除的 project Volume 数据可能永久丢失 |
+| `docker system prune` | 默认删除所有 stopped containers、未被 container 使用的 networks、dangling images 和未使用 build cache；`-a` 将 image 范围扩为所有未使用 images，`--volumes` 加入未使用 anonymous volumes | 多类现场与 cache 丢失；未推送 image 需重建，加入 `--volumes` 后持久数据通常不可恢复 |
+| `docker compose down --volumes` | 当前 Compose project containers、Compose 创建的 networks、Compose 文件声明的 named volumes 和附着于 containers 的 anonymous volumes；不删除 external volumes | 被删除的 project Volume 数据可能永久丢失 |
 
 建议先运行 `docker system df --verbose`、各类 `ls`/`inspect`，记录明确的 ID/名称，再执行最窄的删除命令。不要用宽泛 prune 代替根因分析。
 
