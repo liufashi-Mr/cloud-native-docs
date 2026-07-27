@@ -134,6 +134,22 @@ describe('Docker / OCI content contracts', () => {
     expect(diagram).toContain('SNAP->>SNAP: unpack layers and prepare snapshot/rootfs')
     expect(diagram).toContain('CLIENT->>RT: invoke with runtime bundle')
 
+    const selectedManifestFlow = [
+      'CLIENT->>CLIENT: select platform manifest descriptor',
+      'CLIENT->>REG: request selected manifest by descriptor digest',
+      'REG-->>CLIENT: return selected manifest',
+      'CLIENT->>CLIENT: verify selected manifest digest and size',
+      'CLIENT->>REG: request config and layer blobs',
+    ]
+    let previousPosition = -1
+    for (const step of selectedManifestFlow) {
+      const position = diagram.indexOf(step)
+      expect(position, `image retrieval is missing or misorders: ${step}`).toBeGreaterThan(
+        previousPosition,
+      )
+      previousPosition = position
+    }
+
     const passiveDataNodeIds = new Set(
       Array.from(diagram.matchAll(/([A-Za-z][A-Za-z0-9_]*)\["([^"]+)"\]/g))
         .filter((match) => /index|manifest|config|layer/i.test(match[2]))

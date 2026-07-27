@@ -14,7 +14,15 @@ sequenceDiagram
   participant RT as OCI runtime
   CLIENT->>REG: request index or manifest
   REG-->>CLIENT: return index or manifest
-  CLIENT->>CLIENT: select platform and verify digest and size
+  CLIENT->>CLIENT: verify top-level digest and size
+  alt returned content is an index or manifest list
+    CLIENT->>CLIENT: select platform manifest descriptor
+    CLIENT->>REG: request selected manifest by descriptor digest
+    REG-->>CLIENT: return selected manifest
+    CLIENT->>CLIENT: verify selected manifest digest and size
+  else returned content is an image manifest
+    CLIENT->>CLIENT: use verified top-level manifest
+  end
   CLIENT->>REG: request config and layer blobs
   REG-->>CLIENT: return config and layer blobs
   CLIENT->>CLIENT: verify digest and size
@@ -24,6 +32,8 @@ sequenceDiagram
   CLIENT->>CLIENT: assemble runtime bundle from config and rootfs
   CLIENT->>RT: invoke with runtime bundle
 ```
+
+如果顶层对象是 index 或 manifest list，客户端必须先按 platform 选择一个 manifest descriptor，再用其中的 digest 从 Registry 获取并校验子 manifest。只有得到已验证的具体 image manifest，客户端才能沿它的 descriptors 请求 config 和 layer blobs；顶层对象本身就是 image manifest 时则不需要这次子 manifest 往返。
 
 这张图描述职责顺序，不承诺每个实现都使用独立进程。Image client / container manager 可以由 Docker Engine、containerd 或其他实现承担，snapshotter 也可能嵌入其存储路径。OCI runtime 不直接解析 Registry 引用，也不直接拉取或解包镜像 layer。准备 snapshot/rootfs 和 runtime bundle 后，容器管理器才调用 OCI runtime；runtime 消费的是 runtime bundle 中的配置和 root filesystem，而不是 OCI image manifest。
 
