@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import MarkdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 
+import { dockerOciRouteManifest } from './support/docker-oci-routes'
 import { kubernetesRouteManifest } from './support/kubernetes-routes'
 
 const root = resolve(import.meta.dirname, '..')
@@ -11,6 +12,14 @@ const markdownParser = new MarkdownIt()
 const kubernetesFiles = kubernetesRouteManifest.map(
   (route) => `docs/kubernetes/${route}.md`,
 )
+const canonicalDocumentRoutes = new Set([
+  ...kubernetesRouteManifest.map((route) => (
+    route === 'index' ? '/kubernetes/' : `/kubernetes/${route}`
+  )),
+  ...dockerOciRouteManifest.map((route) => (
+    route === 'index' ? '/docker-oci/' : `/docker-oci/${route}`
+  )),
+])
 
 function sourceMarkdownRoutes(): string[] {
   return readdirSync(resolve(docsRoot, 'kubernetes'), {
@@ -22,7 +31,7 @@ function sourceMarkdownRoutes(): string[] {
     .sort()
 }
 
-function nonKubernetesDocumentDestinations(source: string): string[] {
+function nonCanonicalDocumentDestinations(source: string): string[] {
   return markdownParser
     .parse(source, {})
     .flatMap((token) => token.children ?? [])
@@ -36,7 +45,7 @@ function nonKubernetesDocumentDestinations(source: string): string[] {
         !destination.startsWith('//') &&
         !/^[a-z][a-z\d+.-]*:/i.test(destination) &&
         !/\.(?:avif|gif|ico|jpe?g|pdf|png|svg|webp)$/i.test(pathname) &&
-        !destination.startsWith('/kubernetes/')
+        !canonicalDocumentRoutes.has(pathname)
       )
     })
 }
@@ -65,7 +74,7 @@ describe('Kubernetes topic routing', () => {
   })
 
   it('rejects controlled relative Kubernetes document destinations', () => {
-    const relativeDestinations = nonKubernetesDocumentDestinations(
+    const relativeDestinations = nonCanonicalDocumentDestinations(
       '[current](./guide/deployment-flow) [parent](../guide/deployment-flow) [bare](guide/deployment-flow)',
     )
 
@@ -77,17 +86,17 @@ describe('Kubernetes topic routing', () => {
   })
 
   it('excludes anchors, external schemes, and non-document assets from topic-link validation', () => {
-    const excludedDestinations = nonKubernetesDocumentDestinations(
+    const excludedDestinations = nonCanonicalDocumentDestinations(
       '[anchor](#reading-path) [web](https://kubernetes.io) [mail](mailto:docs@example.com) [asset](/logo.png)',
     )
 
     expect(excludedDestinations).toEqual([])
   })
 
-  it.each(kubernetesFiles)('uses absolute Kubernetes routes for document links in %s', (file) => {
+  it.each(kubernetesFiles)('uses canonical absolute routes for document links in %s', (file) => {
     const source = readFileSync(resolve(root, file), 'utf8')
 
-    expect(nonKubernetesDocumentDestinations(source)).toEqual([])
+    expect(nonCanonicalDocumentDestinations(source)).toEqual([])
   })
 
   it('links the Kubernetes reading path with an absolute topic route', () => {
