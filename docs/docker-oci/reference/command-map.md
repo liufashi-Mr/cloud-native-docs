@@ -101,7 +101,7 @@ Volume 删除通常不可恢复。删除前停止写入、按应用语义备份�
 | 删除项目容器与网络 | removed objects | `docker compose down` |
 | 同时删除声明 Volume | removed volumes | `docker compose down --volumes` |
 
-`down --volumes` 比普通 `down` 多删除声明的命名 Volume，可能永久删除数据。
+`down --volumes` 比普通 `down` 多删除 Compose 创建的命名 Volume 和附着的匿名 Volume，可能永久删除数据；声明为 `external` 的 Volume 不由 Compose 删除。
 
 ## 清理与破坏性操作
 
@@ -114,8 +114,10 @@ Volume 删除通常不可恢复。删除前停止写入、按应用语义备份�
 | `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |
 | `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |
 | `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |
-| `docker compose down --volumes` | 当前 Compose project 容器、网络和声明 Volume | project 数据可能永久丢失 |
+| `docker compose down --volumes` | 当前 Compose project 容器、网络、Compose 创建的命名 Volume 和附着的匿名 Volume；不删除 external Volume | 被删除的 project Volume 数据可能永久丢失 |
 
 建议先运行 `docker system df --verbose`、各类 `ls`/`inspect`，记录明确的 ID/名称，再执行最窄的删除命令。不要用宽泛 prune 代替根因分析。
+
+完整选项与版本差异见 Docker 官方 [Docker CLI reference](https://docs.docker.com/reference/cli/docker/) 和 [`docker compose down`](https://docs.docker.com/reference/cli/docker/compose/down/)；速查表只保留常用证据路径，不替代命令的 `--help` 输出。
 
 概念与流程入口：[Docker 架构](/docker-oci/concepts/docker-architecture)、[镜像模型](/docker-oci/concepts/image-model)、[容器模型](/docker-oci/concepts/container-model)、[安全边界](/docker-oci/operations/security)和[故障排查](/docker-oci/operations/troubleshooting)。

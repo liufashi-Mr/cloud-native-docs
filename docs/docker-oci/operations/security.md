@@ -85,4 +85,11 @@ inspect 应显示 `true`、`["ALL"]` 和 `no-new-privileges`，`docker top` 用�
 - 发布端口、bind mount、设备与主机 namespace 都经过逐项审批。
 - 清理前先识别容器、Volume、cache 和凭据各自的数据生命周期。
 
+官方参考：Docker [Engine security]、[Rootless mode]、[Seccomp security profiles] 与 [Build secrets] 分别描述 daemon 主机边界、rootless 前提、默认 seccomp 行为和构建期 secret mount。产品默认值会随版本和平台变化，实际部署仍应检查当前 Engine 配置。
+
+[Engine security]: https://docs.docker.com/engine/security/
+[Rootless mode]: https://docs.docker.com/engine/security/rootless/
+[Seccomp security profiles]: https://docs.docker.com/engine/security/seccomp/
+[Build secrets]: https://docs.docker.com/build/building/secrets/
+
 继续阅读：[Dockerfile 语义](/docker-oci/build/dockerfile)、[BuildKit 缓存](/docker-oci/build/buildkit-cache)、[容器生命周期](/docker-oci/runtime/process-lifecycle)和[存储](/docker-oci/runtime/storage)。

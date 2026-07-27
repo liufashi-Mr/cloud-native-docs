@@ -130,4 +130,6 @@ docker events --since 10m --filter container=demo-api
 
 修复后记录：失败阶段、对象 ID/digest、关键时间、原始错误、最终变更和验证命令。若创建了临时容器或 network，先 `docker ps -a`、`docker network inspect` 确认目标，再精确删除；Volume 默认保留，除非已完成备份与生命周期审批。
 
+命令字段与筛选行为以 Docker 官方 [`docker inspect`](https://docs.docker.com/reference/cli/docker/inspect/)、[`docker events`](https://docs.docker.com/reference/cli/docker/system/events/)、[`docker logs`](https://docs.docker.com/reference/cli/docker/container/logs/) 和 [`docker system df`](https://docs.docker.com/reference/cli/docker/system/df/) 参考为准。排障结论仍需结合当前 Engine 版本、主机系统和应用证据。
+
 进一步阅读：[架构边界](/docker-oci/concepts/docker-architecture)、[进程生命周期](/docker-oci/runtime/process-lifecycle)、[网络](/docker-oci/runtime/networking)、[存储](/docker-oci/runtime/storage)和[命令速查](/docker-oci/reference/command-map)。

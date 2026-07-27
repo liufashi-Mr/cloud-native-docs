@@ -764,7 +764,7 @@ describe('Docker / OCI content contracts', () => {
       '| `docker builder prune` | 可回收 build cache | 后续构建变慢；共享 builder 影响更大 |',
       '| `docker volume prune` | 未被容器引用的 local Volume | 持久数据通常不可恢复 |',
       '| `docker system prune` | 多类未使用对象 | 范围宽；默认不等同于清理所有 Volume |',
-      '| `docker compose down --volumes` | 当前 Compose project 容器、网络和声明 Volume | project 数据可能永久丢失 |',
+      '| `docker compose down --volumes` | 当前 Compose project 容器、网络、Compose 创建的命名 Volume 和附着的匿名 Volume；不删除 external Volume | 被删除的 project Volume 数据可能永久丢失 |',
     ])
     expect(normalizedBashCommands(source, file)).toEqual([
       'docker context show',
