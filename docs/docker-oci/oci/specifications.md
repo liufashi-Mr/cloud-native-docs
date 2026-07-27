@@ -136,6 +136,12 @@ function readJsonFile(name) {
 
 function verifyBlob(descriptor, role) {
   if (!descriptor || typeof descriptor !== 'object') throw new Error(`invalid descriptor: ${role}`)
+  if (
+    typeof descriptor.mediaType !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$/.test(descriptor.mediaType)
+  ) {
+    throw new Error(`invalid descriptor mediaType: ${role}`)
+  }
   if (!Number.isSafeInteger(descriptor.size) || descriptor.size < 0) {
     throw new Error(`invalid descriptor size: ${role}`)
   }
@@ -177,6 +183,9 @@ function verifyBlob(descriptor, role) {
 function verifyManifest(descriptor, bytes, role) {
   const manifest = parseJson(bytes, role)
   if (manifest.schemaVersion !== 2) throw new Error(`unsupported schemaVersion: ${role}`)
+  if (manifest.mediaType !== undefined && manifest.mediaType !== imageManifestMediaType) {
+    throw new Error(`mismatched embedded mediaType: ${role}`)
+  }
   if (!manifest.config || !Array.isArray(manifest.layers)) {
     throw new Error(`invalid image manifest: ${role}`)
   }
@@ -214,6 +223,9 @@ function verifyIndex(index, role, depth) {
   if (index.schemaVersion !== 2 || !Array.isArray(index.manifests)) {
     throw new Error(`invalid image index: ${role}`)
   }
+  if (index.mediaType !== undefined && index.mediaType !== imageIndexMediaType) {
+    throw new Error(`mismatched embedded mediaType: ${role}`)
+  }
   for (const [position, descriptor] of index.manifests.entries()) {
     const descriptorRole = `${role} manifests[${position}]`
     const bytes = verifyBlob(descriptor, descriptorRole)
@@ -231,9 +243,7 @@ function verifyIndex(index, role, depth) {
         verifyIndex(parseJson(bytes, descriptorRole), descriptorRole, depth + 1)
       }
     } else {
-      const mediaType = typeof descriptor.mediaType === 'string'
-        ? descriptor.mediaType
-        : '<missing>'
+      const mediaType = descriptor.mediaType
       skippedDescriptors.set(`${descriptor.digest}|${mediaType}`, mediaType)
     }
   }
@@ -262,7 +272,7 @@ rm demo-api.oci.tar
 
 build 成功时会生成 OCI archive，两条 `test` 以零状态确认布局入口。验证器首先解析 `oci-layout` 并要求当前 `imageLayoutVersion` 为 `1.0.0`，再从 `index.json` 递归跟随已识别的 index/manifest descriptor，对它们及所引用的 config 和 layer blob 重算 size 与 digest。index 和 manifest 必须作为 JSON 解析；只有 config descriptor 的 `mediaType` 明确为 `application/vnd.oci.image.config.v1+json` 时才解析 config JSON，普通或未知 config mediaType 只校验原始 bytes。layer 同样一律只按 bytes 校验，因此 binary config 和 gzip layer 不会被误当成 JSON。
 
-index 中未识别的 descriptor mediaType 仍必须先通过 digest 和 size 校验，之后才作为 unsupported/out-of-scope 记录到 skipped 计数，验证器不把未知 bytes 猜成 JSON，也不仅因未知 mediaType 拒绝整个布局。用 image manifest 表示的 attestation 辅助对象仍会校验 config 与所有 layer，但 `unknown/unknown` 或标记为 attestation 的 descriptor 不计入 runnable platform。
+每个 descriptor 都必须提供符合 media type 语法的 `mediaType`；缺失或语法非法会使验证失败。index 与 manifest JSON 内若提供自身 `mediaType`，也必须和 descriptor 选择的对象类型一致。index 中合法但未识别的 descriptor mediaType 仍必须先通过 digest 和 size 校验，之后才作为 unsupported/out-of-scope 记录到 skipped 计数，验证器不把未知 bytes 猜成 JSON，也不仅因未知 mediaType 拒绝整个布局。用 image manifest 表示的 attestation 辅助对象仍会校验 config 与所有 layer，但 `unknown/unknown` 或标记为 attestation 的 descriptor 不计入 runnable platform。
 
 `verified unique OCI blobs: N; manifests=M configs=C layers=L skipped=S` 是完整递归范围的成功证据。验证器按 digest 缓存已校验 bytes，命中缓存时仍要求 descriptor size 与已知 bytes 一致；已遍历的 index 和 manifest 不重复递归，共享 layer 也只计入一次 unique layer。这使 duplicate nested-index DAG 不会指数展开。index 最多递归 32 层，超限会以 `maximum OCI index depth exceeded` 明确失败，而不是依赖几乎无法构造的 digest cycle。
 

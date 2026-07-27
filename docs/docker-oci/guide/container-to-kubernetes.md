@@ -124,7 +124,7 @@ spec:
 
 ## 在测试集群中验证
 
-前置条件：有一个可用的测试集群，已安装 `kubectl` 和 `curl`，有权创建 Pod 与 Service，主机端口 `18080` 未被占用，且当前目录没有 `demo-api-pod.yaml`。先把上一节的 YAML 原样落盘为 `demo-api-pod.template.yaml`，再在当前 shell 中把 `DEMO_API_IMAGE` 设为节点可拉取、组织已批准的 `registry/repository@sha256:digest`。不要把占位 digest 直接执行。
+前置条件：有一个可用的测试集群，已安装 `kubectl` 和 `curl`，有权创建和删除 namespace，并能在该 namespace 中管理 Pod 与 Service，主机端口 `18080` 未被占用。先把上一节的 YAML 原样落盘为 `demo-api-pod.template.yaml`，再在当前 shell 中把 `DEMO_API_IMAGE` 设为节点可拉取、组织已批准的 `registry/repository@sha256:digest`。不要把占位 digest 直接执行。
 
 本地 `demo-api:dev` 不会自动出现在集群节点上。`kind load docker-image`、`minikube image load` 或特定容器 runtime 的 import 流程都是本地集群实现选择，不具备跨集群通用性。本流程使用已批准 digest，并先显示 context 与 API 端点；读者必须确认 kubectl context 确实指向允许测试的集群，否则应在 `kubectl apply` 前停止。
 

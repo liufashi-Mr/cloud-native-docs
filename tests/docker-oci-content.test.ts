@@ -487,6 +487,30 @@ function appendUnknownSyntheticDescriptor(
   return resolve(layout, 'blobs', 'sha256', descriptor.digest.slice('sha256:'.length))
 }
 
+function replaceFirstSyntheticManifestMediaType(
+  layout: string,
+  fixture: SyntheticOciLayout,
+  mediaType: string,
+): void {
+  const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+  const descriptor = index.manifests.find(
+    (candidate: OciDescriptor) =>
+      candidate.mediaType === 'application/vnd.oci.image.manifest.v1+json',
+  ) as OciDescriptor
+  const [, manifestEncoded] = descriptor.digest.split(':', 2)
+  const manifest = JSON.parse(
+    readFileSync(resolve(layout, 'blobs', 'sha256', manifestEncoded), 'utf8'),
+  )
+  manifest.mediaType = mediaType
+  const replacement = writeOciBlob(
+    layout,
+    'application/vnd.oci.image.manifest.v1+json',
+    JSON.stringify(manifest),
+  )
+  Object.assign(descriptor, replacement)
+  writeFileSync(fixture.index, JSON.stringify(index))
+}
+
 function kubernetesWorkflow(source: string, file: string): string {
   const workflow = fenceContents(source, file, 'bash')
     .find((content) => content.includes('kubectl apply'))
@@ -794,6 +818,8 @@ describe('Docker / OCI content contracts', () => {
     expect(source).toContain('minikube image load')
     expect(source).toContain('不具备跨集群通用性')
     expect(source).toContain('本次唯一 namespace')
+    expect(source).toContain('有权创建和删除 namespace')
+    expect(source).not.toContain('当前目录没有 `demo-api-pod.yaml`')
     expect(source).toContain('Forwarding from 127.0.0.1:18080')
     expect(source.match(/kill -0 "\$demo_api_port_forward_pid"/g)).toHaveLength(2)
     expect(source.match(/if require_port_forward_alive; then/g)).toHaveLength(3)
@@ -1416,6 +1442,86 @@ describe('Docker / OCI content contracts', () => {
       expect(result.stdout).toContain(
         'skipped unsupported descriptor mediaTypes: application/vnd.example.binary',
       )
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it.each([
+    {
+      mutate: (fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        delete index.manifests[0].mediaType
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'a missing descriptor mediaType',
+    },
+    {
+      mutate: (fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        index.manifests[0].mediaType = 'not a media type'
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'an invalid descriptor mediaType',
+    },
+  ])('rejects $name', ({ mutate }) => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-invalid-media-type-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      mutate(fixture)
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('invalid descriptor mediaType')
+    } finally {
+      rmSync(temporaryRoot, { force: true, recursive: true })
+    }
+  })
+
+  it.each([
+    {
+      mutate: (_layout: string, fixture: SyntheticOciLayout) => {
+        const index = JSON.parse(readFileSync(fixture.index, 'utf8'))
+        index.mediaType = 'application/vnd.oci.image.manifest.v1+json'
+        writeFileSync(fixture.index, JSON.stringify(index))
+      },
+      name: 'index',
+    },
+    {
+      mutate: (layout: string, fixture: SyntheticOciLayout) => {
+        replaceFirstSyntheticManifestMediaType(
+          layout,
+          fixture,
+          'application/vnd.oci.image.index.v1+json',
+        )
+      },
+      name: 'manifest',
+    },
+  ])('rejects a mismatched embedded $name mediaType', ({ mutate }) => {
+    const file = 'docs/docker-oci/oci/specifications.md'
+    const script = nodeHeredoc(readRequiredPage(file), file)
+    const temporaryRoot = mkdtempSync(resolve(tmpdir(), 'docker-oci-mismatched-media-type-'))
+    const layout = resolve(temporaryRoot, 'layout')
+
+    try {
+      const fixture = createSyntheticOciLayout(layout)
+      mutate(layout, fixture)
+      const result = spawnSync(process.execPath, ['--input-type=module'], {
+        encoding: 'utf8',
+        env: { ...process.env, DEMO_API_OCI_DIR: layout },
+        input: script,
+      })
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('mismatched embedded mediaType')
     } finally {
       rmSync(temporaryRoot, { force: true, recursive: true })
     }
