@@ -140,7 +140,7 @@ describe('GitHub Pages deployment', () => {
   })
 
   it.each([
-    ['project Pages', 'liufashi-Mr/k8s-doc', '/k8s-doc/'],
+    ['project Pages', 'liufashi-Mr/cloud-native', '/cloud-native/'],
     ['user or organization Pages', 'ExampleOrg/EXAMPLEORG.GITHUB.IO', '/'],
   ])('resolves the %s base from the repository name', async (_, repository, expected) => {
     const workflow = await readWorkflow()
