@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { dockerOciRouteManifest } from './support/docker-oci-routes'
 import { kubernetesRouteManifest } from './support/kubernetes-routes'
+import { linuxRouteManifest } from './support/linux-routes'
 
 const root = resolve(import.meta.dirname, '..')
 const docsRoot = resolve(root, 'docs')
@@ -18,6 +19,9 @@ const canonicalDocumentRoutes = new Set([
   )),
   ...dockerOciRouteManifest.map((route) => (
     route === 'index' ? '/docker-oci/' : `/docker-oci/${route}`
+  )),
+  ...linuxRouteManifest.map((route) => (
+    route === 'index' ? '/linux/' : `/linux/${route}`
   )),
 ])
 
