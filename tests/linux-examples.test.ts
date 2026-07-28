@@ -6,14 +6,18 @@ import { describe, expect, it } from 'vitest'
 import { markdownFences } from './support/markdown'
 
 const root = resolve(import.meta.dirname, '..')
-const initialPages = [
+const linuxPages = [
   'docs/linux/index.md',
   'docs/linux/guide/shell-practical-basics.md',
   'docs/linux/guide/run-demo-api.md',
+  'docs/linux/concepts/processes-and-procfs.md',
+  'docs/linux/concepts/users-groups-permissions.md',
+  'docs/linux/concepts/filesystems-and-mounts.md',
+  'docs/linux/concepts/signals-and-exit-status.md',
 ]
 
 describe('Linux runnable examples', () => {
-  it.each(initialPages)('keeps Bash fences syntactically valid in %s', (file) => {
+  it.each(linuxPages)('keeps Bash fences syntactically valid in %s', (file) => {
     const source = readFileSync(resolve(root, file), 'utf8')
     for (const fence of markdownFences(source, file).filter(
       ({ language }) => language === 'bash',

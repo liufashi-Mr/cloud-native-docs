@@ -66,6 +66,79 @@ const pageContracts: Record<string, PageContract> = {
       'ss -ltnp',
     ],
   },
+  'docs/linux/concepts/processes-and-procfs.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '进程表是一个时间点的快照，不是完整执行历史',
+      '/proc/<pid>/environ 使用 NUL 分隔环境项',
+      '文件描述符是进程表项中的整数引用',
+      'PID 可以复用，单独保存 PID 不能永久证明进程身份',
+    ],
+    terms: [
+      'PID',
+      'PPID',
+      'thread',
+      'process state',
+      '/proc',
+      'fd',
+      'cmdline',
+      'start time',
+    ],
+  },
+  'docs/linux/concepts/users-groups-permissions.md': {
+    fences: ['bash'],
+    phrases: [
+      'kernel 比较数值 UID 和 GID，不比较用户名字符串',
+      '目录的 execute 位控制路径遍历',
+      'umask 从请求的 mode 中移除权限',
+      'capability 把传统 root 权限拆成独立能力',
+    ],
+    terms: [
+      'UID',
+      'GID',
+      'supplementary groups',
+      'umask',
+      'ACL',
+      'capabilities',
+      'demo-api',
+    ],
+  },
+  'docs/linux/concepts/filesystems-and-mounts.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      'pathname 经过逐级解析后定位文件对象',
+      'hard link 引用同一个 inode',
+      'mount 把一个文件系统附着到目录树中的挂载点',
+      '剩余字节和剩余 inode 是两种不同容量',
+    ],
+    terms: [
+      'pathname',
+      'inode',
+      'hard link',
+      'symbolic link',
+      'mount point',
+      'findmnt',
+      'df -i',
+    ],
+  },
+  'docs/linux/concepts/signals-and-exit-status.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      'SIGKILL 不能被捕获、阻塞或忽略',
+      '退出状态只保留有限范围的信息',
+      '向单个 PID 发信号不等于处理整个进程组',
+      'graceful shutdown 必须有可验证的等待上界',
+    ],
+    terms: [
+      'SIGTERM',
+      'SIGINT',
+      'SIGKILL',
+      'process group',
+      'wait',
+      'exit status',
+      'trap',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {
