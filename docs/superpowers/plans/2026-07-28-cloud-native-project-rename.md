@@ -643,7 +643,7 @@ Across historical specs/plans, make these semantic updates:
 
 ~~~text
 k8s-concepts-handbook             -> cloud-native
-liufashi-Mr/k8s-doc               -> liufashi-Mr/cloud-native
+liufashi-Mr/k8s-doc               -> liufashi-Mr/cloud-native-docs
 /k8s-doc/                         -> /cloud-native/
 --k8s-*                           -> --cloud-native-*
 .k8s-appearance*                  -> .cloud-native-appearance*
@@ -788,54 +788,54 @@ Run:
 git status --short --branch
 gh auth status
 gh repo view liufashi-Mr/k8s-doc --json nameWithOwner,url,defaultBranchRef
-if gh repo view liufashi-Mr/cloud-native >/dev/null 2>&1; then exit 1; fi
+if gh repo view liufashi-Mr/cloud-native-docs >/dev/null 2>&1; then exit 1; fi
 test ! -e /Users/liufashi/workspace/personal/cloud-native
 ~~~
 
-Expected: working tree clean, GitHub authentication valid, old repository resolves with default branch `main`, no repository named `liufashi-Mr/cloud-native` exists yet, and the target local directory does not exist.
+Expected: working tree clean, GitHub authentication valid, old repository resolves with default branch `main`, no repository named `liufashi-Mr/cloud-native-docs` exists yet, and the target local directory does not exist.
 
 - [ ] **Step 2: Rename the GitHub repository**
 
 Run:
 
 ~~~bash
-gh repo rename cloud-native --repo liufashi-Mr/k8s-doc --yes
-gh repo view liufashi-Mr/cloud-native --json nameWithOwner,url,defaultBranchRef
+gh repo rename cloud-native-docs --repo liufashi-Mr/k8s-doc --yes
+gh repo view liufashi-Mr/cloud-native-docs --json nameWithOwner,url,defaultBranchRef
 ~~~
 
-Expected: `nameWithOwner` is `liufashi-Mr/cloud-native`.
+Expected: `nameWithOwner` is `liufashi-Mr/cloud-native-docs`.
 
 - [ ] **Step 3: Update origin and publish main**
 
 Run:
 
 ~~~bash
-git remote set-url origin git@github.com:liufashi-Mr/cloud-native.git
+git remote set-url origin git@github.com:liufashi-Mr/cloud-native-docs.git
 git remote -v
 git ls-remote origin HEAD
 git push origin main
 ~~~
 
-Expected: fetch and push URLs use `cloud-native.git`, remote HEAD resolves, and `main` pushes successfully.
+Expected: fetch and push URLs use `cloud-native-docs.git`, remote HEAD resolves, and `main` pushes successfully.
 
 - [ ] **Step 4: Verify the Pages deployment**
 
 Run:
 
 ~~~bash
-gh run list --repo liufashi-Mr/cloud-native --workflow deploy-pages.yml --branch main --limit 1
-gh api repos/liufashi-Mr/cloud-native/pages --jq '{html_url, status}'
+gh run list --repo liufashi-Mr/cloud-native-docs --workflow deploy-pages.yml --branch main --limit 1
+gh api repos/liufashi-Mr/cloud-native-docs/pages --jq '{html_url, status}'
 ~~~
 
 Resolve and watch the newest deployment run:
 
 ~~~bash
-pages_run_id="$(gh run list --repo liufashi-Mr/cloud-native --workflow deploy-pages.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
+pages_run_id="$(gh run list --repo liufashi-Mr/cloud-native-docs --workflow deploy-pages.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
 test -n "$pages_run_id"
-gh run watch "$pages_run_id" --repo liufashi-Mr/cloud-native --exit-status
+gh run watch "$pages_run_id" --repo liufashi-Mr/cloud-native-docs --exit-status
 ~~~
 
-Expected: workflow succeeds and the Pages API reports the new `/cloud-native/` site URL.
+Expected: workflow succeeds and the Pages API reports the configured site URL.
 
 - [ ] **Step 5: Stop the old-path dev server and rename the workspace**
 

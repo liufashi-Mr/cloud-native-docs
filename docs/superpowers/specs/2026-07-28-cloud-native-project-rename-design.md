@@ -11,7 +11,7 @@
 下列名称属于项目身份，统一使用 `cloud-native`：
 
 - 本地仓库目录：`k8s` 改为 `cloud-native`。
-- GitHub 仓库：`liufashi-Mr/k8s-doc` 改为 `liufashi-Mr/cloud-native`。
+- GitHub 仓库：`liufashi-Mr/k8s-doc` 改为 `liufashi-Mr/cloud-native-docs`。
 - GitHub Pages 项目路径：`/k8s-doc/` 改为 `/cloud-native/`。
 - npm 包名：`k8s-concepts-handbook` 改为 `cloud-native`。
 - 自定义 CSS 变量：`--k8s-*` 改为 `--cloud-native-*`。
@@ -61,7 +61,7 @@
 
 ## Repository And Deployment Migration
 
-GitHub 仓库重命名为 `cloud-native`，本地 `origin` 更新为 `git@github.com:liufashi-Mr/cloud-native.git`。GitHub 通常会为旧仓库 URL 提供跳转，但代码和文档不依赖该兼容行为。
+GitHub 仓库重命名为 `cloud-native-docs`，本地 `origin` 更新为 `git@github.com:liufashi-Mr/cloud-native-docs.git`。GitHub 通常会为旧仓库 URL 提供跳转，但代码和文档不依赖该兼容行为。
 
 项目 Pages 基路径同步改为 `/cloud-native/`。部署测试、构建命令和历史维护文档中的项目站点示例全部更新；根路径构建仍用于本地和域名根路径场景。
 
