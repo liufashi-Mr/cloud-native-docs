@@ -146,6 +146,11 @@ describe('CloudNativeHome', () => {
     expect(topics).toHaveLength(24)
     expect(topics.filter((topic) => topic.status === 'available')).toEqual([
       expect.objectContaining({
+        title: 'Linux',
+        href: '/linux/',
+        icon: 'terminal',
+      }),
+      expect.objectContaining({
         title: 'Docker / OCI',
         href: '/docker-oci/',
         icon: 'container',
@@ -156,7 +161,7 @@ describe('CloudNativeHome', () => {
         icon: 'ship-wheel',
       }),
     ])
-    expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(22)
+    expect(topics.filter((topic) => topic.status === 'planned')).toHaveLength(21)
   })
 
   it('assigns one recognizable linear icon to each topic', () => {
@@ -181,7 +186,7 @@ describe('CloudNativeHome', () => {
     expect(wrapper.get('h1').text()).toBe('应用开发者的云原生技术工作台')
     expect(wrapper.text()).toContain('5 条开发路径')
     expect(wrapper.text()).toContain('24 个技术主题')
-    expect(wrapper.text()).toContain('2 个已完成')
+    expect(wrapper.text()).toContain('3 个已完成')
     expect(wrapper.findAll('[data-path]')).toHaveLength(5)
     expect(wrapper.findAll('[data-domain]')).toHaveLength(6)
     expect(wrapper.findAll('[data-topic]')).toHaveLength(24)
@@ -190,10 +195,13 @@ describe('CloudNativeHome', () => {
     }
 
     const available = wrapper.findAll('[data-topic][data-status="available"]')
-    expect(available).toHaveLength(2)
+    expect(available).toHaveLength(3)
 
+    const linux = available.find((topic) => topic.text().includes('Linux'))
     const dockerOci = available.find((topic) => topic.text().includes('Docker / OCI'))
     const kubernetes = available.find((topic) => topic.text().includes('Kubernetes'))
+    expect(linux?.element.tagName).toBe('A')
+    expect(linux?.attributes('href')).toBe('/project/linux/')
     expect(dockerOci?.element.tagName).toBe('A')
     expect(dockerOci?.attributes('href')).toBe('/project/docker-oci/')
     expect(kubernetes?.element.tagName).toBe('A')
@@ -215,7 +223,7 @@ describe('CloudNativeHome', () => {
     }
 
     const planned = wrapper.findAll('[data-topic][data-status="planned"]')
-    expect(planned).toHaveLength(22)
+    expect(planned).toHaveLength(21)
     for (const topic of planned) {
       expect(topic.element.tagName).toBe('DIV')
       expect(topic.attributes('tabindex')).toBeUndefined()

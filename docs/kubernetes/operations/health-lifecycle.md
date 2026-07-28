@@ -152,4 +152,4 @@ Ready、Running 与“用户请求成功”是三个层次。probe 只能从 kub
 
 ## 继续阅读
 
-前置：[调度与资源](/kubernetes/concepts/scheduling-resources)。下一篇：[发布与扩缩容](/kubernetes/operations/release-scaling)，把单个 Pod 的健康信号放进副本更新与容量控制循环。容器 PID 1、信号转发和退出行为见 [进程与生命周期](/docker-oci/runtime/process-lifecycle)。
+前置：[调度与资源](/kubernetes/concepts/scheduling-resources)。下一篇：[发布与扩缩容](/kubernetes/operations/release-scaling)，把单个 Pod 的健康信号放进副本更新与容量控制循环。容器 PID 1、信号转发和退出行为见 [进程与生命周期](/docker-oci/runtime/process-lifecycle)；底层 signal disposition、process group、wait status 与强制终止边界见 [Linux 信号与退出状态](/linux/concepts/signals-and-exit-status)。

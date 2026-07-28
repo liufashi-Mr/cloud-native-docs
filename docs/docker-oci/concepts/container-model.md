@@ -71,6 +71,8 @@ Linux namespaces 为一组进程提供不同的系统资源视图。namespace �
 
 namespace 是内核边界而不是虚拟机边界。容器共享主机内核，错误配置的 capability、特权模式、敏感 bind mount 或 runtime 漏洞仍可能突破预期边界。Linux namespaces 的系统接口可参考 [namespaces(7)](https://man7.org/linux/man-pages/man7/namespaces.7.html)。
 
+需要从主机进程视角观察八类资源视图、`/proc/<pid>/ns` 和 user namespace 映射时，参见 [Linux namespace](/linux/concepts/namespaces)。
+
 ## cgroups 约束与统计资源
 
 cgroups 把进程组织到控制组中，供内核统计 CPU、内存、I/O 和 PID 等资源，并在配置时施加限制。`docker stats` 读取的指标来自这类运行时统计，但字段和计算方式会受 cgroup v1/v2、操作系统及 Docker 版本影响。

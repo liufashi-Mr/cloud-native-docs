@@ -1,0 +1,18 @@
+export const linuxRouteManifest = [
+  'index',
+  'guide/shell-practical-basics',
+  'guide/run-demo-api',
+  'concepts/processes-and-procfs',
+  'concepts/users-groups-permissions',
+  'concepts/filesystems-and-mounts',
+  'concepts/signals-and-exit-status',
+  'concepts/namespaces',
+  'concepts/cgroups-and-resources',
+  'runtime/systemd-services',
+  'runtime/logs-and-journal',
+  'runtime/sockets-and-name-resolution',
+  'runtime/resource-pressure',
+  'operations/security-boundaries',
+  'operations/troubleshooting',
+  'reference/command-evidence-map',
+] as const

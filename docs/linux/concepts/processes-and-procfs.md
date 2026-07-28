@@ -124,4 +124,4 @@ curl --fail --show-error http://127.0.0.1:3000/healthz
 - `kill -0` 不发送信号，但也不能永久锁定进程身份。
 - Docker Desktop 中看到的 Linux PID 位于 VM；容器 PID namespace 中的 PID 与主机 PID 可以不同。
 
-参考 [proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html)、[proc_pid_stat(5)](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html) 和 [Linux kernel task documentation](https://docs.kernel.org/)。下一步学习[用户、组与权限](/linux/concepts/users-groups-permissions)和[信号与退出状态](/linux/concepts/signals-and-exit-status)。
+参考 [proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html)、[proc_pid_stat(5)](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html) 和 [Linux kernel task documentation](https://docs.kernel.org/)。Kubernetes 节点上的进程职责边界见[集群与节点](/kubernetes/concepts/cluster-nodes)。下一步学习[用户、组与权限](/linux/concepts/users-groups-permissions)和[信号与退出状态](/linux/concepts/signals-and-exit-status)。

@@ -42,6 +42,8 @@ OCI Runtime Specification 定义 `create`、`start`、`kill`、`delete` 等低�
 
 容器初始进程在自己的 PID namespace 中通常是 PID 1。Linux 对 PID 1 的默认信号处理有特殊规则，它还应回收孤儿子进程。应用若会派生子进程，应明确处理终止信号和回收；不能只因为进程在容器里就假定这些问题消失。
 
+主机上的 signal disposition、process group、wait status 和可验证停止上界见 [Linux 信号与退出状态](/linux/concepts/signals-and-exit-status)。
+
 Dockerfile 的 exec form，例如 `ENTRYPOINT ["node", "server.mjs"]`，直接执行应用。shell form 可能让 shell 成为 PID 1；如果 shell 没有 `exec` 应用或正确转发信号，应用可能收不到预期的 `SIGTERM`。对无法自行回收子进程的应用，可在 `docker run` 使用 `--init`，让一个小型 init 位于 PID 1 并转发信号、回收子进程；它不会替应用改变信号退出状态，也不会让 exit code 自动变成 0。
 
 对 Node.js 24 的 Unix 进程，本例应用没有安装 `SIGTERM` handler；Node 的默认信号行为终止进程，因此正常收到该信号时通常观察到 exit code `143`，即 `128 + 15`。只有应用主动处理 `SIGTERM`，停止接收新请求，等待 `server.close` 完成并正常退出，才应预期 exit code 0。canonical `server.mjs` 为了保持最小示例没有加入该 handler，所以本页只解释这个差异，不改写源码。

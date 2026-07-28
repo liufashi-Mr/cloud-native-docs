@@ -163,6 +163,49 @@ export default defineConfig({
     logo: '/logo.png',
     siteTitle: '云原生开发手册',
     sidebar: {
+      '/linux/': [
+        {
+          text: '开始',
+          items: [
+            { text: 'Linux 应用运行基础', link: '/linux/' },
+            { text: 'Shell 实用基础', link: '/linux/guide/shell-practical-basics' },
+            { text: '在主机运行 demo-api', link: '/linux/guide/run-demo-api' },
+          ],
+        },
+        {
+          text: '核心模型',
+          items: [
+            { text: '进程与 procfs', link: '/linux/concepts/processes-and-procfs' },
+            { text: '用户、组与权限', link: '/linux/concepts/users-groups-permissions' },
+            { text: '文件系统与 mount', link: '/linux/concepts/filesystems-and-mounts' },
+            { text: '信号与退出状态', link: '/linux/concepts/signals-and-exit-status' },
+            { text: 'Linux namespace', link: '/linux/concepts/namespaces' },
+            { text: 'cgroup v2 与资源', link: '/linux/concepts/cgroups-and-resources' },
+          ],
+        },
+        {
+          text: '运行与服务',
+          items: [
+            { text: 'systemd 服务', link: '/linux/runtime/systemd-services' },
+            { text: '日志与 journal', link: '/linux/runtime/logs-and-journal' },
+            { text: 'Socket 与名称解析', link: '/linux/runtime/sockets-and-name-resolution' },
+            { text: '资源压力', link: '/linux/runtime/resource-pressure' },
+          ],
+        },
+        {
+          text: '运行实践',
+          items: [
+            { text: '安全边界', link: '/linux/operations/security-boundaries' },
+            { text: '系统化排障', link: '/linux/operations/troubleshooting' },
+          ],
+        },
+        {
+          text: '速查',
+          items: [
+            { text: '命令与证据速查', link: '/linux/reference/command-evidence-map' },
+          ],
+        },
+      ],
       '/docker-oci/': [
         {
           text: '开始',

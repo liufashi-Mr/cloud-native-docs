@@ -71,4 +71,4 @@ Node 的 `Ready=True` 表示 kubelet 报告的节点健康条件满足，并不�
 
 ## 继续阅读
 
-前置：[资源对象与元数据](/kubernetes/concepts/resource-model)。下一篇：[工作负载](/kubernetes/concepts/workloads)，比较各类 controller 如何创建和维护 Pod。容器运行链路的 Docker、containerd 与 OCI runtime 边界见 [Docker 架构与边界](/docker-oci/concepts/docker-architecture)。
+前置：[资源对象与元数据](/kubernetes/concepts/resource-model)。下一篇：[工作负载](/kubernetes/concepts/workloads)，比较各类 controller 如何创建和维护 Pod。容器运行链路的 Docker、containerd 与 OCI runtime 边界见 [Docker 架构与边界](/docker-oci/concepts/docker-architecture)。Linux 节点上的 PID、父子关系、文件描述符与 `/proc` 观察边界见 [Linux 进程与 procfs](/linux/concepts/processes-and-procfs)。

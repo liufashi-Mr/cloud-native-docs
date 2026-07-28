@@ -174,3 +174,5 @@ printf 'evidence_dir=%s\n' "$evidence_dir"
 | latency high | usage、PSI、limits、downstream | [资源压力](/linux/runtime/resource-pressure) |
 
 参考 [systemd troubleshooting interfaces](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html)、[proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html) 和 [Ubuntu observability](https://documentation.ubuntu.com/server/how-to/observability/)。快速查命令见[命令与证据速查](/linux/reference/command-evidence-map)。
+
+故障若仍位于 Kubernetes API、Pod event、Service 或调度层，返回 [Kubernetes 系统化排障](/kubernetes/operations/troubleshooting)，不要用主机命令替代控制面证据。

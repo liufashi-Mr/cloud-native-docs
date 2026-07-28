@@ -107,7 +107,12 @@ export const technologyDomains: readonly TechnologyDomain[] = [
     icon: 'terminal',
     tone: 'coral',
     topics: [
-      { title: 'Linux', status: 'planned', icon: 'terminal' },
+      {
+        title: 'Linux',
+        status: 'available',
+        href: '/linux/',
+        icon: 'terminal',
+      },
       { title: '网络与 DNS', status: 'planned', icon: 'network' },
       { title: '存储', status: 'planned', icon: 'hard-drive' },
       { title: '云平台基础', status: 'planned', icon: 'cloud' },

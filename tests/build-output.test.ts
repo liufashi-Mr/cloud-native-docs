@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { dockerOciRouteManifest } from './support/docker-oci-routes'
 import { kubernetesRouteManifest } from './support/kubernetes-routes'
+import { linuxRouteManifest } from './support/linux-routes'
 
 const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'docs/.vitepress/dist')
@@ -60,9 +61,10 @@ describe('production build', () => {
     expect(kubernetesHome).toContain('Kubernetes 概念总览')
   })
 
-  it('publishes exactly the Kubernetes and Docker / OCI HTML inventories', () => {
+  it('publishes exactly the Kubernetes, Docker / OCI, and Linux HTML inventories', () => {
     expect(builtTopicRoutes('kubernetes')).toEqual([...kubernetesRouteManifest].sort())
     expect(builtTopicRoutes('docker-oci')).toEqual([...dockerOciRouteManifest].sort())
+    expect(builtTopicRoutes('linux')).toEqual([...linuxRouteManifest].sort())
   })
 
   it('publishes the Docker / OCI homepage entry and module home', () => {
@@ -72,6 +74,15 @@ describe('production build', () => {
     expect(home).toContain('href="/docker-oci/"')
     expect(home).toContain('Docker / OCI')
     expect(dockerOciHome).toContain('Docker / OCI 总览')
+  })
+
+  it('publishes the Linux homepage entry and module home', () => {
+    const home = readFileSync(resolve(dist, 'index.html'), 'utf8')
+    const linuxHome = readFileSync(resolve(dist, 'linux/index.html'), 'utf8')
+
+    expect(home).toContain('href="/linux/"')
+    expect(home).toContain('Linux')
+    expect(linuxHome).toContain('Linux 应用运行基础')
   })
 
   it('does not publish internal superpowers pages', () => {

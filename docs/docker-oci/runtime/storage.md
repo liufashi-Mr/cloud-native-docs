@@ -44,6 +44,8 @@ named volume 是 Docker 对存储对象的命名与生命周期管理，不代�
 
 Linux 文件权限最终比较数值 UID 和 GID，而不是用户名字符串。同一个 `node` 名称在镜像与主机上可能对应不同数值；named volume 中已有文件的 owner 也不会因为新镜像更换用户名而自动迁移。推荐在镜像和部署配置中保持已知的非 root UID/GID，并在应用启动前以受控迁移步骤调整数据权限，不要常态化使用 `chmod 777`。
 
+pathname、inode、mount view、剩余 blocks 与 inode 的主机证据见 [Linux 文件系统与 mount](/linux/concepts/filesystems-and-mounts)。
+
 bind mount 的 source 路径属于 Docker daemon 主机。远程 Docker context 下，CLI 当前目录不是远端主机目录；把本地路径传给远端 daemon 通常会找不到或挂到意外位置。Docker Desktop 的 daemon 位于 Linux VM，Desktop 负责把获准的 macOS/Windows 路径共享进 VM；文件共享设置、大小写、事件通知、owner 映射和 I/O 性能可能与原生 Linux 不同。不要把本机 bind mount 的测试结果直接当作生产 Linux 的性能或权限保证。
 
 ## bind propagation 的权限边界

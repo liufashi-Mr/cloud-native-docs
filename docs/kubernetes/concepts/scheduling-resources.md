@@ -123,4 +123,4 @@ kubectl -n demo get pdb worker
 
 ## 继续阅读
 
-前置：[身份与安全](/kubernetes/concepts/security)。下一篇：[健康检查与生命周期](/kubernetes/operations/health-lifecycle)，把调度成功继续推进到应用就绪与安全终止。
+前置：[身份与安全](/kubernetes/concepts/security)。下一篇：[健康检查与生命周期](/kubernetes/operations/health-lifecycle)，把调度成功继续推进到应用就绪与安全终止。节点最终通过 Linux cgroup 统计和约束容器进程；requests、limits、cgroup event 和 PSI 的底层边界见 [Linux cgroup v2 与资源](/linux/concepts/cgroups-and-resources)。

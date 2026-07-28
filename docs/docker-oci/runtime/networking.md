@@ -38,6 +38,8 @@ sequenceDiagram
 
 Docker 的默认行为是：未指定 `--network` 的 Linux 容器连接默认 bridge。user-defined bridge 的隔离规则、embedded DNS 和可连接性由 Docker Engine 提供，不是 OCI 对所有 runtime 的要求。`host` 会移除一层网络隔离，端口冲突直接发生在主机；`none` 也不等于进程没有任何 IPC、mount 或其他权限。
 
+监听 socket、连接、主机 route、NSS/resolver 与 network namespace 的分层证据见 [Linux Socket 与名称解析](/linux/runtime/sockets-and-name-resolution)。
+
 ## 容器 DNS 与主机 DNS
 
 同一 user-defined bridge 上的 `probe` 可以解析 service/container 名 `demo-api-net`。Docker 的 embedded DNS 接收容器查询并解析网络内名称，对外部名称再根据 daemon 主机配置转发。容器的 `/etc/resolv.conf` 是 Engine 生成的运行时视图，不应在镜像构建时硬编码为某台主机的 resolver。

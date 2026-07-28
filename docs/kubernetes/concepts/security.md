@@ -114,4 +114,4 @@ Secret 的 base64 不是加密，应通过 RBAC、静态加密、轮换、审计
 
 ## 继续阅读
 
-前置：[配置与存储](/kubernetes/concepts/config-storage)。下一篇：[调度与资源](/kubernetes/concepts/scheduling-resources)，理解安全约束之外的放置、容量与中断边界。
+前置：[配置与存储](/kubernetes/concepts/config-storage)。下一篇：[调度与资源](/kubernetes/concepts/scheduling-resources)，理解安全约束之外的放置、容量与中断边界。SecurityContext 对应的主机 service account、capabilities、`NoNewPrivileges`、systemd sandbox 与共享 kernel 边界见 [Linux 应用安全边界](/linux/operations/security-boundaries)。
