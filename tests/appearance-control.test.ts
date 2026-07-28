@@ -77,8 +77,8 @@ describe('AppearanceControl', () => {
     resetAppearanceStateForTests()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
-    document.documentElement.style.removeProperty('--k8s-accent')
-    document.documentElement.style.removeProperty('--k8s-accent-dark')
+    document.documentElement.style.removeProperty('--cloud-native-accent')
+    document.documentElement.style.removeProperty('--cloud-native-accent-dark')
     if (vitepressData.isDark) vitepressData.isDark.value = false
   })
 
@@ -165,9 +165,9 @@ describe('AppearanceControl', () => {
     await swatches[2].trigger('click')
 
     expect(swatches[2].attributes('aria-pressed')).toBe('true')
-    expect(localStorage.getItem('k8s-theme-color')).toBe(PRESET_COLORS[2])
+    expect(localStorage.getItem('cloud-native-theme-color')).toBe(PRESET_COLORS[2])
     expect(
-      document.documentElement.style.getPropertyValue('--k8s-accent'),
+      document.documentElement.style.getPropertyValue('--cloud-native-accent'),
     ).toBe(deriveAccent(PRESET_COLORS[2]).light)
   })
 
@@ -178,7 +178,7 @@ describe('AppearanceControl', () => {
 
     await wrapper.get('input[type="color"]').setValue('#8fd8bc')
 
-    expect(localStorage.getItem('k8s-theme-color')).toBe('#8FD8BC')
+    expect(localStorage.getItem('cloud-native-theme-color')).toBe('#8FD8BC')
     expect(wrapper.text()).toContain('#8FD8BC')
     expect(wrapper.find('button[data-color][aria-pressed="true"]').exists()).toBe(
       false,
@@ -203,7 +203,7 @@ describe('AppearanceControl', () => {
       '明暗模式：当前浅色，点击切换为深色',
     )
     expect(modeTrigger.get('svg').classes()).toContain('lucide-sun')
-    expect(localStorage.getItem('k8s-theme-mode')).toBe('light')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(vitepressData.isDark!.value).toBe(false)
 
@@ -217,7 +217,7 @@ describe('AppearanceControl', () => {
       '明暗模式：当前深色，点击切换为自适应',
     )
     expect(modeTrigger.get('svg').classes()).toContain('lucide-moon')
-    expect(localStorage.getItem('k8s-theme-mode')).toBe('dark')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('dark')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(vitepressData.isDark!.value).toBe(true)
 
@@ -225,7 +225,7 @@ describe('AppearanceControl', () => {
 
     expect(modeTrigger.attributes('data-mode')).toBe('auto')
     expect(modeTrigger.get('svg').classes()).toContain('lucide-monitor')
-    expect(localStorage.getItem('k8s-theme-mode')).toBe('auto')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('auto')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(vitepressData.isDark!.value).toBe(true)
   })
@@ -245,7 +245,7 @@ describe('AppearanceControl', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(paletteTrigger.attributes('aria-expanded')).toBe('false')
     expect(modeTrigger.attributes('data-mode')).toBe('light')
-    expect(localStorage.getItem('k8s-theme-mode')).toBe('light')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('light')
     expect(document.activeElement).not.toBe(paletteTrigger.element)
   })
 

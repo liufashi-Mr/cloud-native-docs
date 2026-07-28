@@ -98,10 +98,10 @@ describe('appearance utilities', () => {
     restoreMatchMedia()
     localStorage.clear()
     document.documentElement.classList.remove('dark')
-    document.documentElement.style.removeProperty('--k8s-accent')
-    document.documentElement.style.removeProperty('--k8s-accent-dark')
-    document.documentElement.style.removeProperty('--k8s-accent-text')
-    document.documentElement.style.removeProperty('--k8s-accent-text-dark')
+    document.documentElement.style.removeProperty('--cloud-native-accent')
+    document.documentElement.style.removeProperty('--cloud-native-accent-dark')
+    document.documentElement.style.removeProperty('--cloud-native-accent-text')
+    document.documentElement.style.removeProperty('--cloud-native-accent-text-dark')
   })
 
   afterEach(() => {
@@ -191,22 +191,22 @@ describe('appearance utilities', () => {
     applyAppearance('#8FD8BC', 'auto')
 
     expect(
-      document.documentElement.style.getPropertyValue('--k8s-accent'),
+      document.documentElement.style.getPropertyValue('--cloud-native-accent'),
     ).toBe('hsl(156 48% 36%)')
     expect(
-      document.documentElement.style.getPropertyValue('--k8s-accent-dark'),
+      document.documentElement.style.getPropertyValue('--cloud-native-accent-dark'),
     ).toBe('hsl(156 48% 68%)')
     const textAccent = deriveTextAccent('#8FD8BC')
     expect(
-      document.documentElement.style.getPropertyValue('--k8s-accent-text'),
+      document.documentElement.style.getPropertyValue('--cloud-native-accent-text'),
     ).toBe(textAccent.light)
     expect(
-      document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
+      document.documentElement.style.getPropertyValue('--cloud-native-accent-text-dark'),
     ).toBe(textAccent.dark)
     for (const name of [
-      '--k8s-accent-button',
-      '--k8s-accent-button-hover',
-      '--k8s-accent-button-active',
+      '--cloud-native-accent-button',
+      '--cloud-native-accent-button-hover',
+      '--cloud-native-accent-button-active',
     ]) {
       expect(
         document.documentElement.style.getPropertyValue(name),
@@ -220,13 +220,13 @@ describe('appearance utilities', () => {
     }
     expect(
       contrastRatio(
-        document.documentElement.style.getPropertyValue('--k8s-accent-text'),
+        document.documentElement.style.getPropertyValue('--cloud-native-accent-text'),
         '#FFFFFF',
       ),
     ).toBeGreaterThanOrEqual(4.5)
     expect(
       contrastRatio(
-        document.documentElement.style.getPropertyValue('--k8s-accent-text-dark'),
+        document.documentElement.style.getPropertyValue('--cloud-native-accent-text-dark'),
         DARK_SURFACES[0],
       ),
     ).toBeGreaterThanOrEqual(4.5)
@@ -287,13 +287,42 @@ describe('appearance utilities', () => {
     saveAppearance('#2B69A7', 'dark')
 
     expect(loadAppearance()).toEqual({ color: '#2B69A7', mode: 'dark' })
-    expect(localStorage.getItem('k8s-theme-color')).toBe('#2B69A7')
-    expect(localStorage.getItem('k8s-theme-mode')).toBe('dark')
+    expect(localStorage.getItem('cloud-native-theme-color')).toBe('#2B69A7')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('dark')
+  })
+
+  it('migrates valid legacy appearance preferences', () => {
+    localStorage.setItem('k8s-theme-color', '#2b69a7')
+    localStorage.setItem('k8s-theme-mode', 'dark')
+
+    expect(loadAppearance()).toEqual({ color: '#2B69A7', mode: 'dark' })
+    expect(localStorage.getItem('cloud-native-theme-color')).toBe('#2B69A7')
+    expect(localStorage.getItem('cloud-native-theme-mode')).toBe('dark')
+    expect(localStorage.getItem('k8s-theme-color')).toBeNull()
+    expect(localStorage.getItem('k8s-theme-mode')).toBeNull()
+  })
+
+  it('prefers valid cloud-native appearance preferences', () => {
+    localStorage.setItem('cloud-native-theme-color', '#555DB0')
+    localStorage.setItem('cloud-native-theme-mode', 'light')
+    localStorage.setItem('k8s-theme-color', '#2B69A7')
+    localStorage.setItem('k8s-theme-mode', 'dark')
+
+    expect(loadAppearance()).toEqual({ color: '#555DB0', mode: 'light' })
+  })
+
+  it('falls back to valid legacy values when current values are invalid', () => {
+    localStorage.setItem('cloud-native-theme-color', '#xyzxyz')
+    localStorage.setItem('cloud-native-theme-mode', 'sepia')
+    localStorage.setItem('k8s-theme-color', '#2b69a7')
+    localStorage.setItem('k8s-theme-mode', 'dark')
+
+    expect(loadAppearance()).toEqual({ color: '#2B69A7', mode: 'dark' })
   })
 
   it('falls back when persisted appearance preferences are invalid', () => {
-    localStorage.setItem('k8s-theme-color', '#xyzxyz')
-    localStorage.setItem('k8s-theme-mode', 'sepia')
+    localStorage.setItem('cloud-native-theme-color', '#xyzxyz')
+    localStorage.setItem('cloud-native-theme-mode', 'sepia')
 
     expect(loadAppearance()).toEqual({ color: DEFAULT_COLOR, mode: 'auto' })
   })

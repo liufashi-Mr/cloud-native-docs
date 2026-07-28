@@ -15,8 +15,10 @@ export const PRESET_COLORS = [
   '#5B6670',
 ] as const
 
-const COLOR_STORAGE_KEY = 'k8s-theme-color'
-const MODE_STORAGE_KEY = 'k8s-theme-mode'
+const COLOR_STORAGE_KEY = 'cloud-native-theme-color'
+const MODE_STORAGE_KEY = 'cloud-native-theme-mode'
+const LEGACY_COLOR_STORAGE_KEY = 'k8s-theme-color'
+const LEGACY_MODE_STORAGE_KEY = 'k8s-theme-mode'
 
 export interface AppearanceState {
   color: string
@@ -222,13 +224,13 @@ export function applyAppearance(
   const accent = deriveAccent(color)
   const textAccent = deriveTextAccent(color)
   const buttonAccent = deriveButtonAccent(color)
-  root.style.setProperty('--k8s-accent', accent.light)
-  root.style.setProperty('--k8s-accent-dark', accent.dark)
-  root.style.setProperty('--k8s-accent-text', textAccent.light)
-  root.style.setProperty('--k8s-accent-text-dark', textAccent.dark)
-  root.style.setProperty('--k8s-accent-button', buttonAccent.base)
-  root.style.setProperty('--k8s-accent-button-hover', buttonAccent.hover)
-  root.style.setProperty('--k8s-accent-button-active', buttonAccent.active)
+  root.style.setProperty('--cloud-native-accent', accent.light)
+  root.style.setProperty('--cloud-native-accent-dark', accent.dark)
+  root.style.setProperty('--cloud-native-accent-text', textAccent.light)
+  root.style.setProperty('--cloud-native-accent-text-dark', textAccent.dark)
+  root.style.setProperty('--cloud-native-accent-button', buttonAccent.base)
+  root.style.setProperty('--cloud-native-accent-button-hover', buttonAccent.hover)
+  root.style.setProperty('--cloud-native-accent-button-active', buttonAccent.active)
   root.classList.toggle('dark', dark)
 }
 
@@ -240,18 +242,21 @@ export function loadAppearance(): AppearanceState {
   let color = fallback.color
   let mode = fallback.mode
 
-  try {
-    color = normalizeHex(storage.getItem(COLOR_STORAGE_KEY) ?? '') ?? color
-  } catch {
-    // Storage can be disabled even when localStorage exists.
-  }
+  const storedColor = readMigratedValue(
+    storage,
+    COLOR_STORAGE_KEY,
+    LEGACY_COLOR_STORAGE_KEY,
+    normalizeHex,
+  )
+  if (storedColor !== null) color = storedColor
 
-  try {
-    const storedMode = storage.getItem(MODE_STORAGE_KEY)
-    if (isAppearanceMode(storedMode)) mode = storedMode
-  } catch {
-    // Preserve any preference that was read successfully.
-  }
+  const storedMode = readMigratedValue(
+    storage,
+    MODE_STORAGE_KEY,
+    LEGACY_MODE_STORAGE_KEY,
+    (value) => (isAppearanceMode(value) ? value : null),
+  )
+  if (storedMode !== null) mode = storedMode
 
   return { color, mode }
 }
@@ -278,6 +283,42 @@ export function saveAppearance(color: string, mode: AppearanceMode): void {
 
 function isAppearanceMode(value: unknown): value is AppearanceMode {
   return value === 'auto' || value === 'light' || value === 'dark'
+}
+
+function readMigratedValue<T extends string>(
+  storage: Storage,
+  currentKey: string,
+  legacyKey: string,
+  normalize: (value: string) => T | null,
+): T | null {
+  let currentValue: string | null = null
+  try {
+    currentValue = storage.getItem(currentKey)
+  } catch {
+    return null
+  }
+
+  const normalizedCurrent = normalize(currentValue ?? '')
+  if (normalizedCurrent !== null) return normalizedCurrent
+
+  let legacyValue: string | null = null
+  try {
+    legacyValue = storage.getItem(legacyKey)
+  } catch {
+    return null
+  }
+
+  const normalizedLegacy = normalize(legacyValue ?? '')
+  if (normalizedLegacy === null) return null
+
+  try {
+    storage.setItem(currentKey, normalizedLegacy)
+    storage.removeItem(legacyKey)
+  } catch {
+    // Migration is best-effort; the valid value still applies in memory.
+  }
+
+  return normalizedLegacy
 }
 
 function getSystemDark(): boolean {
