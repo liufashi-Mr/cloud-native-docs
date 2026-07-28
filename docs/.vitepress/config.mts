@@ -20,14 +20,56 @@ export default defineConfig({
         var defaultColor = '#28755D'
         var color = defaultColor
         var mode = 'auto'
+
+        function readPreference(currentKey, legacyKey, normalize) {
+          var currentValue = localStorage.getItem(currentKey)
+          var normalizedCurrent = normalize(currentValue || '')
+          if (normalizedCurrent !== null) return normalizedCurrent
+
+          var legacyValue = localStorage.getItem(legacyKey)
+          var normalizedLegacy = normalize(legacyValue || '')
+          if (normalizedLegacy === null) return null
+
+          try {
+            localStorage.setItem(currentKey, normalizedLegacy)
+            localStorage.removeItem(legacyKey)
+          } catch (_) {}
+          return normalizedLegacy
+        }
+
         try {
-          var savedColor = localStorage.getItem('k8s-theme-color')
-          if (/^#[0-9a-f]{6}$/i.test(savedColor || '')) color = savedColor.toUpperCase()
-          var savedMode = localStorage.getItem('k8s-theme-mode')
-          if (savedMode === 'auto' || savedMode === 'light' || savedMode === 'dark') mode = savedMode
-          var savedSidebarWidth = Number(localStorage.getItem('k8s-sidebar-width'))
-          if (Number.isFinite(savedSidebarWidth) && savedSidebarWidth >= 220 && savedSidebarWidth <= 380) {
-            root.style.setProperty('--k8s-sidebar-width', savedSidebarWidth + 'px')
+          var savedColor = readPreference(
+            'cloud-native-theme-color',
+            'k8s-theme-color',
+            function (value) {
+              return /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : null
+            },
+          )
+          if (savedColor !== null) color = savedColor
+
+          var savedMode = readPreference(
+            'cloud-native-theme-mode',
+            'k8s-theme-mode',
+            function (value) {
+              return value === 'auto' || value === 'light' || value === 'dark'
+                ? value
+                : null
+            },
+          )
+          if (savedMode !== null) mode = savedMode
+
+          var savedSidebarWidth = readPreference(
+            'cloud-native-sidebar-width',
+            'k8s-sidebar-width',
+            function (value) {
+              var parsed = Number(value)
+              return Number.isFinite(parsed) && parsed >= 220 && parsed <= 380
+                ? String(parsed)
+                : null
+            },
+          )
+          if (savedSidebarWidth !== null) {
+            root.style.setProperty('--cloud-native-sidebar-width', savedSidebarWidth + 'px')
           }
         } catch (_) {}
 
@@ -94,13 +136,13 @@ export default defineConfig({
         var buttonLightness = lightTextLightness
         var buttonHoverLightness = Math.max(0, buttonLightness - 4)
         var buttonActiveLightness = Math.max(0, buttonLightness - 8)
-        root.style.setProperty('--k8s-accent', 'hsl(' + hueDegrees + ' ' + saturation + '% 36%)')
-        root.style.setProperty('--k8s-accent-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% 68%)')
-        root.style.setProperty('--k8s-accent-text', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + lightTextLightness + '%)')
-        root.style.setProperty('--k8s-accent-text-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + darkTextLightness + '%)')
-        root.style.setProperty('--k8s-accent-button', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonLightness + '%)')
-        root.style.setProperty('--k8s-accent-button-hover', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonHoverLightness + '%)')
-        root.style.setProperty('--k8s-accent-button-active', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonActiveLightness + '%)')
+        root.style.setProperty('--cloud-native-accent', 'hsl(' + hueDegrees + ' ' + saturation + '% 36%)')
+        root.style.setProperty('--cloud-native-accent-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% 68%)')
+        root.style.setProperty('--cloud-native-accent-text', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + lightTextLightness + '%)')
+        root.style.setProperty('--cloud-native-accent-text-dark', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + darkTextLightness + '%)')
+        root.style.setProperty('--cloud-native-accent-button', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonLightness + '%)')
+        root.style.setProperty('--cloud-native-accent-button-hover', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonHoverLightness + '%)')
+        root.style.setProperty('--cloud-native-accent-button-active', 'hsl(' + hueDegrees + ' ' + saturation + '% ' + buttonActiveLightness + '%)')
 
         var systemDark = false
         if (mode === 'auto') {

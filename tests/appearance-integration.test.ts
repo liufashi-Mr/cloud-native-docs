@@ -132,16 +132,27 @@ describe('appearance theme integration', () => {
     )
 
     expect(config).toMatch(/appearance:\s*false/)
-    expect(config).toContain('k8s-theme-color')
-    expect(config).toContain('k8s-theme-mode')
-    expect(config).toContain('k8s-sidebar-width')
-    expect(config).toContain('--k8s-accent')
-    expect(config).toContain('--k8s-accent-dark')
-    expect(config).toContain('--k8s-accent-text')
-    expect(config).toContain('--k8s-accent-text-dark')
-    expect(config).toContain('--k8s-accent-button')
-    expect(config).toContain('--k8s-accent-button-hover')
-    expect(config).toContain('--k8s-accent-button-active')
+    for (const contract of [
+      'cloud-native-theme-color',
+      'cloud-native-theme-mode',
+      'cloud-native-sidebar-width',
+      '--cloud-native-accent',
+      '--cloud-native-accent-dark',
+      '--cloud-native-accent-text',
+      '--cloud-native-accent-text-dark',
+      '--cloud-native-accent-button',
+      '--cloud-native-accent-button-hover',
+      '--cloud-native-accent-button-active',
+    ]) {
+      expect(config).toContain(contract)
+    }
+    for (const legacyKey of [
+      'k8s-theme-color',
+      'k8s-theme-mode',
+      'k8s-sidebar-width',
+    ]) {
+      expect(config).toContain(legacyKey)
+    }
     expect(config).toContain('relativeLuminance')
     expect(config).toContain('contrastRatio')
     expect(config).toContain("classList.toggle('dark'")
