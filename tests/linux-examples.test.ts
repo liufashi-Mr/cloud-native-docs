@@ -18,6 +18,8 @@ const linuxPages = [
   'docs/linux/runtime/logs-and-journal.md',
   'docs/linux/concepts/namespaces.md',
   'docs/linux/concepts/cgroups-and-resources.md',
+  'docs/linux/runtime/sockets-and-name-resolution.md',
+  'docs/linux/runtime/resource-pressure.md',
 ]
 
 describe('Linux runnable examples', () => {

@@ -212,6 +212,43 @@ const pageContracts: Record<string, PageContract> = {
       'PSI',
     ],
   },
+  'docs/linux/runtime/sockets-and-name-resolution.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      '监听 socket、连接、路由和名称解析是四个不同检查点',
+      '127.0.0.1 只接受本机 loopback 路径上的连接',
+      'getent ahosts 使用系统配置的 Name Service Switch 路径',
+      'DNS 返回地址不证明目标端口正在监听',
+    ],
+    terms: [
+      'ss -ltnp',
+      'socket',
+      'LISTEN',
+      'ip route get',
+      'getent ahosts',
+      '/etc/resolv.conf',
+      '127.0.0.1:3000',
+    ],
+  },
+  'docs/linux/runtime/resource-pressure.md': {
+    fences: ['bash', 'mermaid'],
+    phrases: [
+      '高利用率、资源压力和资源上限是不同证据',
+      '不能通过填满宿主文件系统来演示磁盘故障',
+      'memory.events 中的 oom_kill 计数比单次进程消失更接近限制证据',
+      '剩余空间正常时仍可能耗尽 inode',
+    ],
+    terms: [
+      'CPU',
+      'memory',
+      'I/O',
+      'PID',
+      'PSI',
+      'memory.events',
+      'df -h',
+      'df -i',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {
