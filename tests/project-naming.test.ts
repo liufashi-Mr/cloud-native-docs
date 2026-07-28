@@ -92,6 +92,21 @@ describe('cloud-native project identity', () => {
     }
   })
 
+  it('records the final GitHub repository remote consistently', () => {
+    const renamePlan = readFileSync(
+      resolve(
+        root,
+        'docs/superpowers/plans/2026-07-28-cloud-native-project-rename.md',
+      ),
+      'utf8',
+    )
+
+    expect(renamePlan).toContain(
+      'git@github.com:liufashi-Mr/cloud-native-docs.git',
+    )
+    expect(renamePlan).not.toContain('origin uses `cloud-native.git`')
+  })
+
   it('uses current project identifiers in historical maintenance documents', () => {
     const initialSpec = existsSync(
       resolve(

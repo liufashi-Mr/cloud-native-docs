@@ -863,13 +863,13 @@ git remote -v
 npm run dev -- --host 127.0.0.1 --port 5173
 ~~~
 
-Expected: clean `main`, origin uses `cloud-native.git`, and the site loads at `http://127.0.0.1:5173/`.
+Expected: clean `main`, origin uses `cloud-native-docs.git`, and the site loads at `http://127.0.0.1:5173/`.
 
 ## Final Acceptance
 
-- [ ] npm package, GitHub repository, Pages path, remote URL, and local directory all use `cloud-native`.
+- [ ] npm package and local directory use `cloud-native`; GitHub repository and remote URL use `cloud-native-docs`.
 - [ ] Active CSS variables, CSS classes, transition names, runtime root classes, and current storage keys all use the new prefix.
 - [ ] Valid old appearance and sidebar preferences migrate once without visual flicker or behavior loss.
 - [ ] Kubernetes technical names, routes, examples, and content remain unchanged.
-- [ ] Full tests, typecheck, root build, project-base build, browser checks, GitHub Actions, and Pages deployment pass.
+- [ ] Full tests, typecheck, root build, project-base build, and browser checks pass; GitHub Pages verification is deferred.
 - [ ] Final `git status --short --branch` is clean.
