@@ -12,12 +12,12 @@ const { hasSidebar } = useSidebar()
 <template>
   <DefaultTheme.Layout>
     <template #nav-bar-content-after>
-      <div class="k8s-appearance-slot k8s-appearance-slot--desktop">
+      <div class="cloud-native-appearance-slot cloud-native-appearance-slot--desktop">
         <AppearanceControl />
       </div>
     </template>
     <template #nav-screen-content-after>
-      <div class="k8s-appearance-slot k8s-appearance-slot--mobile">
+      <div class="cloud-native-appearance-slot cloud-native-appearance-slot--mobile">
         <AppearanceControl />
       </div>
     </template>

@@ -29,7 +29,7 @@ describe('BackToTop', () => {
     expect(button.text()).toBe('')
     expect(button.attributes('title')).toBe('返回顶部')
     expect(button.find('svg').exists()).toBe(true)
-    expect(wrapper.get('.k8s-back-to-top').element).toBeInstanceOf(
+    expect(wrapper.get('.cloud-native-back-to-top').element).toBeInstanceOf(
       HTMLButtonElement,
     )
 

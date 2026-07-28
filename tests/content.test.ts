@@ -702,7 +702,7 @@ describe('content contract', () => {
     )
 
     for (const contract of [
-      '--k8s-accent',
+      '--cloud-native-accent',
       'clamp(',
       '@media (max-width: 1099px)',
       '@media (max-width: 767px)',

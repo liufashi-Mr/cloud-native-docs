@@ -137,7 +137,7 @@ describe('SidebarResizeHandle', () => {
       'utf8',
     )
     expect(source).toMatch(
-      /\.k8s-sidebar-resize-handle:focus-visible\s*\{[^}]*outline:\s*none/,
+      /\.cloud-native-sidebar-resize-handle:focus-visible\s*\{[^}]*outline:\s*none/,
     )
   })
 })

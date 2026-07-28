@@ -131,8 +131,8 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="k8s-sidebar-resize-handle"
-    :class="{ 'k8s-sidebar-resize-handle--dragging': dragging }"
+    class="cloud-native-sidebar-resize-handle"
+    :class="{ 'cloud-native-sidebar-resize-handle--dragging': dragging }"
     role="separator"
     aria-label="调整侧边栏宽度"
     aria-orientation="vertical"
@@ -151,7 +151,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.k8s-sidebar-resize-handle {
+.cloud-native-sidebar-resize-handle {
   position: fixed;
   z-index: 26;
   top: var(--vp-nav-height);
@@ -162,7 +162,7 @@ onUnmounted(() => {
   touch-action: none;
 }
 
-.k8s-sidebar-resize-handle::after {
+.cloud-native-sidebar-resize-handle::after {
   position: absolute;
   top: 12px;
   right: 4px;
@@ -174,26 +174,26 @@ onUnmounted(() => {
   transition: background-color 120ms ease, width 120ms ease, left 120ms ease;
 }
 
-.k8s-sidebar-resize-handle:hover::after,
-.k8s-sidebar-resize-handle:focus-visible::after,
-.k8s-sidebar-resize-handle--dragging::after {
+.cloud-native-sidebar-resize-handle:hover::after,
+.cloud-native-sidebar-resize-handle:focus-visible::after,
+.cloud-native-sidebar-resize-handle--dragging::after {
   right: 3px;
   left: 3px;
   background: var(--vp-c-brand-1);
 }
 
-.k8s-sidebar-resize-handle:focus-visible {
+.cloud-native-sidebar-resize-handle:focus-visible {
   outline: none;
 }
 
 @media (max-width: 1099px) {
-  .k8s-sidebar-resize-handle {
+  .cloud-native-sidebar-resize-handle {
     display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .k8s-sidebar-resize-handle::after {
+  .cloud-native-sidebar-resize-handle::after {
     transition: none;
   }
 }

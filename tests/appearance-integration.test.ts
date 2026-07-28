@@ -62,18 +62,18 @@ describe('appearance theme integration', () => {
     const styles = await readFile(resolve(themeDirectory, 'styles.css'), 'utf8')
 
     expect(component).toContain('data-mode-trigger')
-    expect(component).toContain('k8s-appearance__mode-trigger')
-    expect(component).not.toContain('k8s-appearance__modes')
+    expect(component).toContain('cloud-native-appearance__mode-trigger')
+    expect(component).not.toContain('cloud-native-appearance__modes')
     expect(styles).toMatch(
-      /\.k8s-appearance\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*4px;/,
+      /\.cloud-native-appearance\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*4px;/,
     )
     expect(styles).toMatch(
-      /\.k8s-appearance__trigger,\s*\.k8s-appearance__mode-trigger\s*\{[^}]*width:\s*36px;[^}]*height:\s*32px;/,
+      /\.cloud-native-appearance__trigger,\s*\.cloud-native-appearance__mode-trigger\s*\{[^}]*width:\s*36px;[^}]*height:\s*32px;/,
     )
     expect(styles).toMatch(
-      /\.k8s-appearance-slot--mobile\s+\.k8s-appearance\s*\{[^}]*flex-wrap:\s*wrap;[^}]*width:\s*100%;[^}]*row-gap:\s*0;/,
+      /\.cloud-native-appearance-slot--mobile\s+\.cloud-native-appearance\s*\{[^}]*flex-wrap:\s*wrap;[^}]*width:\s*100%;[^}]*row-gap:\s*0;/,
     )
-    expect(styles).not.toContain('.k8s-appearance__modes')
+    expect(styles).not.toContain('.cloud-native-appearance__modes')
   })
 
   it('keeps the outline text spaced from its divider at every desktop width', async () => {
@@ -111,7 +111,7 @@ describe('appearance theme integration', () => {
       /\.VPNavBar\.has-sidebar\s+\.title\s*\{/,
     )
     expect(desktopStyles).toMatch(
-      /\.VPNavBar\.has-sidebar\s+\.container\s*>\s*\.title\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*var\(--k8s-sidebar-width\);/,
+      /\.VPNavBar\.has-sidebar\s+\.container\s*>\s*\.title\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*var\(--cloud-native-sidebar-width\);/,
     )
     expect(desktopStyles).toMatch(
       /\.VPNavBar\.has-sidebar\s+\.VPNavBarTitle\s+\.title\s*\{[^}]*box-sizing:\s*border-box;[^}]*width:\s*100%;/,

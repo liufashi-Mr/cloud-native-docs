@@ -111,10 +111,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="control" class="k8s-appearance">
+  <div ref="control" class="cloud-native-appearance">
     <button
       ref="trigger"
-      class="k8s-appearance__trigger"
+      class="cloud-native-appearance__trigger"
       type="button"
       aria-label="外观设置"
       title="外观设置"
@@ -127,7 +127,7 @@ onBeforeUnmount(() => {
     </button>
 
     <button
-      class="k8s-appearance__mode-trigger"
+      class="cloud-native-appearance__mode-trigger"
       type="button"
       data-mode-trigger
       :data-mode="mode"
@@ -142,16 +142,16 @@ onBeforeUnmount(() => {
       v-if="open"
       ref="popover"
       :id="popoverId"
-      class="k8s-appearance__popover"
+      class="cloud-native-appearance__popover"
       role="dialog"
       aria-label="外观设置"
     >
-      <p class="k8s-appearance__label">主题色</p>
-      <div class="k8s-appearance__swatches">
+      <p class="cloud-native-appearance__label">主题色</p>
+      <div class="cloud-native-appearance__swatches">
         <button
           v-for="preset in PRESET_COLORS"
           :key="preset"
-          class="k8s-appearance__swatch"
+          class="cloud-native-appearance__swatch"
           type="button"
           :data-color="preset"
           :style="{ '--swatch-color': preset }"
@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <label class="k8s-appearance__custom">
+      <label class="cloud-native-appearance__custom">
         <input
           type="color"
           :value="displayColor"

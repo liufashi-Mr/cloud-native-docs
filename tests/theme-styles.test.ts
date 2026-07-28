@@ -31,21 +31,21 @@ describe('responsive theme styles', () => {
 
   it('maps brand text to foreground-safe accent tokens', () => {
     expect(styles).toMatch(
-      /:root\s*{[^}]*--vp-c-brand-1:\s*var\(--k8s-accent-text\)/,
+      /:root\s*{[^}]*--vp-c-brand-1:\s*var\(--cloud-native-accent-text\)/,
     )
     expect(styles).toMatch(
-      /\.dark\s*{[^}]*--vp-c-brand-1:\s*var\(--k8s-accent-text-dark\)/,
+      /\.dark\s*{[^}]*--vp-c-brand-1:\s*var\(--cloud-native-accent-text-dark\)/,
     )
     expect(styles).toMatch(
-      /:root\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--k8s-accent-text\)/,
+      /:root\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--cloud-native-accent-text\)/,
     )
     expect(styles).toMatch(
-      /\.dark\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--k8s-accent-text-dark\)/,
+      /\.dark\s*{[^}]*--vp-c-tip-2:\s*color-mix\(in srgb, var\(--cloud-native-accent-text-dark\)/,
     )
     for (const [property, token] of [
-      ['--vp-button-brand-bg', '--k8s-accent-button'],
-      ['--vp-button-brand-hover-bg', '--k8s-accent-button-hover'],
-      ['--vp-button-brand-active-bg', '--k8s-accent-button-active'],
+      ['--vp-button-brand-bg', '--cloud-native-accent-button'],
+      ['--vp-button-brand-hover-bg', '--cloud-native-accent-button-hover'],
+      ['--vp-button-brand-active-bg', '--cloud-native-accent-button-active'],
     ]) {
       expect(styles).toContain(`${property}: var(${token})`)
     }
@@ -97,12 +97,12 @@ describe('responsive theme styles', () => {
 
   it('keeps both appearance icon controls at a stable size', () => {
     const triggerRule = styles.match(
-      /\.k8s-appearance__trigger,\s*\.k8s-appearance__mode-trigger\s*{([^}]*)}/,
+      /\.cloud-native-appearance__trigger,\s*\.cloud-native-appearance__mode-trigger\s*{([^}]*)}/,
     )
 
     expect(triggerRule?.[1]).toMatch(/width:\s*36px/)
     expect(triggerRule?.[1]).toMatch(/height:\s*32px/)
-    expect(styles).not.toContain('.k8s-appearance__mode-label')
-    expect(styles).not.toContain('.k8s-appearance__modes')
+    expect(styles).not.toContain('.cloud-native-appearance__mode-label')
+    expect(styles).not.toContain('.cloud-native-appearance__modes')
   })
 })

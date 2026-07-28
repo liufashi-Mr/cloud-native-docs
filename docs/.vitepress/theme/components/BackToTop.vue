@@ -24,10 +24,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Transition name="k8s-back-to-top">
+  <Transition name="cloud-native-back-to-top">
     <button
       v-if="visible"
-      class="k8s-back-to-top"
+      class="cloud-native-back-to-top"
       type="button"
       aria-label="返回顶部"
       title="返回顶部"
@@ -39,7 +39,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.k8s-back-to-top {
+.cloud-native-back-to-top {
   position: fixed;
   z-index: 30;
   right: calc(16px + env(safe-area-inset-right));
@@ -59,40 +59,40 @@ onUnmounted(() => {
   backdrop-filter: blur(8px);
 }
 
-.k8s-back-to-top:hover {
+.cloud-native-back-to-top:hover {
   color: var(--vp-c-brand-1);
   background: var(--vp-c-bg-soft);
   border-color: var(--vp-c-brand-1);
 }
 
-.k8s-back-to-top:focus-visible {
+.cloud-native-back-to-top:focus-visible {
   outline: 3px solid var(--vp-c-brand-1);
   outline-offset: 2px;
 }
 
-.k8s-back-to-top-enter-active,
-.k8s-back-to-top-leave-active {
+.cloud-native-back-to-top-enter-active,
+.cloud-native-back-to-top-leave-active {
   transition:
     opacity 160ms ease,
     transform 160ms ease;
 }
 
-.k8s-back-to-top-enter-from,
-.k8s-back-to-top-leave-to {
+.cloud-native-back-to-top-enter-from,
+.cloud-native-back-to-top-leave-to {
   opacity: 0;
   transform: translateY(8px);
 }
 
 @media (max-width: 480px) {
-  .k8s-back-to-top {
+  .cloud-native-back-to-top {
     right: calc(12px + env(safe-area-inset-right));
     bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .k8s-back-to-top-enter-active,
-  .k8s-back-to-top-leave-active {
+  .cloud-native-back-to-top-enter-active,
+  .cloud-native-back-to-top-leave-active {
     transition: none;
   }
 }
