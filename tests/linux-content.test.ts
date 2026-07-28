@@ -249,6 +249,64 @@ const pageContracts: Record<string, PageContract> = {
       'df -i',
     ],
   },
+  'docs/linux/operations/security-boundaries.md': {
+    fences: ['ini', 'bash', 'mermaid'],
+    phrases: [
+      '非 root 服务账户只缩小一个权限边界，不构成完整隔离',
+      'NoNewPrivileges 阻止进程通过 execve 获得新的特权',
+      'systemd sandboxing directive 必须根据应用实际文件和 socket 需求验证',
+      'secret 不应出现在命令行参数、普通环境转储或日志中',
+    ],
+    terms: [
+      'service account',
+      'capabilities',
+      'NoNewPrivileges',
+      'ProtectSystem',
+      'PrivateTmp',
+      'LoadCredential',
+      'AppArmor',
+    ],
+  },
+  'docs/linux/operations/troubleshooting.md': {
+    fences: ['bash', 'mermaid'],
+    phrases: [
+      '先记录症状发生的时间、主机、unit 和请求标识',
+      '进程未创建与进程创建后立即退出需要不同证据',
+      '权限拒绝必须同时检查进程身份、路径每一级权限和安全模块',
+      '不要在保存证据前重启服务、清空日志或删除状态目录',
+    ],
+    terms: [
+      'systemctl show',
+      'journalctl',
+      'namei -l',
+      'ss -ltnp',
+      'getent',
+      'memory.events',
+      'dmesg',
+    ],
+  },
+  'docs/linux/reference/command-evidence-map.md': {
+    fences: ['bash'],
+    phrases: [
+      '命令输出是某个时间点的证据，不是自动成立的根因',
+      '先使用最小权限读取证据，再决定是否需要 sudo',
+      '每条命令都链接回解释其模型的页面',
+      '修改状态的命令不属于只读速查',
+    ],
+    terms: [
+      'ps',
+      '/proc',
+      'id',
+      'stat',
+      'findmnt',
+      'systemctl',
+      'journalctl',
+      'ss',
+      'ip route get',
+      'getent',
+      'cgroup',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {

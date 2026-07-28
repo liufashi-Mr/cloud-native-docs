@@ -20,6 +20,9 @@ const linuxPages = [
   'docs/linux/concepts/cgroups-and-resources.md',
   'docs/linux/runtime/sockets-and-name-resolution.md',
   'docs/linux/runtime/resource-pressure.md',
+  'docs/linux/operations/security-boundaries.md',
+  'docs/linux/operations/troubleshooting.md',
+  'docs/linux/reference/command-evidence-map.md',
 ]
 
 describe('Linux runnable examples', () => {
