@@ -16,6 +16,8 @@ const linuxPages = [
   'docs/linux/concepts/signals-and-exit-status.md',
   'docs/linux/runtime/systemd-services.md',
   'docs/linux/runtime/logs-and-journal.md',
+  'docs/linux/concepts/namespaces.md',
+  'docs/linux/concepts/cgroups-and-resources.md',
 ]
 
 describe('Linux runnable examples', () => {

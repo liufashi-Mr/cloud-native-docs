@@ -174,6 +174,44 @@ const pageContracts: Record<string, PageContract> = {
       'retention',
     ],
   },
+  'docs/linux/concepts/namespaces.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      'namespace 改变一组进程看到的资源视图',
+      'namespace 不是虚拟机，也不是完整安全边界',
+      'user namespace 中的 UID 映射不改变所有外部对象的 ownership',
+      'nsenter 会进入目标进程的 namespace，必须先验证目标身份',
+    ],
+    terms: [
+      'mount',
+      'PID',
+      'network',
+      'UTS',
+      'IPC',
+      'user',
+      'cgroup',
+      'time',
+      '/proc/self/ns',
+    ],
+  },
+  'docs/linux/concepts/cgroups-and-resources.md': {
+    fences: ['mermaid', 'bash'],
+    phrases: [
+      'cgroup 组织进程并提供资源统计和控制接口',
+      'cgroup namespace 不等于 cgroup resource limit',
+      'memory.high 用于节流压力，memory.max 是硬上限',
+      'systemd 是 Ubuntu 主机上 cgroup hierarchy 的主要管理者',
+    ],
+    terms: [
+      'cgroup v2',
+      'cgroup.controllers',
+      'cpu.stat',
+      'memory.current',
+      'memory.events',
+      'pids.current',
+      'PSI',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {
