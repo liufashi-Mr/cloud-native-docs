@@ -56,15 +56,12 @@ describe('cloud-native project identity', () => {
       runtimeFiles.filter((file) => sources.get(file)?.includes(legacyKey))
 
     expect(owners('k8s-theme-color')).toEqual([
-      'docs/.vitepress/config.mts',
       'docs/.vitepress/theme/appearance.ts',
     ])
     expect(owners('k8s-theme-mode')).toEqual([
-      'docs/.vitepress/config.mts',
       'docs/.vitepress/theme/appearance.ts',
     ])
     expect(owners('k8s-sidebar-width')).toEqual([
-      'docs/.vitepress/config.mts',
       'docs/.vitepress/theme/components/SidebarResizeHandle.vue',
     ])
 

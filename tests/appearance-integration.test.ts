@@ -151,7 +151,7 @@ describe('appearance theme integration', () => {
       'k8s-theme-mode',
       'k8s-sidebar-width',
     ]) {
-      expect(config).toContain(legacyKey)
+      expect(config).not.toContain(legacyKey)
     }
     expect(config).toContain('relativeLuminance')
     expect(config).toContain('contrastRatio')

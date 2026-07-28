@@ -21,26 +21,14 @@ export default defineConfig({
         var color = defaultColor
         var mode = 'auto'
 
-        function readPreference(currentKey, legacyKey, normalize) {
+        function readPreference(currentKey, normalize) {
           var currentValue = localStorage.getItem(currentKey)
-          var normalizedCurrent = normalize(currentValue || '')
-          if (normalizedCurrent !== null) return normalizedCurrent
-
-          var legacyValue = localStorage.getItem(legacyKey)
-          var normalizedLegacy = normalize(legacyValue || '')
-          if (normalizedLegacy === null) return null
-
-          try {
-            localStorage.setItem(currentKey, normalizedLegacy)
-            localStorage.removeItem(legacyKey)
-          } catch (_) {}
-          return normalizedLegacy
+          return normalize(currentValue || '')
         }
 
         try {
           var savedColor = readPreference(
             'cloud-native-theme-color',
-            'k8s-theme-color',
             function (value) {
               return /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : null
             },
@@ -49,7 +37,6 @@ export default defineConfig({
 
           var savedMode = readPreference(
             'cloud-native-theme-mode',
-            'k8s-theme-mode',
             function (value) {
               return value === 'auto' || value === 'light' || value === 'dark'
                 ? value
@@ -60,7 +47,6 @@ export default defineConfig({
 
           var savedSidebarWidth = readPreference(
             'cloud-native-sidebar-width',
-            'k8s-sidebar-width',
             function (value) {
               var parsed = Number(value)
               return Number.isFinite(parsed) && parsed >= 220 && parsed <= 380
