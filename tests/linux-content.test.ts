@@ -139,6 +139,41 @@ const pageContracts: Record<string, PageContract> = {
       'trap',
     ],
   },
+  'docs/linux/runtime/systemd-services.md': {
+    fences: ['ini', 'bash', 'mermaid'],
+    phrases: [
+      'systemd 读取 unit 配置并创建服务进程',
+      'daemon-reload 重新加载 unit 文件，不会自动重启服务',
+      'Restart=on-failure 不会修复持续存在的配置错误',
+      'drop-in override 比复制完整 vendor unit 更容易审计差异',
+    ],
+    terms: [
+      'demo-api.service',
+      'ExecStart',
+      'User=demo-api',
+      'WorkingDirectory=/opt/demo-api',
+      'Restart=on-failure',
+      'TimeoutStopSec',
+    ],
+  },
+  'docs/linux/runtime/logs-and-journal.md': {
+    fences: ['bash'],
+    phrases: [
+      'journal entry 把日志内容与 unit、PID、boot 和时间元数据关联',
+      'stdout 和 stderr 不是日志级别',
+      'journalctl --unit demo-api.service',
+      '删除或 vacuum journal 会破坏仍可能需要的排障证据',
+    ],
+    terms: [
+      'systemd-journald',
+      '_SYSTEMD_UNIT',
+      '_PID',
+      '_BOOT_ID',
+      'priority',
+      'kernel log',
+      'retention',
+    ],
+  },
 }
 
 function readRequiredPage(file: string): string {

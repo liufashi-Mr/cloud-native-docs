@@ -14,6 +14,8 @@ const linuxPages = [
   'docs/linux/concepts/users-groups-permissions.md',
   'docs/linux/concepts/filesystems-and-mounts.md',
   'docs/linux/concepts/signals-and-exit-status.md',
+  'docs/linux/runtime/systemd-services.md',
+  'docs/linux/runtime/logs-and-journal.md',
 ]
 
 describe('Linux runnable examples', () => {
@@ -39,5 +41,26 @@ describe('Linux runnable examples', () => {
     expect(source).toContain('3000')
     expect(source).toContain('/healthz')
     expect(source).toContain("request.url === '/healthz'")
+  })
+
+  it('defines one consistent demo-api systemd service', () => {
+    const file = 'docs/linux/runtime/systemd-services.md'
+    const source = readFileSync(resolve(root, file), 'utf8')
+    const unit = markdownFences(source, file).find(
+      (fence) =>
+        fence.info === 'ini title="/etc/systemd/system/demo-api.service"',
+    )?.content
+
+    expect(unit).toBeDefined()
+    expect(unit).toContain('[Unit]')
+    expect(unit).toContain('[Service]')
+    expect(unit).toContain('[Install]')
+    expect(unit).toContain('User=demo-api')
+    expect(unit).toContain('WorkingDirectory=/opt/demo-api')
+    expect(unit).toContain(
+      'ExecStart=/opt/demo-api/node/bin/node /opt/demo-api/server.mjs',
+    )
+    expect(unit).toContain('Restart=on-failure')
+    expect(unit).toContain('TimeoutStopSec=15s')
   })
 })
