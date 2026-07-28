@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deploy the production VitePress site from `main` to GitHub Pages with the correct `/k8s-doc/` project-site base path.
+**Goal:** Deploy the production VitePress site from `main` to GitHub Pages with the correct `/cloud-native/` project-site base path.
 
 **Architecture:** A GitHub Actions workflow uses the official Pages actions, installs from `package-lock.json`, runs all quality gates, builds with VitePress's CLI `--base` override, uploads `docs/.vitepress/dist`, and deploys through the Pages environment. A focused test parses the YAML contract and verifies that a project-base build emits prefixed asset, navigation, logo, and favicon URLs.
 
@@ -157,11 +157,11 @@ Run:
 npm test -- tests/github-pages.test.ts
 npm test
 npm run typecheck
-npm run build -- --base=/k8s-doc/
+npm run build -- --base=/cloud-native/
 git diff --check
 ```
 
-Inspect `docs/.vitepress/dist/index.html` and require `/k8s-doc/assets/`, `/k8s-doc/kubernetes-logo.svg`, and `/k8s-doc/concepts/resource-model.html`; reject root-only `href="/kubernetes-logo.svg"`.
+Inspect `docs/.vitepress/dist/index.html` and require `/cloud-native/assets/`, `/cloud-native/kubernetes-logo.svg`, and `/cloud-native/concepts/resource-model.html`; reject root-only `href="/kubernetes-logo.svg"`.
 
 - [ ] **Step 6: Commit only the deployment changes**
 
@@ -195,11 +195,11 @@ Expected: YAML parses, the focused test passes, and pre-existing user files rema
 - [ ] **Step 2: Verify the generated project-site links**
 
 ```bash
-npm run build -- --base=/k8s-doc/
-rg -n '(/k8s-doc/assets/|/k8s-doc/kubernetes-logo.svg|/k8s-doc/concepts/resource-model.html)' docs/.vitepress/dist/index.html
+npm run build -- --base=/cloud-native/
+rg -n '(/cloud-native/assets/|/cloud-native/kubernetes-logo.svg|/cloud-native/concepts/resource-model.html)' docs/.vitepress/dist/index.html
 ```
 
-Expected: every deploy-sensitive asset and navigation URL includes `/k8s-doc/`; no favicon points to the domain root.
+Expected: every deploy-sensitive asset and navigation URL includes `/cloud-native/`; no favicon points to the domain root.
 
 - [ ] **Step 3: Document the repository setting**
 

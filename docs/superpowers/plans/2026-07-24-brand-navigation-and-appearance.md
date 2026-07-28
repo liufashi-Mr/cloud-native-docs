@@ -159,22 +159,22 @@ function cycleMode(): void {
 }
 ```
 
-Render the palette trigger and a sibling mode trigger inside `.k8s-appearance`. Remove the “明暗模式” label and three mode buttons from the color dialog.
+Render the palette trigger and a sibling mode trigger inside `.cloud-native-appearance`. Remove the “明暗模式” label and three mode buttons from the color dialog.
 
 - [ ] **Step 4: Update styles for two independent buttons**
 
 Make the wrapper an inline flex group and share icon-button styling:
 
 ```css
-.k8s-appearance {
+.cloud-native-appearance {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-.k8s-appearance__trigger,
-.k8s-appearance__mode-trigger {
+.cloud-native-appearance__trigger,
+.cloud-native-appearance__mode-trigger {
   display: inline-flex;
   width: 36px;
   height: 32px;
@@ -186,7 +186,7 @@ Make the wrapper an inline flex group and share icon-button styling:
 }
 ```
 
-Delete the unused `.k8s-appearance__modes` rules while preserving the popover, swatches, custom input and mobile slot rules.
+Delete the unused `.cloud-native-appearance__modes` rules while preserving the popover, swatches, custom input and mobile slot rules.
 
 - [ ] **Step 5: Run focused tests and verify GREEN**
 

@@ -27,7 +27,7 @@ it('uses the Kubernetes brand and links it to the handbook homepage', () => {
   expect(config).toContain("siteTitle: 'Kubernetes'")
   expect(config).toContain("logo: '/kubernetes-logo.svg'")
   expect(config).toContain("logoLink: '/'")
-  expect(config).not.toContain("title: 'K8s 概念手册'")
+  expect(config).not.toContain("title: '云原生开发手册'")
 })
 ```
 
@@ -39,7 +39,7 @@ Run:
 npm test -- tests/appearance-integration.test.ts
 ```
 
-Expected: FAIL because the config still contains `K8s 概念手册` and has no local logo configuration.
+Expected: FAIL because the config still contains `云原生开发手册` and has no local logo configuration.
 
 - [ ] **Step 3: Add the official local asset and config**
 
@@ -54,7 +54,7 @@ curl -L --fail --silent --show-error \
 Update only these fields in `docs/.vitepress/config.mts`; leave the remaining existing configuration unchanged:
 
 ```diff
--  title: 'K8s 概念手册',
+-  title: '云原生开发手册',
 +  title: 'Kubernetes',
 @@
    themeConfig: {

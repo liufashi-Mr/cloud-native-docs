@@ -6,7 +6,7 @@ Update the documentation brand to use the Kubernetes name and logo, and make eve
 
 ## Brand
 
-- Replace the visible `K8s 概念手册` brand with `Kubernetes`.
+- Replace the visible `云原生开发手册` brand with `Kubernetes`.
 - Add a local Kubernetes logo asset to the left of the brand text.
 - Make the logo and brand text one link to the documentation homepage, `/`.
 - Keep the brand compact and stable at desktop, tablet, and mobile widths.

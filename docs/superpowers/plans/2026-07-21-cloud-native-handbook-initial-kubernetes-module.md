@@ -1,4 +1,4 @@
-# K8s Concepts Site Implementation Plan
+# Cloud Native Handbook Initial Kubernetes Module Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -45,7 +45,7 @@ Create `package.json` with these scripts:
 
 ```json
 {
-  "name": "k8s-concepts-handbook",
+  "name": "cloud-native",
   "private": true,
   "type": "module",
   "scripts": {
@@ -136,7 +136,7 @@ export default defineConfig({
 })
 ```
 
-Create `docs/.vitepress/config.mts` with `lang: 'zh-CN'`, title `K8s 概念手册`, local search, `outline: { level: [2, 3] }`, Chinese doc footer labels, and `withMermaid(defineConfig(...))`.
+Create `docs/.vitepress/config.mts` with `lang: 'zh-CN'`, title `云原生开发手册`, local search, `outline: { level: [2, 3] }`, Chinese doc footer labels, and `withMermaid(defineConfig(...))`.
 
 Create a temporary `docs/index.md` containing a title, a one-paragraph desired-state explanation, and the seven required relationship terms. Do not add empty placeholder pages yet; the content contract should remain red until Tasks 5-7 create real content.
 
@@ -280,7 +280,7 @@ Create `theme/index.ts` by extending `DefaultTheme`, registering `Layout`, and i
 
 - [ ] **Step 4: Add early appearance initialization**
 
-Set VitePress `appearance: false` and add an inline head script that reads `k8s-theme-color` and `k8s-theme-mode`, applies the validated color variables, and adds `.dark` before content renders. The fallback is default green plus system mode.
+Set VitePress `appearance: false` and add an inline head script that reads `cloud-native-theme-color` and `cloud-native-theme-mode`, applies the validated color variables, and adds `.dark` before content renders. The fallback is default green plus system mode.
 
 - [ ] **Step 5: Run tests and build**
 
@@ -307,7 +307,7 @@ Extend `tests/content.test.ts` to require `styles.css` to contain:
 
 ```ts
 for (const contract of [
-  '--k8s-accent',
+  '--cloud-native-accent',
   'clamp(',
   '@media (max-width: 1099px)',
   '@media (max-width: 767px)',
@@ -324,7 +324,7 @@ Expected: FAIL because `styles.css` is missing.
 
 - [ ] **Step 3: Implement styles**
 
-Define neutral light/dark tokens, `--k8s-accent`, `--k8s-accent-dark`, `--k8s-accent-soft`, code colors, line colors, and muted text colors. Override VitePress container maximum widths so the page is fluid. Use `clamp()` for sidebar, outline, and content padding.
+Define neutral light/dark tokens, `--cloud-native-accent`, `--cloud-native-accent-dark`, `--cloud-native-accent-soft`, code colors, line colors, and muted text colors. Override VitePress container maximum widths so the page is fluid. Use `clamp()` for sidebar, outline, and content padding.
 
 Add explicit responsive rules:
 

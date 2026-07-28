@@ -445,7 +445,7 @@ function openSearch(): void {
 .cloud-native-home {
   box-sizing: border-box;
   width: 100%;
-  padding: 42px var(--k8s-content-padding) 72px;
+  padding: 42px var(--cloud-native-content-padding) 72px;
   color: var(--vp-c-text-1);
 }
 
@@ -1018,7 +1018,7 @@ nav: [
 
 4. Remove `logo: '/kubernetes-logo.svg'`. Keep `docs/public/kubernetes-logo.svg`; the active Kubernetes topic still uses it.
 
-Do not rename existing `--k8s-*` CSS variables or local-storage keys in this task. They are internal compatibility identifiers, and renaming them would create unrelated appearance-state risk.
+Do not rename existing `--cloud-native-*` CSS variables or local-storage keys in this task. They are internal compatibility identifiers, and renaming them would create unrelated appearance-state risk.
 
 - [ ] **Step 4: Run branding, homepage, and Pages tests**
 
@@ -1064,7 +1064,7 @@ Run:
 npm test
 npm run typecheck
 npm run build
-npm run build -- --base=/k8s-doc/
+npm run build -- --base=/cloud-native/
 git diff --check
 git status --short
 ```
@@ -1074,7 +1074,7 @@ Expected:
 - All Vitest files pass with zero failures.
 - `vue-tsc` exits `0`.
 - Both builds exit `0`.
-- The project-base build contains `/k8s-doc/kubernetes/` links and `/k8s-doc/kubernetes-logo.svg` only where the Kubernetes topic needs it.
+- The project-base build contains `/cloud-native/kubernetes/` links and `/cloud-native/kubernetes-logo.svg` only where the Kubernetes topic needs it.
 - `git diff --check` is empty.
 - No generated `dist`, cache, screenshot, or `.superpowers` file is tracked.
 
